@@ -8,10 +8,9 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var showSignupView = false
-    
     var body: some View {
-        ZStack {
+        NavigationStack {
+            ZStack {
             // Background gradient
             LinearGradient(
                 gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.purple.opacity(0.6)]),
@@ -62,9 +61,7 @@ struct ContentView: View {
                     }
                     
                     // Sign up button
-                    Button(action: {
-                        showSignupView = true
-                    }) {
+                    NavigationLink(destination: SignupView()) {
                         Text("Sign Up")
                             .font(.headline)
                             .foregroundColor(.blue)
@@ -83,13 +80,11 @@ struct ContentView: View {
                 Text("Discover local flavors")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.8))
-                    .padding(.bottom, 30)
-            }
-        }
-        .sheet(isPresented: $showSignupView) {
-            SignupView()
-        }
-    }
+                                         .padding(.bottom, 30)
+             }
+         }
+         }
+     }
 }
 
 #Preview {

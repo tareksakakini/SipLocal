@@ -22,122 +22,125 @@ struct SignupView: View {
     @StateObject private var authManager = AuthenticationManager()
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Background gradient
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.purple.opacity(0.6)]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: 30) {
-                        // Header
-                        VStack(spacing: 10) {
-                            Text("Join SipLocal")
-                                .font(.largeTitle)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
-                            
-                            Text("Create your account to discover local flavors")
-                                .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.8))
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.top, 50)
+        ZStack {
+            // Background - neutral with subtle gradient
+            LinearGradient(
+                gradient: Gradient(colors: [Color.gray.opacity(0.1), Color.gray.opacity(0.05)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 30) {
+                    // Header
+                    VStack(spacing: 10) {
+                        Text("Join SipLocal")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(.primary)
                         
-                        // Form
-                        VStack(spacing: 20) {
-                            // Full Name Field
-                            CustomTextField(
-                                placeholder: "Full Name",
-                                text: $fullName,
-                                icon: "person.fill"
-                            )
-                            
-                            // Username Field
-                            CustomTextField(
-                                placeholder: "Username",
-                                text: $username,
-                                icon: "at"
-                            )
-                            
-                            // Email Field
-                            CustomTextField(
-                                placeholder: "Email",
-                                text: $email,
-                                icon: "envelope.fill",
-                                keyboardType: .emailAddress
-                            )
-                            
-                            // Password Field
-                            CustomSecureField(
-                                placeholder: "Password",
-                                text: $password,
-                                icon: "lock.fill"
-                            )
-                            
-                            // Confirm Password Field
-                            CustomSecureField(
-                                placeholder: "Confirm Password",
-                                text: $confirmPassword,
-                                icon: "lock.fill"
-                            )
-                        }
-                        .padding(.horizontal, 30)
+                        Text("Create your account to discover local flavors")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .padding(.top, 50)
+                    
+                    // Form
+                    VStack(spacing: 20) {
+                        // Full Name Field
+                        CustomTextField(
+                            placeholder: "Full Name",
+                            text: $fullName,
+                            icon: "person.fill"
+                        )
                         
-                        // Sign Up Button
-                        Button(action: {
-                            signUp()
-                        }) {
-                            HStack {
-                                if isLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .blue))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Text("Sign Up")
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
-                                }
+                        // Username Field
+                        CustomTextField(
+                            placeholder: "Username",
+                            text: $username,
+                            icon: "at"
+                        )
+                        
+                        // Email Field
+                        CustomTextField(
+                            placeholder: "Email",
+                            text: $email,
+                            icon: "envelope.fill",
+                            keyboardType: .emailAddress
+                        )
+                        
+                        // Password Field
+                        CustomSecureField(
+                            placeholder: "Password",
+                            text: $password,
+                            icon: "lock.fill"
+                        )
+                        
+                        // Confirm Password Field
+                        CustomSecureField(
+                            placeholder: "Confirm Password",
+                            text: $confirmPassword,
+                            icon: "lock.fill"
+                        )
+                    }
+                    .padding(.horizontal, 30)
+                    
+                    // Sign Up Button
+                    Button(action: {
+                        signUp()
+                    }) {
+                        HStack {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            } else {
+                                Text("Sign Up")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
                             }
-                            .foregroundColor(.blue)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color.white)
-                            .cornerRadius(25)
-                            .shadow(color: .black.opacity(0.2), radius: 5, x: 0, y: 2)
                         }
-                        .disabled(isLoading || !isFormValid)
-                        .opacity(isFormValid ? 1.0 : 0.6)
-                        .padding(.horizontal, 30)
-                        
-                        // Back to Login
-                        Button(action: {
-                            dismiss()
-                        }) {
-                            Text("Already have an account? Login")
-                                .font(.subheadline)
-                                .foregroundColor(.white)
-                                .underline()
-                        }
-                        .padding(.bottom, 30)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.blue, Color.purple]),
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .cornerRadius(25)
+                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
                     }
-                }
-            }
-            .navigationBarHidden(true)
-            .alert("Sign Up", isPresented: $showAlert) {
-                Button("OK") { 
-                    if signupSuccess {
+                    .disabled(isLoading || !isFormValid)
+                    .opacity(isFormValid ? 1.0 : 0.6)
+                    .padding(.horizontal, 30)
+                    
+                    // Back to Login
+                    Button(action: {
                         dismiss()
+                    }) {
+                        Text("Already have an account? Login")
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+                            .underline()
                     }
+                    .padding(.bottom, 30)
                 }
-            } message: {
-                Text(alertMessage)
             }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .alert("Sign Up", isPresented: $showAlert) {
+            Button("OK") { 
+                if signupSuccess {
+                    dismiss()
+                }
+            }
+        } message: {
+            Text(alertMessage)
         }
     }
     
@@ -190,21 +193,21 @@ struct CustomTextField: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.blue)
                 .frame(width: 20)
             
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
                 .autocapitalization(.none)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
                 .textFieldStyle(PlainTextFieldStyle())
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(Color(.systemGray6))
         .cornerRadius(15)
         .overlay(
             RoundedRectangle(cornerRadius: 15)
-                .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                .stroke(Color(.systemGray4), lineWidth: 1)
         )
     }
 }
@@ -218,19 +221,19 @@ struct CustomSecureField: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.blue)
                 .frame(width: 20)
             
             SecureField(placeholder, text: $text)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
                 .textFieldStyle(PlainTextFieldStyle())
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(Color(.systemGray6))
         .cornerRadius(15)
         .overlay(
             RoundedRectangle(cornerRadius: 15)
-                .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                .stroke(Color(.systemGray4), lineWidth: 1)
         )
     }
 }
