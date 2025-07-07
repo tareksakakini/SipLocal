@@ -53,3 +53,5 @@ integration_logs/
 .env
 *.orig
 
+
+*.plist
