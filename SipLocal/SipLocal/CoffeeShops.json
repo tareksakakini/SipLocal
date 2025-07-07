@@ -1,0 +1,52 @@
+[
+  {
+    "id": "1",
+    "name": "Temple Coffee Roasters",
+    "address": "2829 S St, Sacramento, CA 95816",
+    "latitude": 38.5676,
+    "longitude": -121.4695,
+    "phone": "+1 916-443-4960",
+    "website": "https://templecoffee.com",
+    "description": "A popular spot known for its high-quality, single-origin coffees and modern, sleek cafes."
+  },
+  {
+    "id": "2",
+    "name": "Insight Coffee Roasters",
+    "address": "1901 8th St, Sacramento, CA 95811",
+    "latitude": 38.5733,
+    "longitude": -121.4984,
+    "phone": "+1 916-442-2991",
+    "website": "https://insightcoffee.com",
+    "description": "Focused on sourcing and roasting the best coffees from around the world. They have a relaxed, community-focused vibe."
+  },
+  {
+    "id": "3",
+    "name": "Old Soul Co.",
+    "address": "3434 Broadway, Sacramento, CA 95817",
+    "latitude": 38.5529,
+    "longitude": -121.4659,
+    "phone": "+1 916-453-8540",
+    "website": "https://oldsoulco.com",
+    "description": "A coffee roaster, bakery, and eatery with a rustic, industrial-chic atmosphere. They emphasize farm-to-table ingredients."
+  },
+  {
+    "id": "4",
+    "name": "Pachamama Coffee",
+    "address": "919 20th St, Sacramento, CA 95811",
+    "latitude": 38.5727,
+    "longitude": -121.4780,
+    "phone": "+1 916-441-2557",
+    "website": "https://pachamamacoffee.com",
+    "description": "A 100% farmer-owned cooperative, offering organic coffee with a focus on sustainability and fair trade."
+  },
+  {
+    "id": "5",
+    "name": "The Mill",
+    "address": "1827 I St, Sacramento, CA 95811",
+    "latitude": 38.5760,
+    "longitude": -121.4823,
+    "phone": "+1 916-469-9689",
+    "website": "https://themillsacramento.com",
+    "description": "A charming and stylish cafe known for its unique flavored lattes and homemade waffles."
+  }
+] 
