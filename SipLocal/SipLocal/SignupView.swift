@@ -23,113 +23,118 @@ struct SignupView: View {
     
     var body: some View {
         ZStack {
-            // Background - neutral with subtle gradient
-            LinearGradient(
-                gradient: Gradient(colors: [Color.gray.opacity(0.1), Color.gray.opacity(0.05)]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Background - subtle neutral
+            Color(.systemGray6)
+                .ignoresSafeArea()
             
-            ScrollView {
-                VStack(spacing: 30) {
-                    // Header
-                    VStack(spacing: 10) {
-                        Text("Join SipLocal")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                            .foregroundColor(.primary)
-                        
-                        Text("Create your account to discover local flavors")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top, 50)
+            VStack {
+                Spacer(minLength: 40)
+                
+                // Card container
+                VStack(spacing: 0) {
+                    // Accent header
+                    Rectangle()
+                        .fill(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
+                        .frame(height: 6)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .padding(.horizontal, 24)
+                        .padding(.top, 2)
                     
-                    // Form
-                    VStack(spacing: 20) {
-                        // Full Name Field
-                        CustomTextField(
-                            placeholder: "Full Name",
-                            text: $fullName,
-                            icon: "person.fill"
-                        )
-                        
-                        // Username Field
-                        CustomTextField(
-                            placeholder: "Username",
-                            text: $username,
-                            icon: "at"
-                        )
-                        
-                        // Email Field
-                        CustomTextField(
-                            placeholder: "Email",
-                            text: $email,
-                            icon: "envelope.fill",
-                            keyboardType: .emailAddress
-                        )
-                        
-                        // Password Field
-                        CustomSecureField(
-                            placeholder: "Password",
-                            text: $password,
-                            icon: "lock.fill"
-                        )
-                        
-                        // Confirm Password Field
-                        CustomSecureField(
-                            placeholder: "Confirm Password",
-                            text: $confirmPassword,
-                            icon: "lock.fill"
-                        )
-                    }
-                    .padding(.horizontal, 30)
-                    
-                    // Sign Up Button
-                    Button(action: {
-                        signUp()
-                    }) {
-                        HStack {
-                            if isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            } else {
-                                Text("Sign Up")
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
-                            }
+                    VStack(spacing: 28) {
+                        // Header
+                        VStack(spacing: 8) {
+                            Text("Join SipLocal")
+                                .font(.title)
+                                .fontWeight(.bold)
+                                .foregroundColor(.primary)
+                            Text("Create your account to discover local flavors")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.blue, Color.purple]),
-                                startPoint: .leading,
-                                endPoint: .trailing
+                        .padding(.top, 18)
+                        
+                        // Form
+                        VStack(spacing: 16) {
+                            CustomTextField(
+                                placeholder: "Full Name",
+                                text: $fullName,
+                                icon: "person.fill"
                             )
-                        )
-                        .cornerRadius(25)
-                        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+                            CustomTextField(
+                                placeholder: "Username",
+                                text: $username,
+                                icon: "at"
+                            )
+                            CustomTextField(
+                                placeholder: "Email",
+                                text: $email,
+                                icon: "envelope.fill",
+                                keyboardType: .emailAddress
+                            )
+                            CustomSecureField(
+                                placeholder: "Password",
+                                text: $password,
+                                icon: "lock.fill"
+                            )
+                            CustomSecureField(
+                                placeholder: "Confirm Password",
+                                text: $confirmPassword,
+                                icon: "lock.fill"
+                            )
+                        }
+                        
+                        // Sign Up Button
+                        Button(action: {
+                            signUp()
+                        }) {
+                            HStack {
+                                if isLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                } else {
+                                    Text("Sign Up")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.blue, Color.purple]),
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .cornerRadius(25)
+                            .shadow(color: .purple.opacity(0.15), radius: 10, x: 0, y: 5)
+                        }
+                        .disabled(isLoading || !isFormValid)
+                        .opacity(isFormValid ? 1.0 : 0.6)
+                        
+                        // Back to Login
+                        Button(action: {
+                            dismiss()
+                        }) {
+                            Text("Already have an account? Login")
+                                .font(.subheadline)
+                                .foregroundColor(.blue)
+                                .underline()
+                        }
+                        .padding(.bottom, 8)
                     }
-                    .disabled(isLoading || !isFormValid)
-                    .opacity(isFormValid ? 1.0 : 0.6)
-                    .padding(.horizontal, 30)
-                    
-                    // Back to Login
-                    Button(action: {
-                        dismiss()
-                    }) {
-                        Text("Already have an account? Login")
-                            .font(.subheadline)
-                            .foregroundColor(.blue)
-                            .underline()
-                    }
-                    .padding(.bottom, 30)
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
                 }
+                .background(Color.white)
+                .cornerRadius(20)
+                .shadow(color: Color(.black).opacity(0.08), radius: 24, x: 0, y: 8)
+                .padding(.horizontal, 16)
+                
+                Spacer()
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -202,13 +207,14 @@ struct CustomTextField: View {
                 .foregroundColor(.primary)
                 .textFieldStyle(PlainTextFieldStyle())
         }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(15)
+        .padding(14)
+        .background(Color.white)
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 15)
-                .stroke(Color(.systemGray4), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray3), lineWidth: 1.2)
         )
+        .shadow(color: Color(.black).opacity(0.03), radius: 2, x: 0, y: 1)
     }
 }
 
@@ -228,13 +234,14 @@ struct CustomSecureField: View {
                 .foregroundColor(.primary)
                 .textFieldStyle(PlainTextFieldStyle())
         }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(15)
+        .padding(14)
+        .background(Color.white)
+        .cornerRadius(12)
         .overlay(
-            RoundedRectangle(cornerRadius: 15)
-                .stroke(Color(.systemGray4), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(.systemGray3), lineWidth: 1.2)
         )
+        .shadow(color: Color(.black).opacity(0.03), radius: 2, x: 0, y: 1)
     }
 }
 
