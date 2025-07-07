@@ -123,8 +123,8 @@ struct SignupView: View {
                 Spacer()
             }
         }
-        .navigationTitle("")
-        .navigationBarHidden(true)
+        .navigationTitle("Sign Up")
+        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: username, perform: { value in
             usernameStatus = .checking
             
@@ -141,14 +141,12 @@ struct SignupView: View {
                 }
             }
         })
-        .alert("Sign Up", isPresented: $showAlert) {
-            Button("OK") { 
+        .alert(isPresented: $showAlert) {
+            Alert(title: Text(signupSuccess ? "Success" : "Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
                 if signupSuccess {
                     dismiss()
                 }
-            }
-        } message: {
-            Text(alertMessage)
+            })
         }
     }
     

@@ -97,7 +97,7 @@ struct LoginView: View {
             }
         }
         .navigationTitle("Login")
-        .navigationBarHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
         .alert("Login Failed", isPresented: $showAlert) {
             Button("OK") {}
         } message: {
