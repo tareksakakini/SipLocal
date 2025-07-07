@@ -15,6 +15,7 @@ struct SignupView: View {
     @State private var confirmPassword = ""
     @State private var isPasswordVisible = false
     @State private var isConfirmPasswordVisible = false
+    @State private var usernameStatus: UsernameStatus = .none
     @State private var isLoading = false
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -61,7 +62,7 @@ struct SignupView: View {
                         // Form
                         VStack(spacing: 20) {
                             CustomTextField(iconName: "person.fill", placeholder: "Full Name", text: $fullName, autocapitalization: .words)
-                            CustomTextField(iconName: "at", placeholder: "Username", text: $username)
+                            CustomTextField(iconName: "at", placeholder: "Username", text: $username, status: usernameStatus)
                             CustomTextField(iconName: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress)
                             CustomSecureField(iconName: "lock.fill", placeholder: "Password", text: $password, isVisible: $isPasswordVisible)
                             CustomSecureField(iconName: "lock.fill", placeholder: "Confirm Password", text: $confirmPassword, isVisible: $isConfirmPasswordVisible)
@@ -122,7 +123,24 @@ struct SignupView: View {
                 Spacer()
             }
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle("")
+        .navigationBarHidden(true)
+        .onChange(of: username, perform: { value in
+            usernameStatus = .checking
+            
+            // Debounce logic
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                guard value == username else { return } // Check if text has changed
+                
+                authManager.checkUsernameAvailability(username: value) { isAvailable in
+                    if isAvailable {
+                        usernameStatus = .available
+                    } else {
+                        usernameStatus = .unavailable
+                    }
+                }
+            }
+        })
         .alert("Sign Up", isPresented: $showAlert) {
             Button("OK") { 
                 if signupSuccess {
@@ -146,7 +164,17 @@ struct SignupView: View {
     }
     
     private func signUp() {
-        guard isFormValid else { return }
+        guard usernameStatus == .available else {
+            alertMessage = "Username is already taken. Please choose another one."
+            showAlert = true
+            return
+        }
+        
+        guard !fullName.isEmpty, !username.isEmpty, !email.isEmpty, !password.isEmpty else {
+            alertMessage = "Please fill in all fields"
+            showAlert = true
+            return
+        }
         
         isLoading = true
         
@@ -175,12 +203,17 @@ struct SignupView: View {
 
 // MARK: - Reusable Components
 
+enum UsernameStatus {
+    case none, checking, available, unavailable
+}
+
 struct CustomTextField: View {
     var iconName: String
     var placeholder: String
     @Binding var text: String
     var keyboardType: UIKeyboardType = .default
     var autocapitalization: UITextAutocapitalizationType = .none
+    var status: UsernameStatus = .none
     
     var body: some View {
         HStack {
@@ -193,6 +226,19 @@ struct CustomTextField: View {
                 .fontDesign(.rounded)
                 .foregroundColor(.primary)
                 .textFieldStyle(PlainTextFieldStyle())
+            
+            switch status {
+            case .checking:
+                ProgressView()
+            case .available:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundColor(.green)
+            case .unavailable:
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(.red)
+            case .none:
+                EmptyView()
+            }
         }
         .padding(14)
         .background(Color.white)
