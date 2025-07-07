@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -44,12 +46,10 @@ struct ContentView: View {
                 // Buttons section
                 VStack(spacing: 20) {
                     // Login button
-                    Button(action: {
-                        // TODO: Handle login action
-                        print("Login tapped")
-                    }) {
+                    NavigationLink(destination: LoginView().environmentObject(authManager)) {
                         Text("Login")
                             .font(.headline)
+                            .fontWeight(.semibold)
                             .fontDesign(.rounded)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -58,14 +58,15 @@ struct ContentView: View {
                             .cornerRadius(25)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 25)
-                                    .stroke(Color.white, lineWidth: 2)
+                                    .stroke(Color.white, lineWidth: 1)
                             )
                     }
                     
                     // Sign up button
-                    NavigationLink(destination: SignupView()) {
+                    NavigationLink(destination: SignupView().environmentObject(authManager)) {
                         Text("Sign Up")
                             .font(.headline)
+                            .fontWeight(.semibold)
                             .fontDesign(.rounded)
                             .foregroundColor(.blue)
                             .frame(maxWidth: .infinity)

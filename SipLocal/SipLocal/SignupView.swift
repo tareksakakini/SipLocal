@@ -22,7 +22,7 @@ struct SignupView: View {
     @State private var signupSuccess = false
     
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var authManager = AuthenticationManager()
+    @EnvironmentObject var authManager: AuthenticationManager
     
     var body: some View {
         ZStack {
