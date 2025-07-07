@@ -8,6 +8,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var showSignupView = false
+    
     var body: some View {
         ZStack {
             // Background gradient
@@ -61,8 +63,7 @@ struct ContentView: View {
                     
                     // Sign up button
                     Button(action: {
-                        // TODO: Handle sign up action
-                        print("Sign up tapped")
+                        showSignupView = true
                     }) {
                         Text("Sign Up")
                             .font(.headline)
@@ -77,7 +78,16 @@ struct ContentView: View {
                 .padding(.horizontal, 40)
                 
                 Spacer()
+                
+                // Footer text
+                Text("Discover local flavors")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.8))
+                    .padding(.bottom, 30)
             }
+        }
+        .sheet(isPresented: $showSignupView) {
+            SignupView()
         }
     }
 }
