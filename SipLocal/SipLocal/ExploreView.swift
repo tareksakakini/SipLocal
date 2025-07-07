@@ -18,7 +18,7 @@ struct ExploreView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        ZStack {
             Map(coordinateRegion: $region, annotationItems: filteredCoffeeShops) { shop in
                 MapAnnotation(coordinate: shop.coordinate) {
                     VStack {
@@ -31,9 +31,29 @@ struct ExploreView: View {
                     }
                 }
             }
-            .navigationTitle("Explore")
-            .searchable(text: $searchText, prompt: "Search for a coffee shop")
-            .edgesIgnoringSafeArea(.bottom)
+            .edgesIgnoringSafeArea(.top)
+
+            VStack {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                    TextField("Search for a coffee shop", text: $searchText)
+                    if !searchText.isEmpty {
+                        Button(action: {
+                            self.searchText = ""
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(10)
+                .shadow(radius: 5)
+                .padding(.horizontal)
+                
+                Spacer()
+            }
+            .padding(.top)
         }
     }
 }
