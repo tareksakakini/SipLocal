@@ -240,4 +240,14 @@ class AuthenticationManager: ObservableObject {
             }
         }
     }
+    
+    func sendPasswordReset(for email: String, completion: @escaping (Bool, String?) -> Void) {
+        Auth.auth().sendPasswordReset(withEmail: email) { error in
+            if let error = error {
+                completion(false, error.localizedDescription)
+                return
+            }
+            completion(true, nil)
+        }
+    }
 } 

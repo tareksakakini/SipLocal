@@ -1,18 +1,10 @@
-//
-//  LoginView.swift
-//  SipLocal
-//
-//  Created by Tarek Sakakini on 7/7/25.
-//
-
 import SwiftUI
 
-struct LoginView: View {
+struct ForgotPasswordView: View {
     @State private var email = ""
-    @State private var password = ""
-    @State private var isPasswordVisible = false
     @State private var isLoading = false
     @State private var showAlert = false
+    @State private var alertTitle = ""
     @State private var alertMessage = ""
     
     @EnvironmentObject var authManager: AuthenticationManager
@@ -20,41 +12,35 @@ struct LoginView: View {
     
     var body: some View {
         ZStack {
-            // Background
             Color(.systemGray6).ignoresSafeArea()
             
             VStack {
                 Spacer()
                 
-                // Form Container
                 VStack(spacing: 30) {
-                    // Header
                     VStack(spacing: 8) {
-                        Text("Welcome Back")
+                        Text("Reset Password")
                             .font(.title)
                             .fontWeight(.bold)
                             .fontDesign(.rounded)
                             .foregroundColor(.primary)
-                        Text("Sign in to your account")
+                        Text("Enter your email to receive a reset link.")
                             .font(.subheadline)
                             .fontDesign(.rounded)
                             .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
                     }
                     
-                    // Form Fields
-                    VStack(spacing: 20) {
-                        CustomTextField(iconName: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress)
-                        CustomSecureField(iconName: "lock.fill", placeholder: "Password", text: $password, isVisible: $isPasswordVisible)
-                    }
+                    CustomTextField(iconName: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress)
                     
-                    // Login Button
-                    Button(action: login) {
+                    Button(action: sendResetLink) {
                         HStack {
                             if isLoading {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             } else {
-                                Text("Login")
+                                Text("Send Reset Link")
                                     .font(.headline)
                                     .fontWeight(.semibold)
                                     .fontDesign(.rounded)
@@ -65,15 +51,16 @@ struct LoginView: View {
                         .frame(height: 55)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.purple.opacity(0.6)]),
+                                gradient: Gradient(colors: [Color.blue, Color.purple]),
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
                         .cornerRadius(28)
-                        .shadow(color: .black.opacity(0.15), radius: 10, y: 5)
+                        .shadow(color: .purple.opacity(0.15), radius: 10, x: 0, y: 5)
                     }
-                    .disabled(isLoading)
+                    .disabled(isLoading || email.isEmpty)
+                    .opacity(email.isEmpty ? 0.6 : 1.0)
                 }
                 .padding(30)
                 .background(Color(.systemBackground))
@@ -82,44 +69,42 @@ struct LoginView: View {
                 .padding(.horizontal)
                 
                 Spacer()
-                
-                // Forgot Password
-                NavigationLink(destination: ForgotPasswordView()) {
-                    Text("Forgot Password?")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .fontDesign(.rounded)
-                        .foregroundColor(.accentColor)
-                }
-                .padding(.bottom, 20)
             }
         }
-        .navigationTitle("Login")
+        .navigationTitle("Forgot Password")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Login Failed", isPresented: $showAlert) {
-            Button("OK") {}
+        .alert(alertTitle, isPresented: $showAlert) {
+            Button("OK") {
+                if alertTitle == "Success" {
+                    dismiss()
+                }
+            }
         } message: {
             Text(alertMessage)
         }
     }
     
-    private func login() {
+    private func sendResetLink() {
         isLoading = true
-        authManager.signIn(email: email, password: password) { success, error in
+        authManager.sendPasswordReset(for: email) { success, error in
             isLoading = false
             if success {
-                // Handled by the listener in the main app view
+                alertTitle = "Success"
+                alertMessage = "A password reset link has been sent to your email."
             } else {
+                alertTitle = "Error"
                 alertMessage = error ?? "An unknown error occurred."
-                showAlert = true
             }
+            showAlert = true
         }
     }
 }
 
-struct LoginView_Previews: PreviewProvider {
+struct ForgotPasswordView_Previews: PreviewProvider {
     static var previews: some View {
-        LoginView()
-            .environmentObject(AuthenticationManager())
+        NavigationView {
+            ForgotPasswordView()
+                .environmentObject(AuthenticationManager())
+        }
     }
 } 
