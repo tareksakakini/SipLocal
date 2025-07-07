@@ -26,7 +26,7 @@ struct ContentView: View {
                 VStack(spacing: 20) {
                     // App logo - using system image as placeholder until logo is added to assets
                     Image(systemName: "cup.and.saucer.fill")
-                        .font(.system(size: 100))
+                        .font(.system(size: 100, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
                     
@@ -34,6 +34,7 @@ struct ContentView: View {
                     Text("SipLocal")
                         .font(.largeTitle)
                         .fontWeight(.bold)
+                        .fontDesign(.rounded)
                         .foregroundColor(.white)
                         .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
                 }
@@ -49,6 +50,7 @@ struct ContentView: View {
                     }) {
                         Text("Login")
                             .font(.headline)
+                            .fontDesign(.rounded)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
@@ -64,6 +66,7 @@ struct ContentView: View {
                     NavigationLink(destination: SignupView()) {
                         Text("Sign Up")
                             .font(.headline)
+                            .fontDesign(.rounded)
                             .foregroundColor(.blue)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
@@ -79,6 +82,7 @@ struct ContentView: View {
                 // Footer text
                 Text("Discover local flavors")
                     .font(.subheadline)
+                    .fontDesign(.rounded)
                     .foregroundColor(.white.opacity(0.8))
                                          .padding(.bottom, 30)
              }

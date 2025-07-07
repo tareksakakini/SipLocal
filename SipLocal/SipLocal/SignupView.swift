@@ -46,42 +46,23 @@ struct SignupView: View {
                             Text("Join SipLocal")
                                 .font(.title)
                                 .fontWeight(.bold)
+                                .fontDesign(.rounded)
                                 .foregroundColor(.primary)
                             Text("Create your account to discover local flavors")
                                 .font(.subheadline)
+                                .fontDesign(.rounded)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                         }
                         .padding(.top, 18)
                         
                         // Form
-                        VStack(spacing: 16) {
-                            CustomTextField(
-                                placeholder: "Full Name",
-                                text: $fullName,
-                                icon: "person.fill"
-                            )
-                            CustomTextField(
-                                placeholder: "Username",
-                                text: $username,
-                                icon: "at"
-                            )
-                            CustomTextField(
-                                placeholder: "Email",
-                                text: $email,
-                                icon: "envelope.fill",
-                                keyboardType: .emailAddress
-                            )
-                            CustomSecureField(
-                                placeholder: "Password",
-                                text: $password,
-                                icon: "lock.fill"
-                            )
-                            CustomSecureField(
-                                placeholder: "Confirm Password",
-                                text: $confirmPassword,
-                                icon: "lock.fill"
-                            )
+                        VStack(spacing: 20) {
+                            CustomTextField(placeholder: "Full Name", text: $fullName, autocapitalization: .words)
+                            CustomTextField(placeholder: "Username", text: $username)
+                            CustomTextField(placeholder: "Email", text: $email, keyboardType: .emailAddress)
+                            CustomSecureField(placeholder: "Password", text: $password)
+                            CustomSecureField(placeholder: "Confirm Password", text: $confirmPassword)
                         }
                         
                         // Sign Up Button
@@ -97,6 +78,7 @@ struct SignupView: View {
                                     Text("Sign Up")
                                         .font(.headline)
                                         .fontWeight(.semibold)
+                                        .fontDesign(.rounded)
                                 }
                             }
                             .foregroundColor(.white)
@@ -121,6 +103,7 @@ struct SignupView: View {
                         }) {
                             Text("Already have an account? Login")
                                 .font(.subheadline)
+                                .fontDesign(.rounded)
                                 .foregroundColor(.blue)
                                 .underline()
                         }
@@ -188,22 +171,21 @@ struct SignupView: View {
     }
 }
 
-// Custom TextField Component
+// MARK: - Reusable Components
+
 struct CustomTextField: View {
-    let placeholder: String
+    var placeholder: String
     @Binding var text: String
-    let icon: String
     var keyboardType: UIKeyboardType = .default
+    var autocapitalization: UITextAutocapitalizationType = .none
     
     var body: some View {
         HStack {
-            Image(systemName: icon)
-                .foregroundColor(.blue)
-                .frame(width: 20)
-            
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
-                .autocapitalization(.none)
+                .autocapitalization(autocapitalization)
+                .disableAutocorrection(true)
+                .fontDesign(.rounded)
                 .foregroundColor(.primary)
                 .textFieldStyle(PlainTextFieldStyle())
         }
@@ -218,19 +200,15 @@ struct CustomTextField: View {
     }
 }
 
-// Custom SecureField Component
 struct CustomSecureField: View {
     let placeholder: String
     @Binding var text: String
-    let icon: String
     
     var body: some View {
         HStack {
-            Image(systemName: icon)
-                .foregroundColor(.blue)
-                .frame(width: 20)
-            
             SecureField(placeholder, text: $text)
+                .disableAutocorrection(true)
+                .fontDesign(.rounded)
                 .foregroundColor(.primary)
                 .textFieldStyle(PlainTextFieldStyle())
         }
