@@ -13,6 +13,8 @@ struct SignupView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
+    @State private var isPasswordVisible = false
+    @State private var isConfirmPasswordVisible = false
     @State private var isLoading = false
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -61,8 +63,8 @@ struct SignupView: View {
                             CustomTextField(iconName: "person.fill", placeholder: "Full Name", text: $fullName, autocapitalization: .words)
                             CustomTextField(iconName: "at", placeholder: "Username", text: $username)
                             CustomTextField(iconName: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress)
-                            CustomSecureField(iconName: "lock.fill", placeholder: "Password", text: $password)
-                            CustomSecureField(iconName: "lock.fill", placeholder: "Confirm Password", text: $confirmPassword)
+                            CustomSecureField(iconName: "lock.fill", placeholder: "Password", text: $password, isVisible: $isPasswordVisible)
+                            CustomSecureField(iconName: "lock.fill", placeholder: "Confirm Password", text: $confirmPassword, isVisible: $isConfirmPasswordVisible)
                         }
                         
                         // Sign Up Button
@@ -207,16 +209,33 @@ struct CustomSecureField: View {
     let iconName: String
     let placeholder: String
     @Binding var text: String
+    @Binding var isVisible: Bool
     
     var body: some View {
         HStack {
             Image(systemName: iconName)
                 .foregroundColor(.secondary)
-            SecureField(placeholder, text: $text)
-                .disableAutocorrection(true)
-                .fontDesign(.rounded)
-                .foregroundColor(.primary)
-                .textFieldStyle(PlainTextFieldStyle())
+
+            if isVisible {
+                TextField(placeholder, text: $text)
+                    .disableAutocorrection(true)
+                    .fontDesign(.rounded)
+                    .foregroundColor(.primary)
+                    .textFieldStyle(PlainTextFieldStyle())
+            } else {
+                SecureField(placeholder, text: $text)
+                    .disableAutocorrection(true)
+                    .fontDesign(.rounded)
+                    .foregroundColor(.primary)
+                    .textFieldStyle(PlainTextFieldStyle())
+            }
+
+            Button(action: {
+                isVisible.toggle()
+            }) {
+                Image(systemName: isVisible ? "eye.slash.fill" : "eye.fill")
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(14)
         .background(Color.white)
