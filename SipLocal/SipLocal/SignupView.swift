@@ -58,11 +58,11 @@ struct SignupView: View {
                         
                         // Form
                         VStack(spacing: 20) {
-                            CustomTextField(placeholder: "Full Name", text: $fullName, autocapitalization: .words)
-                            CustomTextField(placeholder: "Username", text: $username)
-                            CustomTextField(placeholder: "Email", text: $email, keyboardType: .emailAddress)
-                            CustomSecureField(placeholder: "Password", text: $password)
-                            CustomSecureField(placeholder: "Confirm Password", text: $confirmPassword)
+                            CustomTextField(iconName: "person.fill", placeholder: "Full Name", text: $fullName, autocapitalization: .words)
+                            CustomTextField(iconName: "at", placeholder: "Username", text: $username)
+                            CustomTextField(iconName: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress)
+                            CustomSecureField(iconName: "lock.fill", placeholder: "Password", text: $password)
+                            CustomSecureField(iconName: "lock.fill", placeholder: "Confirm Password", text: $confirmPassword)
                         }
                         
                         // Sign Up Button
@@ -174,6 +174,7 @@ struct SignupView: View {
 // MARK: - Reusable Components
 
 struct CustomTextField: View {
+    var iconName: String
     var placeholder: String
     @Binding var text: String
     var keyboardType: UIKeyboardType = .default
@@ -181,6 +182,8 @@ struct CustomTextField: View {
     
     var body: some View {
         HStack {
+            Image(systemName: iconName)
+                .foregroundColor(.secondary)
             TextField(placeholder, text: $text)
                 .keyboardType(keyboardType)
                 .autocapitalization(autocapitalization)
@@ -201,11 +204,14 @@ struct CustomTextField: View {
 }
 
 struct CustomSecureField: View {
+    let iconName: String
     let placeholder: String
     @Binding var text: String
     
     var body: some View {
         HStack {
+            Image(systemName: iconName)
+                .foregroundColor(.secondary)
             SecureField(placeholder, text: $text)
                 .disableAutocorrection(true)
                 .fontDesign(.rounded)
