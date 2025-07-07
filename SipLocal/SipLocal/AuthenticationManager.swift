@@ -12,6 +12,7 @@ import FirebaseFirestore
 
 class AuthenticationManager: ObservableObject {
     @Published var isAuthenticated = false
+    @Published var isEmailVerified = false
     @Published var currentUser: User?
     
     private let auth = Auth.auth()
@@ -21,12 +22,14 @@ class AuthenticationManager: ObservableObject {
         // Check if user is already authenticated
         self.currentUser = auth.currentUser
         self.isAuthenticated = currentUser != nil
+        self.isEmailVerified = currentUser?.isEmailVerified ?? false
         
         // Listen for authentication state changes
         auth.addStateDidChangeListener { [weak self] _, user in
             DispatchQueue.main.async {
                 self?.currentUser = user
                 self?.isAuthenticated = user != nil
+                self?.isEmailVerified = user?.isEmailVerified ?? false
             }
         }
     }
@@ -50,6 +53,11 @@ class AuthenticationManager: ObservableObject {
             // Save user data to Firestore
             self.saveUserData(userId: user.uid, userData: userData) { success, error in
                 if success {
+                    // Send verification email
+                    self.sendVerificationEmail { _, _ in
+                        // The completion for sending the email can be ignored here,
+                        // as the user will be prompted to verify on the next screen.
+                    }
                     completion(true, nil)
                 } else {
                     // If saving user data fails, we should delete the created account
@@ -192,6 +200,43 @@ class AuthenticationManager: ObservableObject {
                 } else {
                     completion(true, nil)
                 }
+            }
+        }
+    }
+    
+    // MARK: - Email Verification
+    func sendVerificationEmail(completion: @escaping (Bool, String?) -> Void) {
+        guard let user = currentUser else {
+            completion(false, "No user is signed in.")
+            return
+        }
+        
+        user.sendEmailVerification { error in
+            if let error = error {
+                completion(false, error.localizedDescription)
+                return
+            }
+            completion(true, nil)
+        }
+    }
+    
+    func reloadUser(completion: @escaping (Bool) -> Void) {
+        guard let user = currentUser else {
+            completion(false)
+            return
+        }
+        
+        user.reload { [weak self] error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("Error reloading user: \(error.localizedDescription)")
+                    completion(false)
+                    return
+                }
+                
+                self?.currentUser = self?.auth.currentUser
+                self?.isEmailVerified = self?.auth.currentUser?.isEmailVerified ?? false
+                completion(true)
             }
         }
     }
