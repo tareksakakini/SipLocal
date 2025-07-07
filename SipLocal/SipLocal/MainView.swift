@@ -31,22 +31,6 @@ struct MainView: View {
     }
 }
 
-// Placeholder for the main content view after login
-struct HomeView: View {
-    @EnvironmentObject var authManager: AuthenticationManager
-    
-    var body: some View {
-        VStack {
-            Text("Welcome!")
-                .font(.largeTitle)
-            Button("Sign Out", action: {
-                authManager.signOut()
-            })
-            .padding()
-        }
-    }
-}
-
 struct MainView_Previews: PreviewProvider {
     static var previews: some View {
         MainView()

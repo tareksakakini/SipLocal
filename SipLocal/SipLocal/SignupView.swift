@@ -101,9 +101,7 @@ struct SignupView: View {
                         .opacity(isFormValid ? 1.0 : 0.6)
                         
                         // Back to Login
-                        Button(action: {
-                            dismiss()
-                        }) {
+                        NavigationLink(destination: LoginView()) {
                             Text("Already have an account? Login")
                                 .font(.subheadline)
                                 .fontDesign(.rounded)
