@@ -22,10 +22,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 struct SipLocalApp: App {
     // register app delegate for Firebase setup
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var authManager = AuthenticationManager()
 
     var body: some Scene {
         WindowGroup {
             MainView()
+                .environmentObject(authManager)
         }
     }
 }

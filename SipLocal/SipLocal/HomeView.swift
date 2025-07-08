@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct HomeView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    
     var body: some View {
         TabView {
             ExploreView()

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MainView: View {
-    @StateObject private var authManager = AuthenticationManager()
+    @EnvironmentObject var authManager: AuthenticationManager
     
     var body: some View {
         Group {

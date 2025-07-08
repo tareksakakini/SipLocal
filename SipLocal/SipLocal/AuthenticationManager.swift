@@ -14,6 +14,7 @@ class AuthenticationManager: ObservableObject {
     @Published var isAuthenticated = false
     @Published var isEmailVerified = false
     @Published var currentUser: User?
+    @Published var favoriteShops: Set<String> = []
     
     private let auth = Auth.auth()
     private let firestore = Firestore.firestore()
@@ -30,6 +31,12 @@ class AuthenticationManager: ObservableObject {
                 self?.currentUser = user
                 self?.isAuthenticated = user != nil
                 self?.isEmailVerified = user?.isEmailVerified ?? false
+                
+                if user != nil {
+                    self?.fetchFavorites()
+                } else {
+                    self?.favoriteShops = []
+                }
             }
         }
     }
@@ -248,6 +255,65 @@ class AuthenticationManager: ObservableObject {
                 return
             }
             completion(true, nil)
+        }
+    }
+    
+    // MARK: - Favorites
+    
+    func addFavorite(shopId: String, completion: @escaping (Bool) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(false)
+            return
+        }
+        
+        let userDocument = firestore.collection("users").document(userId)
+        userDocument.updateData([
+            "favorites": FieldValue.arrayUnion([shopId])
+        ]) { error in
+            if error == nil {
+                DispatchQueue.main.async {
+                    self.favoriteShops.insert(shopId)
+                }
+            }
+            completion(error == nil)
+        }
+    }
+    
+    func removeFavorite(shopId: String, completion: @escaping (Bool) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(false)
+            return
+        }
+        
+        let userDocument = firestore.collection("users").document(userId)
+        userDocument.updateData([
+            "favorites": FieldValue.arrayRemove([shopId])
+        ]) { error in
+            if error == nil {
+                DispatchQueue.main.async {
+                    self.favoriteShops.remove(shopId)
+                }
+            }
+            completion(error == nil)
+        }
+    }
+    
+    func isFavorite(shopId: String) -> Bool {
+        return favoriteShops.contains(shopId)
+    }
+    
+    func fetchFavorites() {
+        guard let userId = currentUser?.uid else { return }
+        
+        let userDocument = firestore.collection("users").document(userId)
+        userDocument.getDocument { document, error in
+            if let document = document,
+               let data = document.data(),
+               let favorites = data["favorites"] as? [String] {
+                DispatchQueue.main.async {
+                    self.favoriteShops = Set(favorites)
+                }
+            }
         }
     }
 } 

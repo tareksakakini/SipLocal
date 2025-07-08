@@ -3,10 +3,17 @@ import SwiftUI
 struct CoffeeShopDetailView: View {
     let shop: CoffeeShop
     @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject var authManager: AuthenticationManager
+    @State private var isFavorite: Bool
+    
+    init(shop: CoffeeShop, authManager: AuthenticationManager) {
+        self.shop = shop
+        self._isFavorite = State(initialValue: authManager.isFavorite(shopId: shop.id))
+    }
     
     var body: some View {
         ScrollView {
-            ZStack(alignment: .topLeading) {
+            ZStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 16) {
                     Image(shop.imageName)
                         .resizable()
@@ -47,22 +54,54 @@ struct CoffeeShopDetailView: View {
                     .padding()
                 }
                 
-                Button(action: {
-                    presentationMode.wrappedValue.dismiss()
-                }) {
-                    Image(systemName: "xmark")
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                        .padding(10)
-                        .background(Color.white.opacity(0.7))
-                        .clipShape(Circle())
-                        .shadow(radius: 5)
+                HStack {
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .padding(10)
+                            .background(Color.white.opacity(0.7))
+                            .clipShape(Circle())
+                            .shadow(radius: 5)
+                    }
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        toggleFavorite()
+                    }) {
+                        Image(systemName: isFavorite ? "heart.fill" : "heart")
+                            .font(.headline)
+                            .foregroundColor(isFavorite ? .red : .primary)
+                            .padding(10)
+                            .background(Color.white.opacity(0.7))
+                            .clipShape(Circle())
+                            .shadow(radius: 5)
+                    }
                 }
-                .padding(.leading)
+                .padding(.horizontal)
                 .padding(.top, 50)
             }
         }
         .navigationBarBackButtonHidden(true)
         .edgesIgnoringSafeArea(.top)
+    }
+    
+    private func toggleFavorite() {
+        if isFavorite {
+            authManager.removeFavorite(shopId: shop.id) { success in
+                if success {
+                    self.isFavorite = false
+                }
+            }
+        } else {
+            authManager.addFavorite(shopId: shop.id) { success in
+                if success {
+                    self.isFavorite = true
+                }
+            }
+        }
     }
 } 

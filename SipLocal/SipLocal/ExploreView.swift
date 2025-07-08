@@ -2,6 +2,7 @@ import SwiftUI
 import MapKit
 
 struct ExploreView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
     @State private var coffeeShops: [CoffeeShop] = DataService.loadCoffeeShops()
     @State private var searchText: String = ""
     @State private var region: MKCoordinateRegion = MKCoordinateRegion(
@@ -156,7 +157,7 @@ struct ExploreView: View {
                                 .font(.subheadline)
                                 .foregroundColor(.gray)
                             
-                            NavigationLink(destination: CoffeeShopDetailView(shop: shop)) {
+                            NavigationLink(destination: CoffeeShopDetailView(shop: shop, authManager: authManager)) {
                                 HStack {
                                     Text("View More")
                                         .fontWeight(.semibold)
