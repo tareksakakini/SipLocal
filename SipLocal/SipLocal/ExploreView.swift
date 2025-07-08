@@ -32,14 +32,14 @@ struct ExploreView: View {
             Map(coordinateRegion: $region, annotationItems: filteredCoffeeShops) { shop in
                 MapAnnotation(coordinate: shop.coordinate) {
                     Button(action: {
-                        withAnimation {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                             selectedShop = shop
                         }
                     }) {
                         VStack(spacing: 2) {
                             ZStack {
                                 Circle()
-                                    .fill(selectedShop?.id == shop.id ? Color.red : Color.orange)
+                                    .fill(Color.orange)
                                     .frame(width: 32, height: 32)
                                 
                                 Image(systemName: "cup.and.saucer.fill")
@@ -47,6 +47,7 @@ struct ExploreView: View {
                                     .foregroundColor(.white)
                             }
                             .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                            .scaleEffect(selectedShop?.id == shop.id ? 1.3 : 1.0)
                             
                             Text(shop.name)
                                 .font(.caption2)
@@ -56,6 +57,7 @@ struct ExploreView: View {
                                 .background(Color.white.opacity(0.9))
                                 .cornerRadius(4)
                                 .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
+                                .scaleEffect(selectedShop?.id == shop.id ? 1.1 : 1.0)
                         }
                     }
                     .buttonStyle(PlainButtonStyle())
