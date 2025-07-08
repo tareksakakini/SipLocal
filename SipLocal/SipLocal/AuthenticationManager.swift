@@ -9,6 +9,7 @@ import Foundation
 import Firebase
 import FirebaseAuth
 import FirebaseFirestore
+import FirebaseStorage
 
 class AuthenticationManager: ObservableObject {
     @Published var isAuthenticated = false
@@ -18,6 +19,7 @@ class AuthenticationManager: ObservableObject {
     
     private let auth = Auth.auth()
     private let firestore = Firestore.firestore()
+    private let storage = Storage.storage()
     
     init() {
         // Check if user is already authenticated
@@ -138,8 +140,10 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Get User Data
     func getUserData(userId: String, completion: @escaping (UserData?, String?) -> Void) {
+        print("AuthManager: Getting user data for ID: \(userId)")
         firestore.collection("users").document(userId).getDocument { document, error in
             if let error = error {
+                print("AuthManager: Error getting user document: \(error.localizedDescription)")
                 completion(nil, error.localizedDescription)
                 return
             }
@@ -150,16 +154,22 @@ class AuthenticationManager: ObservableObject {
                   let fullName = data["fullName"] as? String,
                   let username = data["username"] as? String,
                   let email = data["email"] as? String else {
+                print("AuthManager: User document not found or missing required fields")
                 completion(nil, "User data not found")
                 return
             }
             
+            let profileImageUrl = data["profileImageUrl"] as? String
+            print("AuthManager: Retrieved profile image URL: \(profileImageUrl ?? "nil")")
+            
             let userData = UserData(
                 fullName: fullName,
                 username: username,
-                email: email
+                email: email,
+                profileImageUrl: profileImageUrl
             )
             
+            print("AuthManager: User data successfully created")
             completion(userData, nil)
         }
     }
@@ -300,6 +310,69 @@ class AuthenticationManager: ObservableObject {
     
     func isFavorite(shopId: String) -> Bool {
         return favoriteShops.contains(shopId)
+    }
+    
+    // MARK: - Profile Image Management
+    
+    func uploadProfileImage(_ image: UIImage) async -> (success: Bool, errorMessage: String?) {
+        print("AuthManager: Starting profile image upload...")
+        guard let userId = currentUser?.uid else {
+            print("AuthManager: No user signed in")
+            return (false, "No user is currently signed in")
+        }
+        
+        print("AuthManager: User ID: \(userId)")
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            print("AuthManager: Failed to convert image to JPEG data")
+            return (false, "Failed to process image")
+        }
+        
+        print("AuthManager: Image data size: \(imageData.count) bytes")
+        
+        let storageRef = storage.reference().child("profile_pictures/\(userId).jpg")
+        print("AuthManager: Storage path: profile_pictures/\(userId).jpg")
+        
+        do {
+            print("AuthManager: Uploading to Firebase Storage...")
+            let _ = try await storageRef.putDataAsync(imageData)
+            print("AuthManager: Upload to storage successful")
+            
+            let downloadURL = try await storageRef.downloadURL()
+            print("AuthManager: Download URL: \(downloadURL.absoluteString)")
+            
+            // Update user document with profile image URL
+            let userDocument = firestore.collection("users").document(userId)
+            print("AuthManager: Updating Firestore document...")
+            try await userDocument.updateData(["profileImageUrl": downloadURL.absoluteString])
+            print("AuthManager: Firestore update successful")
+            
+            return (true, nil)
+        } catch {
+            print("AuthManager: Upload failed with error: \(error.localizedDescription)")
+            return (false, error.localizedDescription)
+        }
+    }
+    
+    func removeProfileImage() async -> (success: Bool, errorMessage: String?) {
+        guard let userId = currentUser?.uid else {
+            return (false, "No user is currently signed in")
+        }
+        
+        let storageRef = storage.reference().child("profile_pictures/\(userId).jpg")
+        
+        do {
+            // Delete from storage
+            try await storageRef.delete()
+            
+            // Remove URL from user document
+            let userDocument = firestore.collection("users").document(userId)
+            try await userDocument.updateData(["profileImageUrl": FieldValue.delete()])
+            
+            return (true, nil)
+        } catch {
+            return (false, error.localizedDescription)
+        }
     }
     
     func fetchFavorites() {

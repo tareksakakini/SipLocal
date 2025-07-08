@@ -8,29 +8,36 @@ struct FavoritesView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
+            Group {
                 if favoriteShops.isEmpty {
-                    VStack {
-                        Spacer(minLength: 200)
+                    VStack(spacing: 16) {
+                        Image(systemName: "heart.slash.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(Color(.systemGray4))
+                        
                         Text("No Favorites Yet")
-                            .font(.headline)
-                        Text("Explore and tap the heart on your favorite coffee shops to see them here.")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                        
+                        Text("Tap the heart on a coffee shop to add it to your favorites.")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
-                            .padding()
+                            .padding(.horizontal)
                     }
                     .padding()
                 } else {
-                    LazyVStack(spacing: 20) {
-                        ForEach(favoriteShops) { shop in
-                            NavigationLink(destination: CoffeeShopDetailView(shop: shop, authManager: authManager)) {
-                                FavoriteShopCard(shop: shop)
+                    ScrollView {
+                        LazyVStack(spacing: 20) {
+                            ForEach(favoriteShops) { shop in
+                                NavigationLink(destination: CoffeeShopDetailView(shop: shop, authManager: authManager)) {
+                                    FavoriteShopCard(shop: shop)
+                                }
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
+                        .padding()
                     }
-                    .padding()
                 }
             }
             .navigationTitle("Favorites")
