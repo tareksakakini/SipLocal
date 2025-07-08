@@ -36,18 +36,27 @@ struct ExploreView: View {
                             selectedShop = shop
                         }
                     }) {
-                        VStack(spacing: 4) {
-                            Image(systemName: "cup.and.saucer.fill")
-                                .font(.title2)
-                                .foregroundColor(selectedShop?.id == shop.id ? .red : .accentColor)
+                        VStack(spacing: 2) {
+                            ZStack {
+                                Circle()
+                                    .fill(selectedShop?.id == shop.id ? Color.red : Color.orange)
+                                    .frame(width: 32, height: 32)
+                                
+                                Image(systemName: "cup.and.saucer.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.white)
+                            }
+                            .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+                            
                             Text(shop.name)
-                                .font(.caption)
+                                .font(.caption2)
                                 .foregroundColor(.primary)
-                                .fixedSize(horizontal: true, vertical: false)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 2)
+                                .background(Color.white.opacity(0.9))
+                                .cornerRadius(4)
+                                .shadow(color: .black.opacity(0.2), radius: 1, x: 0, y: 1)
                         }
-                        .padding(8)
-                        .background(Color(.systemBackground).opacity(0.8))
-                        .cornerRadius(8)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
