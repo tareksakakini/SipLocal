@@ -290,11 +290,11 @@ struct CustomSecureField: View {
     }
 }
 
-struct UserData {
-    let fullName: String
-    let username: String
-    let email: String
-}
+//struct UserData {
+//    let fullName: String
+//    let username: String
+//    let email: String
+//}
 
 #Preview {
     SignupView()
