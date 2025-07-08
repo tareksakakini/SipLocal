@@ -24,7 +24,10 @@ struct FavoritesView: View {
                 } else {
                     LazyVStack(spacing: 20) {
                         ForEach(favoriteShops) { shop in
-                            FavoriteShopCard(shop: shop)
+                            NavigationLink(destination: CoffeeShopDetailView(shop: shop, authManager: authManager)) {
+                                FavoriteShopCard(shop: shop)
+                            }
+                            .buttonStyle(PlainButtonStyle())
                         }
                     }
                     .padding()
