@@ -10,11 +10,13 @@ struct ExploreView: View {
     )
     @State private var selectedShop: CoffeeShop?
     
-    var filteredCoffeeShops: [CoffeeShop] {
+    var searchResults: [CoffeeShop] {
         if searchText.isEmpty {
-            return coffeeShops
+            return []
         } else {
-            return coffeeShops.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+            return coffeeShops.filter {
+                $0.name.localizedCaseInsensitiveContains(searchText)
+            }.prefix(3).map { $0 }
         }
     }
     
@@ -29,7 +31,7 @@ struct ExploreView: View {
                     }
                 }
             
-            Map(coordinateRegion: $region, annotationItems: filteredCoffeeShops) { shop in
+            Map(coordinateRegion: $region, annotationItems: coffeeShops) { shop in
                 MapAnnotation(coordinate: shop.coordinate) {
                     Button(action: {
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -85,6 +87,31 @@ struct ExploreView: View {
                 .padding(.horizontal)
                 .padding(.top)
                 
+                if !searchResults.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(searchResults) { shop in
+                            Button(action: {
+                                selectShop(shop)
+                            }) {
+                                HStack {
+                                    Text(shop.name)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                }
+                                .padding(.vertical, 10)
+                                .padding(.horizontal)
+                            }
+                            if shop.id != searchResults.last?.id {
+                                Divider().padding(.horizontal)
+                            }
+                        }
+                    }
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .shadow(radius: 5)
+                    .padding(.horizontal)
+                }
+                
                 Spacer()
                 
                 // Detail card at the bottom
@@ -123,6 +150,15 @@ struct ExploreView: View {
                     .transition(.opacity)
                 }
             }
+        }
+    }
+    
+    private func selectShop(_ shop: CoffeeShop) {
+        searchText = ""
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+            selectedShop = shop
+            region.center = shop.coordinate
+            region.span = MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
         }
     }
 }
