@@ -7,7 +7,8 @@
     "longitude": -121.483894,
     "phone": "+1 916-661-6647",
     "website": "https://qisacoffee.com",
-    "description": "A popular spot known for its high-quality, single-origin coffees and modern, sleek cafes."
+    "description": "A popular spot known for its high-quality, single-origin coffees and modern, sleek cafes.",
+    "header_pic": "qisa.jpg"
   },
   {
     "id": "2",
@@ -17,7 +18,8 @@
     "longitude": -121.183035,
     "phone": "+1 916-673-9740",
     "website": "https://qamariacoffee.com",
-    "description": "Focused on sourcing and roasting the best coffees from around the world. They have a relaxed, community-focused vibe."
+    "description": "Focused on sourcing and roasting the best coffees from around the world. They have a relaxed, community-focused vibe.",
+    "header_pic": "qamaria.png"
   },
   {
     "id": "3",
@@ -27,7 +29,8 @@
     "longitude": -121.494997,
     "phone": "+1 916-764-3125",
     "website": "https://sanaahousecafe.com",
-    "description": "A coffee roaster, bakery, and eatery with a rustic, industrial-chic atmosphere. They emphasize farm-to-table ingredients."
+    "description": "A coffee roaster, bakery, and eatery with a rustic, industrial-chic atmosphere. They emphasize farm-to-table ingredients.",
+    "header_pic": "sanaa.jpg"
   },
   {
     "id": "4",
@@ -37,7 +40,8 @@
     "longitude": -121.402541,
     "phone": "+1 916-551-1500",
     "website": "https://pachamamacoffee.com",
-    "description": "A 100% farmer-owned cooperative, offering organic coffee with a focus on sustainability and fair trade."
+    "description": "A 100% farmer-owned cooperative, offering organic coffee with a focus on sustainability and fair trade.",
+    "header_pic": "estelle.jpg"
   },
   {
     "id": "5",
@@ -47,6 +51,7 @@
     "longitude": -121.481171,
     "phone": "+1 916-469-9683",
     "website": "https://themillsacramento.com",
-    "description": "A charming and stylish cafe known for its unique flavored lattes and homemade waffles."
+    "description": "A charming and stylish cafe known for its unique flavored lattes and homemade waffles.",
+    "header_pic": "themill.jpg"
   }
 ] 

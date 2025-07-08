@@ -89,20 +89,33 @@ struct ExploreView: View {
                 
                 if !searchResults.isEmpty {
                     VStack(alignment: .leading, spacing: 0) {
+                        Text("Suggestions")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal)
+                            .padding(.top, 8)
+
                         ForEach(searchResults) { shop in
                             Button(action: {
                                 selectShop(shop)
                             }) {
-                                HStack {
-                                    Text(shop.name)
-                                        .foregroundColor(.primary)
+                                HStack(spacing: 12) {
+                                    Image(systemName: "cup.and.saucer.fill")
+                                        .foregroundColor(.orange)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(shop.name)
+                                            .foregroundColor(.primary)
+                                            .fontWeight(.medium)
+                                        Text(shop.address)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
                                     Spacer()
                                 }
-                                .padding(.vertical, 10)
-                                .padding(.horizontal)
+                                .padding(12)
                             }
                             if shop.id != searchResults.last?.id {
-                                Divider().padding(.horizontal)
+                                Divider().padding(.leading, 46)
                             }
                         }
                     }
@@ -110,6 +123,7 @@ struct ExploreView: View {
                     .cornerRadius(10)
                     .shadow(radius: 5)
                     .padding(.horizontal)
+                    .padding(.top, 4)
                 }
                 
                 Spacer()
