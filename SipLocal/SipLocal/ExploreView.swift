@@ -109,7 +109,7 @@ struct ExploreView: View {
                     .shadow(radius: 5)
                     .padding(.horizontal)
                     .padding(.bottom, 8)
-                    .transition(.move(edge: .bottom))
+                    .transition(.opacity)
                 }
             }
         }
