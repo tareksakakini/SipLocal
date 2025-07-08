@@ -74,7 +74,7 @@ struct CoffeeShopDetailView: View {
                     }) {
                         Image(systemName: isFavorite ? "heart.fill" : "heart")
                             .font(.headline)
-                            .foregroundColor(isFavorite ? .red : .primary)
+                            .foregroundColor(.primary)
                             .padding(10)
                             .background(Color.white.opacity(0.7))
                             .clipShape(Circle())
