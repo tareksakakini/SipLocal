@@ -90,16 +90,19 @@ struct CoffeeShopDetailView: View {
     }
     
     private func toggleFavorite() {
-        if isFavorite {
+        let originalState = self.isFavorite
+        self.isFavorite.toggle()
+        
+        if originalState {
             authManager.removeFavorite(shopId: shop.id) { success in
-                if success {
-                    self.isFavorite = false
+                if !success {
+                    self.isFavorite = originalState
                 }
             }
         } else {
             authManager.addFavorite(shopId: shop.id) { success in
-                if success {
-                    self.isFavorite = true
+                if !success {
+                    self.isFavorite = originalState
                 }
             }
         }
