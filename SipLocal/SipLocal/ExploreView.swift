@@ -8,6 +8,7 @@ struct ExploreView: View {
         center: CLLocationCoordinate2D(latitude: 38.5816, longitude: -121.4944),
         span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
     )
+    @State private var selectedShop: CoffeeShop?
     
     var filteredCoffeeShops: [CoffeeShop] {
         if searchText.isEmpty {
@@ -18,22 +19,43 @@ struct ExploreView: View {
     }
     
     var body: some View {
-        ZStack {
+        ZStack(alignment: .top) {
+            // Background tap detection
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation {
+                        selectedShop = nil
+                    }
+                }
+            
             Map(coordinateRegion: $region, annotationItems: filteredCoffeeShops) { shop in
                 MapAnnotation(coordinate: shop.coordinate) {
-                    VStack {
-                        Image(systemName: "cup.and.saucer.fill")
-                            .font(.title)
-                            .foregroundColor(.accentColor)
-                        Text(shop.name)
-                            .font(.caption)
-                            .fixedSize(horizontal: true, vertical: false)
+                    Button(action: {
+                        withAnimation {
+                            selectedShop = shop
+                        }
+                    }) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "cup.and.saucer.fill")
+                                .font(.title2)
+                                .foregroundColor(selectedShop?.id == shop.id ? .red : .accentColor)
+                            Text(shop.name)
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                                .fixedSize(horizontal: true, vertical: false)
+                        }
+                        .padding(8)
+                        .background(Color(.systemBackground).opacity(0.8))
+                        .cornerRadius(8)
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .edgesIgnoringSafeArea(.top)
 
-            VStack {
+            VStack(spacing: 0) {
+                // Search bar at the top
                 HStack {
                     Image(systemName: "magnifyingglass")
                     TextField("Search for a coffee shop", text: $searchText)
@@ -50,10 +72,46 @@ struct ExploreView: View {
                 .cornerRadius(10)
                 .shadow(radius: 5)
                 .padding(.horizontal)
+                .padding(.top)
                 
                 Spacer()
+                
+                // Detail card at the bottom
+                if let shop = selectedShop {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text(shop.name)
+                                .font(.title2)
+                                .fontWeight(.bold)
+                            Spacer()
+                            Button(action: {
+                                withAnimation {
+                                    self.selectedShop = nil
+                                }
+                            }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.title2)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                        
+                        Text(shop.address)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                        
+                        Text(shop.phone)
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    .padding()
+                    .background(Color(.systemBackground))
+                    .cornerRadius(15)
+                    .shadow(radius: 5)
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom))
+                }
             }
-            .padding(.top)
         }
     }
 }
