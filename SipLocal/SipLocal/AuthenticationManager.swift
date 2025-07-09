@@ -16,6 +16,7 @@ class AuthenticationManager: ObservableObject {
     @Published var isEmailVerified = false
     @Published var currentUser: User?
     @Published var favoriteShops: Set<String> = []
+    @Published var stampedShops: Set<String> = []
     
     private let auth = Auth.auth()
     private let firestore = Firestore.firestore()
@@ -36,8 +37,10 @@ class AuthenticationManager: ObservableObject {
                 
                 if user != nil {
                     self?.fetchFavorites()
+                    self?.fetchStampedShops()
                 } else {
                     self?.favoriteShops = []
+                    self?.stampedShops = []
                 }
             }
         }
@@ -312,6 +315,61 @@ class AuthenticationManager: ObservableObject {
         return favoriteShops.contains(shopId)
     }
     
+    // MARK: - Stamped Shops
+    
+    func addStamp(shopId: String, completion: @escaping (Bool) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(false)
+            return
+        }
+        
+        let userDocument = firestore.collection("users").document(userId)
+        userDocument.updateData([
+            "stampedShops": FieldValue.arrayUnion([shopId])
+        ]) { error in
+            if error == nil {
+                DispatchQueue.main.async {
+                    self.stampedShops.insert(shopId)
+                }
+            }
+            completion(error == nil)
+        }
+    }
+    
+    func removeStamp(shopId: String, completion: @escaping (Bool) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(false)
+            return
+        }
+        
+        let userDocument = firestore.collection("users").document(userId)
+        userDocument.updateData([
+            "stampedShops": FieldValue.arrayRemove([shopId])
+        ]) { error in
+            if error == nil {
+                DispatchQueue.main.async {
+                    self.stampedShops.remove(shopId)
+                }
+            }
+            completion(error == nil)
+        }
+    }
+    
+    func fetchStampedShops() {
+        guard let userId = currentUser?.uid else { return }
+        
+        let userDocument = firestore.collection("users").document(userId)
+        userDocument.getDocument { document, error in
+            if let document = document,
+               let data = document.data(),
+               let stamps = data["stampedShops"] as? [String] {
+                DispatchQueue.main.async {
+                    self.stampedShops = Set(stamps)
+                }
+            }
+        }
+    }
+
     // MARK: - Profile Image Management
     
     func uploadProfileImage(_ image: UIImage) async -> (success: Bool, errorMessage: String?) {

@@ -1,14 +1,14 @@
 import SwiftUI
 
 struct PassportView: View {
+    @EnvironmentObject var authManager: AuthenticationManager
+    
     let coffeeShops = DataService.loadCoffeeShops()
     let columns = [
         GridItem(.flexible(), spacing: 16),
         GridItem(.flexible(), spacing: 16),
         GridItem(.flexible(), spacing: 16)
     ]
-    
-    @State private var stampedShops: Set<String> = []
     
     var body: some View {
         NavigationStack {
@@ -19,14 +19,14 @@ struct PassportView: View {
                         Text("Stamps Collected")
                             .font(.headline)
                         Spacer()
-                        Text("\(stampedShops.count) of \(coffeeShops.count)")
+                        Text("\(authManager.stampedShops.count) of \(coffeeShops.count)")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
                     
-                    ProgressView(value: Double(stampedShops.count), total: Double(coffeeShops.count))
+                    ProgressView(value: Double(authManager.stampedShops.count), total: Double(coffeeShops.count))
                         .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                        .animation(.easeInOut, value: stampedShops.count)
+                        .animation(.easeInOut, value: authManager.stampedShops.count)
 
                 }
                 .padding()
@@ -34,7 +34,7 @@ struct PassportView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 16) {
                         ForEach(coffeeShops) { shop in
-                            let isStamped = stampedShops.contains(shop.id)
+                            let isStamped = authManager.stampedShops.contains(shop.id)
                             
                             Image(shop.stampName)
                                 .resizable()
@@ -45,9 +45,9 @@ struct PassportView: View {
                                 .onTapGesture {
                                     withAnimation(.easeInOut(duration: 0.2)) {
                                         if isStamped {
-                                            stampedShops.remove(shop.id)
+                                            authManager.removeStamp(shopId: shop.id) { _ in }
                                         } else {
-                                            stampedShops.insert(shop.id)
+                                            authManager.addStamp(shopId: shop.id) { _ in }
                                         }
                                     }
                                 }
@@ -64,5 +64,6 @@ struct PassportView: View {
 struct PassportView_Previews: PreviewProvider {
     static var previews: some View {
         PassportView()
+            .environmentObject(AuthenticationManager())
     }
 } 
