@@ -5,6 +5,7 @@ struct CoffeeShopDetailView: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var isFavorite: Bool
+    @State private var showMenu = false
     
     init(shop: CoffeeShop, authManager: AuthenticationManager) {
         self.shop = shop
@@ -54,6 +55,30 @@ struct CoffeeShopDetailView: View {
                                 }
                             }
                             .font(.subheadline)
+                            
+                            Divider()
+                            
+                            // Menu Button
+                            Button(action: {
+                                showMenu = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "menucard")
+                                        .font(.title3)
+                                        .foregroundColor(.white)
+                                    Text("View Menu")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.white)
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.subheadline)
+                                        .foregroundColor(.white)
+                                }
+                                .padding()
+                                .background(Color.black)
+                                .cornerRadius(12)
+                            }
                         }
                         .padding()
                         .frame(width: geometry.size.width)
@@ -92,6 +117,9 @@ struct CoffeeShopDetailView: View {
             }
             .edgesIgnoringSafeArea(.top)
             .navigationBarBackButtonHidden(true)
+        }
+        .sheet(isPresented: $showMenu) {
+            MenuCategorySelectionView(shop: shop)
         }
     }
     

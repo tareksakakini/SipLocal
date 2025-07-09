@@ -1,6 +1,18 @@
 import Foundation
 import CoreLocation
 
+struct MenuItem: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let price: Double
+}
+
+struct MenuCategory: Codable, Identifiable {
+    var id: String { name }
+    let name: String
+    let items: [MenuItem]
+}
+
 struct CoffeeShop: Codable, Identifiable {
     let id: String
     let name: String
@@ -12,6 +24,7 @@ struct CoffeeShop: Codable, Identifiable {
     let description: String
     let imageName: String
     let stampName: String
+    let menu: [MenuCategory]
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)

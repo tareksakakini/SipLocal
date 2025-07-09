@@ -9,7 +9,41 @@
     "website": "https://qisacoffee.com",
     "description": "A popular spot known for its high-quality, single-origin coffees and modern, sleek cafes.",
     "imageName": "qisa",
-    "stampName": "qisa_stamp"
+    "stampName": "qisa_stamp",
+    "menu": [
+      {
+        "name": "Yemeni",
+        "items": [
+          { "name": "Yemeni", "price": 4.50 },
+          { "name": "Mocha", "price": 5.00 },
+          { "name": "Hot Chocolate", "price": 4.00 }
+        ]
+      },
+      {
+        "name": "Iced",
+        "items": [
+          { "name": "Latte", "price": 5.00 },
+          { "name": "Mocha", "price": 5.50 },
+          { "name": "Macchiato", "price": 5.25 }
+        ]
+      },
+      {
+        "name": "Frappe",
+        "items": [
+          { "name": "Chocolate", "price": 6.00 },
+          { "name": "Caramel", "price": 6.00 },
+          { "name": "Strawberry", "price": 6.25 }
+        ]
+      },
+      {
+        "name": "Frappe2",
+        "items": [
+          { "name": "Chocolate2", "price": 6.00 },
+          { "name": "Caramel2", "price": 6.00 },
+          { "name": "Strawberry2", "price": 6.25 }
+        ]
+      }
+    ]
   },
   {
     "id": "2",
@@ -21,7 +55,33 @@
     "website": "https://qamariacoffee.com",
     "description": "Focused on sourcing and roasting the best coffees from around the world. They have a relaxed, community-focused vibe.",
     "imageName": "qamaria",
-    "stampName": "qamaria_stamp"
+    "stampName": "qamaria_stamp",
+    "menu": [
+      {
+        "name": "Hot",
+        "items": [
+          { "name": "Latte", "price": 4.50 },
+          { "name": "Mocha", "price": 5.00 },
+          { "name": "Hot Chocolate", "price": 4.00 }
+        ]
+      },
+      {
+        "name": "Iced",
+        "items": [
+          { "name": "Latte", "price": 5.00 },
+          { "name": "Mocha", "price": 5.50 },
+          { "name": "Macchiato", "price": 5.25 }
+        ]
+      },
+      {
+        "name": "Frappe",
+        "items": [
+          { "name": "Chocolate", "price": 6.00 },
+          { "name": "Caramel", "price": 6.00 },
+          { "name": "Strawberry", "price": 6.25 }
+        ]
+      }
+    ]
   },
   {
     "id": "3",
@@ -33,7 +93,33 @@
     "website": "https://sanaahousecafe.com",
     "description": "A coffee roaster, bakery, and eatery with a rustic, industrial-chic atmosphere. They emphasize farm-to-table ingredients.",
     "imageName": "sanaa",
-    "stampName": "sanaa_stamp"
+    "stampName": "sanaa_stamp",
+    "menu": [
+      {
+        "name": "Hot",
+        "items": [
+          { "name": "Latte", "price": 4.50 },
+          { "name": "Mocha", "price": 5.00 },
+          { "name": "Hot Chocolate", "price": 4.00 }
+        ]
+      },
+      {
+        "name": "Iced",
+        "items": [
+          { "name": "Latte", "price": 5.00 },
+          { "name": "Mocha", "price": 5.50 },
+          { "name": "Macchiato", "price": 5.25 }
+        ]
+      },
+      {
+        "name": "Frappe",
+        "items": [
+          { "name": "Chocolate", "price": 6.00 },
+          { "name": "Caramel", "price": 6.00 },
+          { "name": "Strawberry", "price": 6.25 }
+        ]
+      }
+    ]
   },
   {
     "id": "4",
@@ -45,7 +131,33 @@
     "website": "https://pachamamacoffee.com",
     "description": "A 100% farmer-owned cooperative, offering organic coffee with a focus on sustainability and fair trade.",
     "imageName": "estelle",
-    "stampName": "estelle_stamp"
+    "stampName": "estelle_stamp",
+    "menu": [
+      {
+        "name": "Hot",
+        "items": [
+          { "name": "Latte", "price": 4.50 },
+          { "name": "Mocha", "price": 5.00 },
+          { "name": "Hot Chocolate", "price": 4.00 }
+        ]
+      },
+      {
+        "name": "Iced",
+        "items": [
+          { "name": "Latte", "price": 5.00 },
+          { "name": "Mocha", "price": 5.50 },
+          { "name": "Macchiato", "price": 5.25 }
+        ]
+      },
+      {
+        "name": "Frappe",
+        "items": [
+          { "name": "Chocolate", "price": 6.00 },
+          { "name": "Caramel", "price": 6.00 },
+          { "name": "Strawberry", "price": 6.25 }
+        ]
+      }
+    ]
   },
   {
     "id": "5",
@@ -57,6 +169,32 @@
     "website": "https://themillsacramento.com",
     "description": "A charming and stylish cafe known for its unique flavored lattes and homemade waffles.",
     "imageName": "themill",
-    "stampName": "themill_stamp"
+    "stampName": "themill_stamp",
+    "menu": [
+      {
+        "name": "Hot",
+        "items": [
+          { "name": "Latte", "price": 4.50 },
+          { "name": "Mocha", "price": 5.00 },
+          { "name": "Hot Chocolate", "price": 4.00 }
+        ]
+      },
+      {
+        "name": "Iced",
+        "items": [
+          { "name": "Latte", "price": 5.00 },
+          { "name": "Mocha", "price": 5.50 },
+          { "name": "Macchiato", "price": 5.25 }
+        ]
+      },
+      {
+        "name": "Frappe",
+        "items": [
+          { "name": "Chocolate", "price": 6.00 },
+          { "name": "Caramel", "price": 6.00 },
+          { "name": "Strawberry", "price": 6.25 }
+        ]
+      }
+    ]
   }
 ] 
