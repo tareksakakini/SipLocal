@@ -24,238 +24,249 @@ struct ProfileView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // User Info Section
-                    if let user = userData {
-                        VStack(spacing: 20) {
-                            // Profile Avatar
-                            VStack(spacing: 12) {
-                                ZStack {
-                                    if let profileImageUrl = user.profileImageUrl, !profileImageUrl.isEmpty {
-                                        // Add cache busting parameter to force refresh
-                                        let cacheBustingUrl = "\(profileImageUrl)?t=\(Date().timeIntervalSince1970)"
-                                        AsyncImage(url: URL(string: cacheBustingUrl)) { phase in
-                                            switch phase {
-                                            case .empty:
-                                                Circle()
-                                                    .fill(Color.black.opacity(0.1))
-                                                    .frame(width: 90, height: 90)
-                                                    .overlay(
-                                                        ProgressView()
-                                                            .tint(.black.opacity(0.6))
-                                                    )
-                                            case .success(let image):
-                                                image
-                                                    .resizable()
-                                                    .aspectRatio(contentMode: .fill)
-                                                    .frame(width: 90, height: 90)
-                                                    .clipShape(Circle())
-                                                    .onTapGesture {
-                                                        showFullSizeImage = true
-                                                    }
-                                            case .failure(_):
-                                                Circle()
-                                                    .fill(Color.black)
-                                                    .frame(width: 90, height: 90)
-                                                    .overlay(
-                                                        Text(user.fullName.prefix(1))
-                                                            .font(.system(size: 32, weight: .medium, design: .rounded))
-                                                            .foregroundColor(.white)
-                                                    )
-                                            @unknown default:
-                                                EmptyView()
+            ZStack {
+                // Main Content
+                if let user = userData {
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            // User Info Section
+                            VStack(spacing: 20) {
+                                // Profile Avatar
+                                VStack(spacing: 12) {
+                                    ZStack {
+                                        if let profileImageUrl = user.profileImageUrl, !profileImageUrl.isEmpty {
+                                            // Add cache busting parameter to force refresh
+                                            let cacheBustingUrl = "\(profileImageUrl)?t=\(Date().timeIntervalSince1970)"
+                                            AsyncImage(url: URL(string: cacheBustingUrl)) { phase in
+                                                switch phase {
+                                                case .empty:
+                                                    Circle()
+                                                        .fill(Color.black.opacity(0.1))
+                                                        .frame(width: 90, height: 90)
+                                                        .overlay(
+                                                            ProgressView()
+                                                                .tint(.black.opacity(0.6))
+                                                        )
+                                                case .success(let image):
+                                                    image
+                                                        .resizable()
+                                                        .aspectRatio(contentMode: .fill)
+                                                        .frame(width: 90, height: 90)
+                                                        .clipShape(Circle())
+                                                        .onTapGesture {
+                                                            showFullSizeImage = true
+                                                        }
+                                                case .failure(_):
+                                                    Circle()
+                                                        .fill(Color.black)
+                                                        .frame(width: 90, height: 90)
+                                                        .overlay(
+                                                            Text(user.fullName.prefix(1))
+                                                                .font(.system(size: 32, weight: .medium, design: .rounded))
+                                                                .foregroundColor(.white)
+                                                        )
+                                                @unknown default:
+                                                    EmptyView()
+                                                }
                                             }
+                                            .id(imageRefreshId)
+                                        } else {
+                                            Circle()
+                                                .fill(Color.black)
+                                                .frame(width: 90, height: 90)
+                                                .overlay(
+                                                    Text(user.fullName.prefix(1))
+                                                        .font(.system(size: 32, weight: .medium, design: .rounded))
+                                                        .foregroundColor(.white)
+                                                )
                                         }
-                                        .id(imageRefreshId)
-                                    } else {
+                                        
+                                        // Edit button
                                         Circle()
-                                            .fill(Color.black)
-                                            .frame(width: 90, height: 90)
+                                            .fill(Color.white)
+                                            .frame(width: 28, height: 28)
                                             .overlay(
-                                                Text(user.fullName.prefix(1))
-                                                    .font(.system(size: 32, weight: .medium, design: .rounded))
-                                                    .foregroundColor(.white)
+                                                Button(action: {
+                                                    showPhotoActionSheet = true
+                                                }) {
+                                                    Image(systemName: "camera.fill")
+                                                        .font(.system(size: 14, weight: .medium))
+                                                        .foregroundColor(.black.opacity(0.7))
+                                                }
                                             )
+                                            .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
+                                            .offset(x: 30, y: 30)
                                     }
-                                    
-                                    // Edit button
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 28, height: 28)
-                                        .overlay(
-                                            Button(action: {
-                                                showPhotoActionSheet = true
-                                            }) {
-                                                Image(systemName: "camera.fill")
-                                                    .font(.system(size: 14, weight: .medium))
-                                                    .foregroundColor(.black.opacity(0.7))
-                                            }
-                                        )
-                                        .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
-                                        .offset(x: 30, y: 30)
+                                    .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
                                 }
-                                .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
-                            }
-                            .padding(.top, 32)
-                            
-                            // User Info Card
-                            VStack(spacing: 24) {
-                                Text(user.fullName)
-                                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                                    .foregroundColor(.primary)
+                                .padding(.top, 32)
                                 
-                                VStack(spacing: 20) {
-                                    // Username row
-                                    HStack(spacing: 16) {
-                                        Circle()
-                                            .fill(Color.black.opacity(0.05))
-                                            .frame(width: 40, height: 40)
-                                            .overlay(
-                                                Image(systemName: "person")
-                                                    .font(.system(size: 18, weight: .medium))
-                                                    .foregroundColor(.black.opacity(0.7))
-                                            )
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("Username")
-                                                .font(.system(size: 12, weight: .medium))
-                                                .foregroundColor(.black.opacity(0.5))
-                                                .textCase(.uppercase)
-                                                .tracking(0.5)
-                                            Text(user.username)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(.primary)
-                                        }
-                                        Spacer()
-                                    }
-                                    
-                                    Rectangle()
-                                        .fill(Color.black.opacity(0.05))
-                                        .frame(height: 1)
-                                    
-                                    // Email row
-                                    HStack(spacing: 16) {
-                                        Circle()
-                                            .fill(Color.black.opacity(0.05))
-                                            .frame(width: 40, height: 40)
-                                            .overlay(
-                                                Image(systemName: "envelope")
-                                                    .font(.system(size: 18, weight: .medium))
-                                                    .foregroundColor(.black.opacity(0.7))
-                                            )
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text("Email")
-                                                .font(.system(size: 12, weight: .medium))
-                                                .foregroundColor(.black.opacity(0.5))
-                                                .textCase(.uppercase)
-                                                .tracking(0.5)
-                                            Text(user.email)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundColor(.primary)
-                                                .lineLimit(1)
-                                                .truncationMode(.middle)
-                                        }
-                                        Spacer()
-                                    }
-                                }
-                                .padding(28)
-                                .background(Color.white)
-                                .cornerRadius(20)
-                                .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 8)
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
-                        }
-                        
-                        // Upload result message
-                        if showUploadResult, let result = uploadResult {
-                            HStack {
-                                Image(systemName: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                                    .foregroundColor(result.success ? .black.opacity(0.7) : .black.opacity(0.7))
-                                Text(result.message)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.primary)
-                            }
-                            .padding()
-                            .background(Color.black.opacity(0.05))
-                            .cornerRadius(12)
-                            .padding(.horizontal, 20)
-                            .transition(.scale.combined(with: .opacity))
-                        }
-                        
-                        // Account deletion result message
-                        if showDeleteResult, let result = deleteResult {
-                            HStack {
-                                Image(systemName: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                                    .foregroundColor(result.success ? .black.opacity(0.7) : .black.opacity(0.7))
-                                Text(result.message)
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(.primary)
-                            }
-                            .padding()
-                            .background(Color.black.opacity(0.05))
-                            .cornerRadius(12)
-                            .padding(.horizontal, 20)
-                            .transition(.scale.combined(with: .opacity))
-                        }
-                        
-                        // Action Buttons Section
-                        VStack(spacing: 16) {
-                            // Sign Out Button
-                            Button(action: {
-                                showSignOutConfirmation = true
-                            }) {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "arrow.right.square")
-                                        .font(.system(size: 18, weight: .medium))
-                                        .foregroundColor(.black.opacity(0.7))
-                                    Text("Sign Out")
-                                        .font(.system(size: 16, weight: .medium))
+                                // User Info Card
+                                VStack(spacing: 24) {
+                                    Text(user.fullName)
+                                        .font(.system(size: 24, weight: .semibold, design: .rounded))
                                         .foregroundColor(.primary)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(.black.opacity(0.3))
+                                    
+                                    VStack(spacing: 20) {
+                                        // Username row
+                                        HStack(spacing: 16) {
+                                            Circle()
+                                                .fill(Color.black.opacity(0.05))
+                                                .frame(width: 40, height: 40)
+                                                .overlay(
+                                                    Image(systemName: "person")
+                                                        .font(.system(size: 18, weight: .medium))
+                                                        .foregroundColor(.black.opacity(0.7))
+                                                )
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text("Username")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.black.opacity(0.5))
+                                                    .textCase(.uppercase)
+                                                    .tracking(0.5)
+                                                Text(user.username)
+                                                    .font(.system(size: 16, weight: .medium))
+                                                    .foregroundColor(.primary)
+                                            }
+                                            Spacer()
+                                        }
+                                        
+                                        Rectangle()
+                                            .fill(Color.black.opacity(0.05))
+                                            .frame(height: 1)
+                                        
+                                        // Email row
+                                        HStack(spacing: 16) {
+                                            Circle()
+                                                .fill(Color.black.opacity(0.05))
+                                                .frame(width: 40, height: 40)
+                                                .overlay(
+                                                    Image(systemName: "envelope")
+                                                        .font(.system(size: 18, weight: .medium))
+                                                        .foregroundColor(.black.opacity(0.7))
+                                                )
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text("Email")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.black.opacity(0.5))
+                                                    .textCase(.uppercase)
+                                                    .tracking(0.5)
+                                                Text(user.email)
+                                                    .font(.system(size: 16, weight: .medium))
+                                                    .foregroundColor(.primary)
+                                                    .lineLimit(1)
+                                                    .truncationMode(.middle)
+                                            }
+                                            Spacer()
+                                        }
+                                    }
+                                    .padding(28)
+                                    .background(Color.white)
+                                    .cornerRadius(20)
+                                    .shadow(color: Color.black.opacity(0.04), radius: 20, x: 0, y: 8)
                                 }
-                                .padding(20)
-                                .background(Color.white)
-                                .cornerRadius(16)
-                                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                                .padding(.horizontal, 20)
+                                .padding(.top, 20)
                             }
                             
-                            // Delete Account Button
-                            Button(action: {
-                                showDeleteConfirmation = true
-                            }) {
-                                HStack(spacing: 12) {
-                                    if isDeletingAccount {
-                                        ProgressView()
-                                            .scaleEffect(0.8)
-                                            .tint(.black.opacity(0.7))
-                                    } else {
-                                        Image(systemName: "trash")
+                            // Upload result message
+                            if showUploadResult, let result = uploadResult {
+                                HStack {
+                                    Image(systemName: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                        .foregroundColor(result.success ? .black.opacity(0.7) : .black.opacity(0.7))
+                                    Text(result.message)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.primary)
+                                }
+                                .padding()
+                                .background(Color.black.opacity(0.05))
+                                .cornerRadius(12)
+                                .padding(.horizontal, 20)
+                                .transition(.scale.combined(with: .opacity))
+                            }
+                            
+                            // Account deletion result message
+                            if showDeleteResult, let result = deleteResult {
+                                HStack {
+                                    Image(systemName: result.success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                                        .foregroundColor(result.success ? .black.opacity(0.7) : .black.opacity(0.7))
+                                    Text(result.message)
+                                        .font(.system(size: 14, weight: .medium))
+                                        .foregroundColor(.primary)
+                                }
+                                .padding()
+                                .background(Color.black.opacity(0.05))
+                                .cornerRadius(12)
+                                .padding(.horizontal, 20)
+                                .transition(.scale.combined(with: .opacity))
+                            }
+                            
+                            // Action Buttons Section
+                            VStack(spacing: 16) {
+                                // Sign Out Button
+                                Button(action: {
+                                    showSignOutConfirmation = true
+                                }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "arrow.right.square")
                                             .font(.system(size: 18, weight: .medium))
                                             .foregroundColor(.black.opacity(0.7))
-                                    }
-                                    Text(isDeletingAccount ? "Deleting Account..." : "Delete Account")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(.primary)
-                                    Spacer()
-                                    if !isDeletingAccount {
+                                        Text("Sign Out")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.primary)
+                                        Spacer()
                                         Image(systemName: "chevron.right")
                                             .font(.system(size: 14, weight: .medium))
                                             .foregroundColor(.black.opacity(0.3))
                                     }
+                                    .padding(20)
+                                    .background(Color.white)
+                                    .cornerRadius(16)
+                                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
                                 }
-                                .padding(20)
-                                .background(Color.white)
-                                .cornerRadius(16)
-                                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                                
+                                // Delete Account Button
+                                Button(action: {
+                                    showDeleteConfirmation = true
+                                }) {
+                                    HStack(spacing: 12) {
+                                        if isDeletingAccount {
+                                            ProgressView()
+                                                .scaleEffect(0.8)
+                                                .tint(.black.opacity(0.7))
+                                        } else {
+                                            Image(systemName: "trash")
+                                                .font(.system(size: 18, weight: .medium))
+                                                .foregroundColor(.black.opacity(0.7))
+                                        }
+                                        Text(isDeletingAccount ? "Deleting Account..." : "Delete Account")
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundColor(.primary)
+                                        Spacer()
+                                        if !isDeletingAccount {
+                                            Image(systemName: "chevron.right")
+                                                .font(.system(size: 14, weight: .medium))
+                                                .foregroundColor(.black.opacity(0.3))
+                                        }
+                                    }
+                                    .padding(20)
+                                    .background(Color.white)
+                                    .cornerRadius(16)
+                                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                                }
+                                .disabled(isDeletingAccount)
                             }
-                            .disabled(isDeletingAccount)
+                            .padding(.horizontal, 20)
                         }
-                        .padding(.horizontal, 20)
-                    } else if isLoadingUserData {
+                    }
+                    .background(Color(.systemGray6))
+                }
+                
+                // Loading View
+                if isLoadingUserData {
+                    ZStack {
+                        Color(.systemGray6).edgesIgnoringSafeArea(.all)
+                        
                         VStack(spacing: 20) {
                             ProgressView()
                                 .scaleEffect(1.2)
@@ -263,14 +274,16 @@ struct ProfileView: View {
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.secondary)
                         }
-                        .padding(.top, 100)
                     }
+                    .transition(.opacity.animation(.easeInOut(duration: 0.3)))
                 }
             }
-            .background(Color(.systemGray6))
             .navigationTitle("Profile")
             .onAppear {
-                fetchUserData()
+                // Only fetch user data if it hasn't been loaded yet
+                if userData == nil {
+                    fetchUserData()
+                }
             }
         }
         .confirmationDialog(
@@ -302,7 +315,7 @@ struct ProfileView: View {
             isPresented: $showPhotoActionSheet,
             titleVisibility: .visible
         ) {
-            if let user = userData, let profileImageUrl = user.profileImageUrl, !profileImageUrl.isEmpty {
+            if let profileImageUrl = userData?.profileImageUrl, !profileImageUrl.isEmpty {
                 // User has a profile picture - show change and remove options
                 Button("Change Photo") {
                     showPhotoPicker = true
@@ -324,7 +337,7 @@ struct ProfileView: View {
                 Button("Cancel", role: .cancel) { }
             }
         } message: {
-            if let user = userData, let profileImageUrl = user.profileImageUrl, !profileImageUrl.isEmpty {
+            if let profileImageUrl = userData?.profileImageUrl, !profileImageUrl.isEmpty {
                 Text("Choose an option for your profile picture")
             } else {
                 Text("Add a profile picture to personalize your account")
