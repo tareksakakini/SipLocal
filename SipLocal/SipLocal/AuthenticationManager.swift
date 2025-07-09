@@ -323,16 +323,25 @@ class AuthenticationManager: ObservableObject {
             return
         }
         
+        // Optimistic UI update
+        DispatchQueue.main.async {
+            self.stampedShops.insert(shopId)
+        }
+        
         let userDocument = firestore.collection("users").document(userId)
         userDocument.updateData([
             "stampedShops": FieldValue.arrayUnion([shopId])
         ]) { error in
-            if error == nil {
+            if let error = error {
+                // Revert on failure
                 DispatchQueue.main.async {
-                    self.stampedShops.insert(shopId)
+                    self.stampedShops.remove(shopId)
                 }
+                print("Error adding stamp: \(error.localizedDescription)")
+                completion(false)
+            } else {
+                completion(true)
             }
-            completion(error == nil)
         }
     }
     
@@ -342,16 +351,25 @@ class AuthenticationManager: ObservableObject {
             return
         }
         
+        // Optimistic UI update
+        DispatchQueue.main.async {
+            self.stampedShops.remove(shopId)
+        }
+        
         let userDocument = firestore.collection("users").document(userId)
         userDocument.updateData([
             "stampedShops": FieldValue.arrayRemove([shopId])
         ]) { error in
-            if error == nil {
+            if let error = error {
+                // Revert on failure
                 DispatchQueue.main.async {
-                    self.stampedShops.remove(shopId)
+                    self.stampedShops.insert(shopId)
                 }
+                print("Error removing stamp: \(error.localizedDescription)")
+                completion(false)
+            } else {
+                completion(true)
             }
-            completion(error == nil)
         }
     }
     
