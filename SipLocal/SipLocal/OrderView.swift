@@ -43,6 +43,8 @@ struct OrderView: View {
                 .cornerRadius(12)
                 .padding([.horizontal, .top])
                 
+                Spacer().frame(height: 8)
+                
                 // Coffee Shop List
                 ScrollView {
                     LazyVStack(spacing: 16) {
