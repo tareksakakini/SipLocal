@@ -8,7 +8,8 @@
     "phone": "+1 916-661-6647",
     "website": "https://qisacoffee.com",
     "description": "A popular spot known for its high-quality, single-origin coffees and modern, sleek cafes.",
-    "imageName": "qisa"
+    "imageName": "qisa",
+    "stampName": "qisa_stamp"
   },
   {
     "id": "2",
@@ -19,7 +20,8 @@
     "phone": "+1 916-673-9740",
     "website": "https://qamariacoffee.com",
     "description": "Focused on sourcing and roasting the best coffees from around the world. They have a relaxed, community-focused vibe.",
-    "imageName": "qamaria"
+    "imageName": "qamaria",
+    "stampName": "qamaria_stamp"
   },
   {
     "id": "3",
@@ -30,7 +32,8 @@
     "phone": "+1 916-764-3125",
     "website": "https://sanaahousecafe.com",
     "description": "A coffee roaster, bakery, and eatery with a rustic, industrial-chic atmosphere. They emphasize farm-to-table ingredients.",
-    "imageName": "sanaa"
+    "imageName": "sanaa",
+    "stampName": "sanaa_stamp"
   },
   {
     "id": "4",
@@ -41,7 +44,8 @@
     "phone": "+1 916-551-1500",
     "website": "https://pachamamacoffee.com",
     "description": "A 100% farmer-owned cooperative, offering organic coffee with a focus on sustainability and fair trade.",
-    "imageName": "estelle"
+    "imageName": "estelle",
+    "stampName": "estelle_stamp"
   },
   {
     "id": "5",
@@ -52,6 +56,7 @@
     "phone": "+1 916-469-9683",
     "website": "https://themillsacramento.com",
     "description": "A charming and stylish cafe known for its unique flavored lattes and homemade waffles.",
-    "imageName": "themill"
+    "imageName": "themill",
+    "stampName": "themill_stamp"
   }
 ] 

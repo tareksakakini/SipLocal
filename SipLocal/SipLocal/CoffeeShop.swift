@@ -11,6 +11,7 @@ struct CoffeeShop: Codable, Identifiable {
     let website: String
     let description: String
     let imageName: String
+    let stampName: String
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
