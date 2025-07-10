@@ -14,41 +14,41 @@
       {
         "name": "Yemeni",
         "items": [
-          { "name": "Yemeni", "price": 4.50 },
-          { "name": "Mocha", "price": 5.00 },
-          { "name": "Hot Chocolate", "price": 4.00 }
+          { "name": "Yemeni", "price": 4.50, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Hot Chocolate", "price": 4.00, "customizations": ["milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Iced",
         "items": [
-          { "name": "Latte", "price": 5.00 },
-          { "name": "Mocha", "price": 5.50 },
-          { "name": "Macchiato", "price": 5.25 },
-          { "name": "Espresso", "price": 4.00 },
-          { "name": "Americano", "price": 4.00 },
-          { "name": "Cold Brew", "price": 4.00 },
-          { "name": "Cold Brew Latte", "price": 4.00 },
-          { "name": "Cold Brew Mocha", "price": 4.00 },
-          { "name": "Cold Brew Macchiato", "price": 4.00 },
-          { "name": "Cold Brew Espresso", "price": 4.00 },
-          { "name": "Cold Brew Americano", "price": 4.00 }
+          { "name": "Latte", "price": 5.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.50, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Macchiato", "price": 5.25, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Espresso", "price": 4.00, "customizations": ["sugar", "size"] },
+          { "name": "Americano", "price": 4.00, "customizations": ["ice", "sugar", "size"] },
+          { "name": "Cold Brew", "price": 4.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Cold Brew Latte", "price": 4.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Cold Brew Mocha", "price": 4.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Cold Brew Macchiato", "price": 4.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Cold Brew Espresso", "price": 4.00, "customizations": ["ice", "sugar", "size"] },
+          { "name": "Cold Brew Americano", "price": 4.00, "customizations": ["ice", "sugar", "size"] }
         ]
       },
       {
         "name": "Frappe",
         "items": [
-          { "name": "Chocolate", "price": 6.00 },
-          { "name": "Caramel", "price": 6.00 },
-          { "name": "Strawberry", "price": 6.25 }
+          { "name": "Chocolate", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Caramel", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Strawberry", "price": 6.25, "customizations": ["ice", "milk", "size"] }
         ]
       },
       {
         "name": "Frappe2",
         "items": [
-          { "name": "Chocolate2", "price": 6.00 },
-          { "name": "Caramel2", "price": 6.00 },
-          { "name": "Strawberry2", "price": 6.25 }
+          { "name": "Chocolate2", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Caramel2", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Strawberry2", "price": 6.25, "customizations": ["ice", "milk", "size"] }
         ]
       }
     ]
@@ -68,25 +68,25 @@
       {
         "name": "Hot",
         "items": [
-          { "name": "Latte", "price": 4.50 },
-          { "name": "Mocha", "price": 5.00 },
-          { "name": "Hot Chocolate", "price": 4.00 }
+          { "name": "Latte", "price": 4.50, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.00, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Hot Chocolate", "price": 4.00, "customizations": ["milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Iced",
         "items": [
-          { "name": "Latte", "price": 5.00 },
-          { "name": "Mocha", "price": 5.50 },
-          { "name": "Macchiato", "price": 5.25 }
+          { "name": "Latte", "price": 5.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.50, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Macchiato", "price": 5.25, "customizations": ["ice", "milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Frappe",
         "items": [
-          { "name": "Chocolate", "price": 6.00 },
-          { "name": "Caramel", "price": 6.00 },
-          { "name": "Strawberry", "price": 6.25 }
+          { "name": "Chocolate", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Caramel", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Strawberry", "price": 6.25, "customizations": ["ice", "milk", "size"] }
         ]
       }
     ]
@@ -106,25 +106,25 @@
       {
         "name": "Hot",
         "items": [
-          { "name": "Latte", "price": 4.50 },
-          { "name": "Mocha", "price": 5.00 },
-          { "name": "Hot Chocolate", "price": 4.00 }
+          { "name": "Latte", "price": 4.50, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.00, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Hot Chocolate", "price": 4.00, "customizations": ["milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Iced",
         "items": [
-          { "name": "Latte", "price": 5.00 },
-          { "name": "Mocha", "price": 5.50 },
-          { "name": "Macchiato", "price": 5.25 }
+          { "name": "Latte", "price": 5.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.50, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Macchiato", "price": 5.25, "customizations": ["ice", "milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Frappe",
         "items": [
-          { "name": "Chocolate", "price": 6.00 },
-          { "name": "Caramel", "price": 6.00 },
-          { "name": "Strawberry", "price": 6.25 }
+          { "name": "Chocolate", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Caramel", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Strawberry", "price": 6.25, "customizations": ["ice", "milk", "size"] }
         ]
       }
     ]
@@ -144,25 +144,25 @@
       {
         "name": "Hot",
         "items": [
-          { "name": "Latte", "price": 4.50 },
-          { "name": "Mocha", "price": 5.00 },
-          { "name": "Hot Chocolate", "price": 4.00 }
+          { "name": "Latte", "price": 4.50, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.00, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Hot Chocolate", "price": 4.00, "customizations": ["milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Iced",
         "items": [
-          { "name": "Latte", "price": 5.00 },
-          { "name": "Mocha", "price": 5.50 },
-          { "name": "Macchiato", "price": 5.25 }
+          { "name": "Latte", "price": 5.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.50, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Macchiato", "price": 5.25, "customizations": ["ice", "milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Frappe",
         "items": [
-          { "name": "Chocolate", "price": 6.00 },
-          { "name": "Caramel", "price": 6.00 },
-          { "name": "Strawberry", "price": 6.25 }
+          { "name": "Chocolate", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Caramel", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Strawberry", "price": 6.25, "customizations": ["ice", "milk", "size"] }
         ]
       }
     ]
@@ -182,25 +182,25 @@
       {
         "name": "Hot",
         "items": [
-          { "name": "Latte", "price": 4.50 },
-          { "name": "Mocha", "price": 5.00 },
-          { "name": "Hot Chocolate", "price": 4.00 }
+          { "name": "Latte", "price": 4.50, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.00, "customizations": ["milk", "sugar", "size"] },
+          { "name": "Hot Chocolate", "price": 4.00, "customizations": ["milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Iced",
         "items": [
-          { "name": "Latte", "price": 5.00 },
-          { "name": "Mocha", "price": 5.50 },
-          { "name": "Macchiato", "price": 5.25 }
+          { "name": "Latte", "price": 5.00, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Mocha", "price": 5.50, "customizations": ["ice", "milk", "sugar", "size"] },
+          { "name": "Macchiato", "price": 5.25, "customizations": ["ice", "milk", "sugar", "size"] }
         ]
       },
       {
         "name": "Frappe",
         "items": [
-          { "name": "Chocolate", "price": 6.00 },
-          { "name": "Caramel", "price": 6.00 },
-          { "name": "Strawberry", "price": 6.25 }
+          { "name": "Chocolate", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Caramel", "price": 6.00, "customizations": ["ice", "milk", "size"] },
+          { "name": "Strawberry", "price": 6.25, "customizations": ["ice", "milk", "size"] }
         ]
       }
     ]

@@ -5,6 +5,7 @@ struct MenuItem: Codable, Identifiable {
     var id: String { name }
     let name: String
     let price: Double
+    let customizations: [String]?
 }
 
 struct MenuCategory: Codable, Identifiable {

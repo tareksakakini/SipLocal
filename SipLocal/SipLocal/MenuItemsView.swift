@@ -6,6 +6,12 @@ struct MenuItemsView: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var cartManager: CartManager
     @State private var showingCart = false
+    @State private var customizingItem: MenuItem? = nil
+    // Store customization selections
+    @State private var selectedIce: String = "Regular"
+    @State private var selectedMilk: String = "Whole"
+    @State private var selectedSugar: String = "Regular"
+    @State private var selectedSize: String = "Medium"
     
     var body: some View {
         NavigationStack {
@@ -45,7 +51,15 @@ struct MenuItemsView: View {
                                 item: item,
                                 shop: shop,
                                 category: category.name,
-                                cartManager: cartManager
+                                cartManager: cartManager,
+                                onAdd: {
+                                    customizingItem = item
+                                    // Reset selections
+                                    selectedIce = "Regular"
+                                    selectedMilk = "Whole"
+                                    selectedSugar = "Regular"
+                                    selectedSize = "Medium"
+                                }
                             )
                         }
                     }
@@ -98,6 +112,25 @@ struct MenuItemsView: View {
                 CartView()
                     .environmentObject(cartManager)
             }
+            .sheet(item: $customizingItem) { item in
+                DrinkCustomizationSheet(
+                    item: item,
+                    customizations: item.customizations ?? [],
+                    selectedIce: $selectedIce,
+                    selectedMilk: $selectedMilk,
+                    selectedSugar: $selectedSugar,
+                    selectedSize: $selectedSize,
+                    onAdd: {
+                        // Add to cart with customizations as a string description
+                        let customizationDesc = customizationDescription(for: item)
+                        cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc)
+                        customizingItem = nil
+                    },
+                    onCancel: {
+                        customizingItem = nil
+                    }
+                )
+            }
         }
     }
     
@@ -113,6 +146,16 @@ struct MenuItemsView: View {
             return "cup.and.saucer"
         }
     }
+    
+    // Helper to build customization description
+    private func customizationDescription(for item: MenuItem) -> String {
+        var desc: [String] = []
+        if item.customizations?.contains("ice") == true { desc.append("Ice: \(selectedIce)") }
+        if item.customizations?.contains("milk") == true { desc.append("Milk: \(selectedMilk)") }
+        if item.customizations?.contains("sugar") == true { desc.append("Sugar: \(selectedSugar)") }
+        if item.customizations?.contains("size") == true { desc.append("Size: \(selectedSize)") }
+        return desc.joined(separator: ", ")
+    }
 }
 
 struct MenuItemCard: View {
@@ -120,6 +163,7 @@ struct MenuItemCard: View {
     let shop: CoffeeShop
     let category: String
     let cartManager: CartManager
+    var onAdd: (() -> Void)? = nil
     
     var body: some View {
         VStack(spacing: 0) {
@@ -147,7 +191,7 @@ struct MenuItemCard: View {
                     .foregroundColor(.black)
                 
                 Button(action: {
-                    cartManager.addItem(shop: shop, menuItem: item, category: category)
+                    onAdd?()
                 }) {
                     Text("Add")
                         .font(.caption)
@@ -185,6 +229,61 @@ struct RoundedCorner: Shape {
             cornerRadii: CGSize(width: radius, height: radius)
         )
         return Path(path.cgPath)
+    }
+}
+
+// Customization Sheet
+struct DrinkCustomizationSheet: View {
+    let item: MenuItem
+    let customizations: [String]
+    @Binding var selectedIce: String
+    @Binding var selectedMilk: String
+    @Binding var selectedSugar: String
+    @Binding var selectedSize: String
+    var onAdd: () -> Void
+    var onCancel: () -> Void
+    var body: some View {
+        NavigationStack {
+            Form {
+                if customizations.contains("ice") {
+                    Section(header: Text("Ice")) {
+                        Picker("Ice", selection: $selectedIce) {
+                            ForEach(["None", "Light", "Regular", "Extra"], id: \.self) { Text($0) }
+                        }.pickerStyle(.segmented)
+                    }
+                }
+                if customizations.contains("milk") {
+                    Section(header: Text("Milk")) {
+                        Picker("Milk", selection: $selectedMilk) {
+                            ForEach(["None", "Whole", "Skim", "Oat", "Almond", "Soy"], id: \.self) { Text($0) }
+                        }
+                    }
+                }
+                if customizations.contains("sugar") {
+                    Section(header: Text("Sugar")) {
+                        Picker("Sugar", selection: $selectedSugar) {
+                            ForEach(["No Sugar", "Regular"], id: \.self) { Text($0) }
+                        }.pickerStyle(.segmented)
+                    }
+                }
+                if customizations.contains("size") {
+                    Section(header: Text("Size")) {
+                        Picker("Size", selection: $selectedSize) {
+                            ForEach(["Small", "Medium", "Large"], id: \.self) { Text($0) }
+                        }.pickerStyle(.segmented)
+                    }
+                }
+            }
+            .navigationTitle("Customize \(item.name)")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add to Cart", action: onAdd)
+                }
+            }
+        }
     }
 }
 

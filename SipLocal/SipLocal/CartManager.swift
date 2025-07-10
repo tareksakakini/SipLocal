@@ -6,6 +6,7 @@ struct CartItem: Identifiable {
     let menuItem: MenuItem
     let category: String
     var quantity: Int
+    var customizations: String?
     
     var totalPrice: Double {
         return menuItem.price * Double(quantity)
@@ -23,13 +24,13 @@ class CartManager: ObservableObject {
         return items.reduce(0) { $0 + $1.quantity }
     }
     
-    func addItem(shop: CoffeeShop, menuItem: MenuItem, category: String) {
+    func addItem(shop: CoffeeShop, menuItem: MenuItem, category: String, customizations: String? = nil) {
         if let existingIndex = items.firstIndex(where: { 
-            $0.shop.id == shop.id && $0.menuItem.name == menuItem.name 
+            $0.shop.id == shop.id && $0.menuItem.name == menuItem.name && $0.customizations == customizations
         }) {
             items[existingIndex].quantity += 1
         } else {
-            let newItem = CartItem(shop: shop, menuItem: menuItem, category: category, quantity: 1)
+            let newItem = CartItem(shop: shop, menuItem: menuItem, category: category, quantity: 1, customizations: customizations)
             items.append(newItem)
         }
     }
