@@ -23,11 +23,13 @@ struct SipLocalApp: App {
     // register app delegate for Firebase setup
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authManager = AuthenticationManager()
+    @StateObject private var cartManager = CartManager()
 
     var body: some Scene {
         WindowGroup {
             MainView()
                 .environmentObject(authManager)
+                .environmentObject(cartManager)
         }
     }
 }

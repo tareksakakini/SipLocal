@@ -4,6 +4,8 @@ struct MenuItemsView: View {
     let shop: CoffeeShop
     let category: MenuCategory
     @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject var cartManager: CartManager
+    @State private var showingCart = false
     
     var body: some View {
         NavigationStack {
@@ -44,10 +46,25 @@ struct MenuItemsView: View {
                                 
                                 Spacer()
                                 
-                                Text("$\(item.price, specifier: "%.2f")")
-                                    .font(.title3)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.primary)
+                                VStack(alignment: .trailing, spacing: 8) {
+                                    Text("$\(item.price, specifier: "%.2f")")
+                                        .font(.title3)
+                                        .fontWeight(.bold)
+                                        .foregroundColor(.primary)
+                                    
+                                    Button(action: {
+                                        cartManager.addItem(shop: shop, menuItem: item, category: category.name)
+                                    }) {
+                                        Text("Add to Cart")
+                                            .font(.subheadline)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 8)
+                                            .background(Color.black)
+                                            .cornerRadius(8)
+                                    }
+                                }
                             }
                             .padding(.horizontal, 20)
                             .padding(.vertical, 16)
@@ -77,6 +94,33 @@ struct MenuItemsView: View {
                         .foregroundColor(.primary)
                     }
                 }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingCart = true
+                    }) {
+                        ZStack {
+                            Image(systemName: "cart")
+                                .font(.system(size: 20, weight: .medium))
+                            
+                            if cartManager.totalItems > 0 {
+                                Text("\(cartManager.totalItems)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .frame(minWidth: 16, minHeight: 16)
+                                    .background(Color.red)
+                                    .clipShape(Circle())
+                                    .offset(x: 10, y: -10)
+                            }
+                        }
+                        .foregroundColor(.primary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingCart) {
+                CartView()
+                    .environmentObject(cartManager)
             }
         }
     }

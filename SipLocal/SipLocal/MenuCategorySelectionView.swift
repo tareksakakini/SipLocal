@@ -3,6 +3,8 @@ import SwiftUI
 struct MenuCategorySelectionView: View {
     let shop: CoffeeShop
     @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject var cartManager: CartManager
+    @State private var showingCart = false
     
     var body: some View {
         NavigationStack {
@@ -84,6 +86,33 @@ struct MenuCategorySelectionView: View {
                         .foregroundColor(.primary)
                     }
                 }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingCart = true
+                    }) {
+                        ZStack {
+                            Image(systemName: "cart")
+                                .font(.system(size: 20, weight: .medium))
+                            
+                            if cartManager.totalItems > 0 {
+                                Text("\(cartManager.totalItems)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .frame(minWidth: 16, minHeight: 16)
+                                    .background(Color.red)
+                                    .clipShape(Circle())
+                                    .offset(x: 10, y: -10)
+                            }
+                        }
+                        .foregroundColor(.primary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingCart) {
+                CartView()
+                    .environmentObject(cartManager)
             }
         }
     }
