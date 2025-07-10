@@ -24,7 +24,15 @@
         "items": [
           { "name": "Latte", "price": 5.00 },
           { "name": "Mocha", "price": 5.50 },
-          { "name": "Macchiato", "price": 5.25 }
+          { "name": "Macchiato", "price": 5.25 },
+          { "name": "Espresso", "price": 4.00 },
+          { "name": "Americano", "price": 4.00 },
+          { "name": "Cold Brew", "price": 4.00 },
+          { "name": "Cold Brew Latte", "price": 4.00 },
+          { "name": "Cold Brew Mocha", "price": 4.00 },
+          { "name": "Cold Brew Macchiato", "price": 4.00 },
+          { "name": "Cold Brew Espresso", "price": 4.00 },
+          { "name": "Cold Brew Americano", "price": 4.00 }
         ]
       },
       {
