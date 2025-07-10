@@ -242,48 +242,105 @@ struct DrinkCustomizationSheet: View {
     @Binding var selectedSize: String
     var onAdd: () -> Void
     var onCancel: () -> Void
+    
     var body: some View {
         NavigationStack {
-            Form {
-                if customizations.contains("ice") {
-                    Section(header: Text("Ice")) {
-                        Picker("Ice", selection: $selectedIce) {
-                            ForEach(["None", "Light", "Regular", "Extra"], id: \.self) { Text($0) }
-                        }.pickerStyle(.segmented)
-                    }
-                }
-                if customizations.contains("milk") {
-                    Section(header: Text("Milk")) {
-                        Picker("Milk", selection: $selectedMilk) {
-                            ForEach(["None", "Whole", "Skim", "Oat", "Almond", "Soy"], id: \.self) { Text($0) }
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        if customizations.contains("size") {
+                            CustomizationSection(title: "Size") {
+                                Picker("Size", selection: $selectedSize) {
+                                    ForEach(["Small", "Medium", "Large"], id: \.self) { Text($0) }
+                                }.pickerStyle(.segmented)
+                            }
+                        }
+                        
+                        if customizations.contains("ice") {
+                            CustomizationSection(title: "Ice") {
+                                Picker("Ice", selection: $selectedIce) {
+                                    ForEach(["None", "Light", "Regular", "Extra"], id: \.self) { Text($0) }
+                                }.pickerStyle(.segmented)
+                            }
+                        }
+                        
+                        if customizations.contains("milk") {
+                            CustomizationSection(title: "Milk Options") {
+                                Picker("Milk", selection: $selectedMilk) {
+                                    ForEach(["None", "Whole", "Skim", "Oat", "Almond", "Soy"], id: \.self) { Text($0) }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(height: 100)
+                            }
+                        }
+                        
+                        if customizations.contains("sugar") {
+                            CustomizationSection(title: "Sugar") {
+                                Picker("Sugar", selection: $selectedSugar) {
+                                    ForEach(["No Sugar", "Regular"], id: \.self) { Text($0) }
+                                }.pickerStyle(.segmented)
+                            }
                         }
                     }
+                    .padding()
                 }
-                if customizations.contains("sugar") {
-                    Section(header: Text("Sugar")) {
-                        Picker("Sugar", selection: $selectedSugar) {
-                            ForEach(["No Sugar", "Regular"], id: \.self) { Text($0) }
-                        }.pickerStyle(.segmented)
+                
+                // --- Add to Cart Footer ---
+                VStack(spacing: 12) {
+                    Divider()
+                    HStack {
+                        Text("Price")
+                            .font(.headline)
+                        Spacer()
+                        Text("$\(item.price, specifier: "%.2f")")
+                            .font(.title2)
+                            .fontWeight(.bold)
                     }
-                }
-                if customizations.contains("size") {
-                    Section(header: Text("Size")) {
-                        Picker("Size", selection: $selectedSize) {
-                            ForEach(["Small", "Medium", "Large"], id: \.self) { Text($0) }
-                        }.pickerStyle(.segmented)
+                    .padding(.horizontal)
+                    
+                    Button(action: onAdd) {
+                        Text("Add to Cart")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.black)
+                            .cornerRadius(12)
                     }
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
+                .background(Color(.systemGray6))
             }
+            .background(Color(.systemGray6))
             .navigationTitle("Customize \(item.name)")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Add to Cart", action: onAdd)
-                }
             }
         }
+    }
+}
+
+// Reusable Section View for Customizations
+struct CustomizationSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.title3)
+                .fontWeight(.semibold)
+            
+            content
+        }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(12)
     }
 }
 

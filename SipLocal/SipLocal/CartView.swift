@@ -106,12 +106,52 @@ struct CartItemRow: View {
     let cartItem: CartItem
     @EnvironmentObject var cartManager: CartManager
     
+    // Helper to extract concise customizations
+    private func conciseCustomizations() -> (size: String?, mods: [String]) {
+        guard let customizations = cartItem.customizations else { return (nil, []) }
+        var size: String? = nil
+        var mods: [String] = []
+        // Parse customization string: "Ice: X, Milk: Y, Sugar: Z, Size: W"
+        let parts = customizations.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        for part in parts {
+            if part.hasPrefix("Size: ") {
+                size = String(part.dropFirst(6))
+            } else if part.hasPrefix("Ice: ") {
+                let value = String(part.dropFirst(5))
+                if value != "Regular" { mods.append("Ice: " + value) }
+            } else if part.hasPrefix("Milk: ") {
+                let value = String(part.dropFirst(6))
+                if value != "Whole" { mods.append("Milk: " + value) }
+            } else if part.hasPrefix("Sugar: ") {
+                let value = String(part.dropFirst(7))
+                if value != "Regular" { mods.append("Sugar: " + value) }
+            }
+        }
+        return (size, mods)
+    }
+    
     var body: some View {
+        let (size, mods) = conciseCustomizations()
         HStack(spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(cartItem.menuItem.name)
                     .font(.headline)
                     .fontWeight(.semibold)
+                
+                if let size = size {
+                    Text(size)
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .foregroundColor(.blue)
+                        .padding(.vertical, 1)
+                }
+                if !mods.isEmpty {
+                    Text(mods.joined(separator: ", "))
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                        .lineLimit(2)
+                        .padding(.vertical, 1)
+                }
                 
                 Text("\(cartItem.category) • \(cartItem.shop.name)")
                     .font(.subheadline)
