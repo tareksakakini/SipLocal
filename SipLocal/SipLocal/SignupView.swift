@@ -37,7 +37,7 @@ struct SignupView: View {
                 VStack(spacing: 0) {
                     // Accent header
                     Rectangle()
-                        .fill(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
+                        .fill(LinearGradient(gradient: Gradient(colors: [Color(red: 0.9, green: 0.85, blue: 0.8), Color(red: 0.7, green: 0.6, blue: 0.5)]), startPoint: .leading, endPoint: .trailing))
                         .frame(height: 6)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                         .padding(.horizontal, 24)
@@ -87,15 +87,9 @@ struct SignupView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.blue, Color.purple]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .background(Color(red: 0.396, green: 0.263, blue: 0.129)) // Coffee brown
                             .cornerRadius(25)
-                            .shadow(color: .purple.opacity(0.15), radius: 10, x: 0, y: 5)
+                            .shadow(color: Color(red: 0.396, green: 0.263, blue: 0.129).opacity(0.4), radius: 10, x: 0, y: 5)
                         }
                         .disabled(isLoading || !isFormValid)
                         .opacity(isFormValid ? 1.0 : 0.6)

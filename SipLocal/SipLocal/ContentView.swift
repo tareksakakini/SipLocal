@@ -56,7 +56,7 @@ struct LoopingVideoPlayer: UIViewRepresentable {
 struct ContentView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var player: AVPlayer? = nil
-
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -69,64 +69,64 @@ struct ContentView: View {
 
                 // Dark overlay for readability
                 Color.black.opacity(0.4)
-                    .ignoresSafeArea()
-
-                VStack(spacing: 40) {
-                    Spacer()
-
-                    // Logo section
-                    VStack(spacing: 20) {
-                        Text("SipLocal")
+            .ignoresSafeArea()
+            
+            VStack(spacing: 40) {
+                Spacer()
+                
+                // Logo section
+                VStack(spacing: 20) {
+                    Text("SipLocal")
                             .font(.system(size: 64, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                            .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
-                    }
-
-                    Spacer()
-
-                    // Buttons section
-                    VStack(spacing: 20) {
-                        Spacer().frame(height: 30) // Lower the buttons
-                        NavigationLink(destination: LoginView().environmentObject(authManager)) {
-                            Text("Login")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 55)
-                                .background(Color.white.opacity(0.2))
-                                .cornerRadius(27.5)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 27.5)
-                                        .stroke(Color.white, lineWidth: 1)
-                                )
-                        }
-                        
-                        NavigationLink(destination: SignupView().environmentObject(authManager)) {
-                            Text("Sign Up")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
-                                .foregroundColor(.blue)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 55)
-                                .background(Color.white)
-                                .cornerRadius(27.5)
-                                .shadow(color: .black.opacity(0.2), radius: 5, x: 0, y: 2)
-                        }
-                    }
-                    .padding(.horizontal, 40)
-
-                    Spacer()
-
-                    Text("Discover local flavors")
-                        .font(.subheadline)
-                        .fontDesign(.rounded)
-                        .foregroundColor(.white.opacity(0.8))
-                        .padding(.bottom, 30)
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
                 }
+                
+                Spacer()
+                
+                // Buttons section
+                VStack(spacing: 20) {
+                        Spacer().frame(height: 30) // Lower the buttons
+                    NavigationLink(destination: LoginView().environmentObject(authManager)) {
+                        Text("Login")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                                .frame(height: 55)
+                            .background(Color.white.opacity(0.2))
+                                .cornerRadius(27.5)
+                            .overlay(
+                                    RoundedRectangle(cornerRadius: 27.5)
+                                    .stroke(Color.white, lineWidth: 1)
+                            )
+                    }
+                    
+                    NavigationLink(destination: SignupView().environmentObject(authManager)) {
+                        Text("Sign Up")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .foregroundColor(.blue)
+                            .frame(maxWidth: .infinity)
+                                .frame(height: 55)
+                            .background(Color.white)
+                                .cornerRadius(27.5)
+                            .shadow(color: .black.opacity(0.2), radius: 5, x: 0, y: 2)
+                    }
+                }
+                .padding(.horizontal, 40)
+                
+                Spacer()
+                
+                Text("Discover local flavors")
+                    .font(.subheadline)
+                    .fontDesign(.rounded)
+                    .foregroundColor(.white.opacity(0.8))
+                                         .padding(.bottom, 30)
+             }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .onAppear(perform: setupPlayer)
-        }
-    }
+         }
+     }
 
     private func setupPlayer() {
         guard player == nil, let videoURL = getVideoURL() else { return }
