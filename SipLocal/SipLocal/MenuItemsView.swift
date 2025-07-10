@@ -37,8 +37,9 @@ struct MenuItemsView: View {
                     // Menu Items Grid
                     LazyVGrid(columns: [
                         GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12),
                         GridItem(.flexible(), spacing: 12)
-                    ], spacing: 16) {
+                    ], spacing: 12) {
                         ForEach(category.items) { item in
                             MenuItemCard(
                                 item: item,
@@ -126,42 +127,43 @@ struct MenuItemCard: View {
             Image("sample_menu_pic")
                 .resizable()
                 .aspectRatio(1, contentMode: .fill)
-                .frame(height: 140)
+                .frame(height: 100)
                 .clipped()
                 .cornerRadius(12, corners: [.topLeft, .topRight])
             
             // Content Section
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Text(item.name)
-                    .font(.headline)
+                    .font(.subheadline)
                     .fontWeight(.semibold)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .foregroundColor(.primary)
+                    .frame(height: 35) // Fixed height to prevent layout shifts
                 
                 Text("$\(item.price, specifier: "%.2f")")
-                    .font(.title3)
+                    .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(.black)
                 
                 Button(action: {
                     cartManager.addItem(shop: shop, menuItem: item, category: category)
                 }) {
-                    Text("Add to Cart")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                    Text("Add")
+                        .font(.caption)
+                        .fontWeight(.bold)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
+                        .padding(.vertical, 8)
                         .background(Color.black)
                         .cornerRadius(8)
                 }
             }
-            .padding(12)
+            .padding(8)
         }
         .background(Color.white)
         .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 4)
+        .shadow(color: Color.black.opacity(0.08), radius: 8, x: 0, y: 2)
     }
 }
 
