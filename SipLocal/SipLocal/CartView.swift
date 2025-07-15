@@ -111,23 +111,47 @@ struct CartItemRow: View {
         guard let customizations = cartItem.customizations else { return (nil, []) }
         var size: String? = nil
         var mods: [String] = []
-        // Parse customization string: "Ice: X, Milk: Y, Sugar: Z, Size: W"
-        let parts = customizations.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        
+        // Parse customization string: "Size: Medium | Milk Options: Oat Milk | Add-ons: Extra Shot, Vanilla Syrup"
+        let parts = customizations.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+        
         for part in parts {
-            if part.hasPrefix("Size: ") {
-                size = String(part.dropFirst(6))
-            } else if part.hasPrefix("Ice: ") {
-                let value = String(part.dropFirst(5))
-                if value != "Regular" { mods.append("Ice: " + value) }
-            } else if part.hasPrefix("Milk: ") {
-                let value = String(part.dropFirst(6))
-                if value != "Whole" { mods.append("Milk: " + value) }
-            } else if part.hasPrefix("Sugar: ") {
-                let value = String(part.dropFirst(7))
-                if value != "Regular" { mods.append("Sugar: " + value) }
+            if part.lowercased().contains("size") {
+                // Extract size value
+                if let colonIndex = part.firstIndex(of: ":") {
+                    size = String(part[part.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
+                }
+            } else {
+                // For other modifications, include the full modifier list and its selections
+                if let colonIndex = part.firstIndex(of: ":") {
+                    let modifierName = String(part[..<colonIndex]).trimmingCharacters(in: .whitespaces)
+                    let selections = String(part[part.index(after: colonIndex)...]).trimmingCharacters(in: .whitespaces)
+                    
+                    // Simplify common modifier names
+                    let simplifiedName = simplifyModifierName(modifierName)
+                    mods.append("\(simplifiedName): \(selections)")
+                }
             }
         }
         return (size, mods)
+    }
+    
+    // Helper to simplify modifier names for display
+    private func simplifyModifierName(_ name: String) -> String {
+        let lowercased = name.lowercased()
+        if lowercased.contains("milk") {
+            return "Milk"
+        } else if lowercased.contains("add") || lowercased.contains("extra") {
+            return "Add-ons"
+        } else if lowercased.contains("syrup") || lowercased.contains("flavor") {
+            return "Flavoring"
+        } else if lowercased.contains("ice") {
+            return "Ice"
+        } else if lowercased.contains("sweet") || lowercased.contains("sugar") {
+            return "Sweetener"
+        } else {
+            return name
+        }
     }
     
     var body: some View {
@@ -140,17 +164,21 @@ struct CartItemRow: View {
                 
                 if let size = size {
                     Text(size)
-                        .font(.caption)
-                        .fontWeight(.bold)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
                         .foregroundColor(.blue)
                         .padding(.vertical, 1)
                 }
                 if !mods.isEmpty {
-                    Text(mods.joined(separator: ", "))
-                        .font(.caption)
-                        .foregroundColor(.orange)
-                        .lineLimit(2)
-                        .padding(.vertical, 1)
+                    VStack(alignment: .leading, spacing: 2) {
+                        ForEach(mods, id: \.self) { mod in
+                            Text(mod)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.vertical, 1)
                 }
                 
                 Text("\(cartItem.category) • \(cartItem.shop.name)")
