@@ -585,6 +585,7 @@ struct DefaultModifierPicker: View {
                 }
             }
             .pickerStyle(.wheel)
+            .padding(.vertical, 4) // Adjust padding to reduce margin
             .frame(height: 100)
         }
     }
