@@ -49,15 +49,9 @@ struct ForgotPasswordView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 55)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.blue, Color.purple]),
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .background(Color(red: 0.396, green: 0.263, blue: 0.129)) // Coffee brown
                         .cornerRadius(28)
-                        .shadow(color: .purple.opacity(0.15), radius: 10, x: 0, y: 5)
+                        .shadow(color: Color(red: 0.396, green: 0.263, blue: 0.129).opacity(0.4), radius: 10, x: 0, y: 5)
                     }
                     .disabled(isLoading || email.isEmpty)
                     .opacity(email.isEmpty ? 0.6 : 1.0)
