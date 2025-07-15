@@ -165,7 +165,7 @@ struct MenuItemsView: View {
         }
     }
     
-    // Helper to build customization description
+    // Helper to build customization description (always show size, only non-default for others)
     private func customizationDescription(for item: MenuItem) -> String {
         guard let modifierLists = item.modifierLists else { return "" }
         
@@ -173,12 +173,20 @@ struct MenuItemsView: View {
         
         for modifierList in modifierLists {
             if let selectedModifierIds = selectedModifiers[modifierList.id], !selectedModifierIds.isEmpty {
-                let selectedModifierNames = modifierList.modifiers.compactMap { modifier in
-                    selectedModifierIds.contains(modifier.id) ? modifier.name : nil
+                let isSize = modifierList.name.lowercased().contains("size")
+                
+                let modifierNames = modifierList.modifiers.compactMap { modifier in
+                    if selectedModifierIds.contains(modifier.id) {
+                        // Always include size modifiers, only include non-default for others
+                        if isSize || !modifier.isDefault {
+                            return modifier.name
+                        }
+                    }
+                    return nil
                 }
                 
-                if !selectedModifierNames.isEmpty {
-                    desc.append("\(modifierList.name): \(selectedModifierNames.joined(separator: ", "))")
+                if !modifierNames.isEmpty {
+                    desc.append("\(modifierList.name): \(modifierNames.joined(separator: ", "))")
                 }
             }
         }
