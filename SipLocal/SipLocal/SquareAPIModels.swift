@@ -7,11 +7,23 @@ struct SquareCatalogResponse: Codable {
     let cursor: String?
 }
 
+struct SquareCatalogSearchResponse: Codable {
+    let objects: [SquareCatalogObject]?
+    let relatedObjects: [SquareCatalogObject]?
+    let cursor: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case objects, cursor
+        case relatedObjects = "related_objects"
+    }
+}
+
 struct SquareCatalogObject: Codable, Identifiable {
     let id: String
     let type: String
     let categoryData: SquareCategoryData?
     let itemData: SquareItemData?
+    let imageData: SquareImageData?
     let presentAtAllLocations: Bool?
     let presentAtLocationIds: [String]?
     
@@ -19,6 +31,7 @@ struct SquareCatalogObject: Codable, Identifiable {
         case id, type
         case categoryData = "category_data"
         case itemData = "item_data"
+        case imageData = "image_data"
         case presentAtAllLocations = "present_at_all_locations"
         case presentAtLocationIds = "present_at_location_ids"
     }
@@ -31,14 +44,19 @@ struct SquareCategoryData: Codable {
 struct SquareItemData: Codable {
     let name: String
     let description: String?
-    let categoryId: String?
+    let categories: [SquareItemCategory]?
     let variations: [SquareItemVariation]?
+    let imageIds: [String]?
     
     enum CodingKeys: String, CodingKey {
-        case name, description
-        case categoryId = "category_id"
-        case variations
+        case name, description, categories, variations
+        case imageIds = "image_ids"
     }
+}
+
+struct SquareItemCategory: Codable {
+    let id: String
+    let ordinal: Int?
 }
 
 struct SquareItemVariation: Codable, Identifiable {
@@ -82,4 +100,12 @@ struct SquareError: Codable {
     let code: String
     let detail: String?
     let field: String?
+}
+
+// MARK: - Image Models
+
+struct SquareImageData: Codable {
+    let name: String?
+    let url: String?
+    let caption: String?
 } 

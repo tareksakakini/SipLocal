@@ -6,6 +6,7 @@ struct MenuItem: Codable, Identifiable {
     let name: String
     let price: Double
     let customizations: [String]?
+    let imageURL: String?
 }
 
 struct MenuCategory: Codable, Identifiable {

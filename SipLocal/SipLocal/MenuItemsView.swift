@@ -169,12 +169,47 @@ struct MenuItemCard: View {
     var body: some View {
         VStack(spacing: 0) {
             // Image Section
-            Image("sample_menu_pic")
-                .resizable()
-                .aspectRatio(1, contentMode: .fill)
-                .frame(height: 100)
-                .clipped()
-                .cornerRadius(12, corners: [.topLeft, .topRight])
+            if let imageURL = item.imageURL, let url = URL(string: imageURL) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(1, contentMode: .fill)
+                            .frame(height: 100)
+                            .clipped()
+                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                    case .failure(_):
+                        // Show fallback image on error
+                        Image("sample_menu_pic")
+                            .resizable()
+                            .aspectRatio(1, contentMode: .fill)
+                            .frame(height: 100)
+                            .clipped()
+                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                    case .empty:
+                        // Show loading state
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(height: 100)
+                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                            .overlay(
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                                    .scaleEffect(0.8)
+                            )
+                    @unknown default:
+                        EmptyView()
+                    }
+                }
+            } else {
+                Image("sample_menu_pic")
+                    .resizable()
+                    .aspectRatio(1, contentMode: .fill)
+                    .frame(height: 100)
+                    .clipped()
+                    .cornerRadius(12, corners: [.topLeft, .topRight])
+            }
             
             // Content Section
             VStack(spacing: 6) {
@@ -350,8 +385,8 @@ struct MenuItemsView_Previews: PreviewProvider {
         let sampleShop = DataService.loadCoffeeShops().first!
         // Create a sample category since we can't access shop.menu directly anymore
         let sampleCategory = MenuCategory(name: "Hot Coffee", items: [
-            MenuItem(name: "Americano", price: 3.50, customizations: ["size", "milk", "sugar"]),
-            MenuItem(name: "Latte", price: 4.25, customizations: ["size", "milk", "sugar"])
+            MenuItem(name: "Americano", price: 3.50, customizations: ["size", "milk", "sugar"], imageURL: nil),
+            MenuItem(name: "Latte", price: 4.25, customizations: ["size", "milk", "sugar"], imageURL: nil)
         ])
         MenuItemsView(shop: sampleShop, category: sampleCategory)
             .environmentObject(CartManager())
