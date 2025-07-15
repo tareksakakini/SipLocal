@@ -393,7 +393,7 @@ struct ModifierListSection: View {
     @Binding var selectedModifiers: Set<String>
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(modifierList.name)
                     .font(.title3)
@@ -411,18 +411,19 @@ struct ModifierListSection: View {
             }
             
             if modifierList.selectionType == "SINGLE" || modifierList.maxSelections == 1 {
-                // Single selection (radio buttons)
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(modifierList.modifiers) { modifier in
-                        SingleSelectionRow(
-                            modifier: modifier,
-                            isSelected: selectedModifiers.contains(modifier.id),
-                            onSelect: {
-                                selectedModifiers.removeAll()
-                                selectedModifiers.insert(modifier.id)
-                            }
-                        )
-                    }
+                // Single selection - choose UI based on number of options
+                if modifierList.modifiers.count <= 3 {
+                    // Segmented picker for 3 or fewer options
+                    SegmentedModifierPicker(
+                        modifierList: modifierList,
+                        selectedModifiers: $selectedModifiers
+                    )
+                } else {
+                    // Default picker for more than 3 options
+                    DefaultModifierPicker(
+                        modifierList: modifierList,
+                        selectedModifiers: $selectedModifiers
+                    )
                 }
             } else {
                 // Multiple selection (checkboxes)
@@ -470,37 +471,6 @@ struct ModifierListSection: View {
     }
 }
 
-// Single Selection Row (Radio Button Style)
-struct SingleSelectionRow: View {
-    let modifier: MenuItemModifier
-    let isSelected: Bool
-    let onSelect: () -> Void
-    
-    var body: some View {
-        Button(action: onSelect) {
-            HStack {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundColor(isSelected ? .blue : .gray)
-                    .font(.system(size: 20))
-                
-                Text(modifier.name)
-                    .font(.body)
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                if modifier.price > 0 {
-                    Text("+$\(modifier.price, specifier: "%.2f")")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-}
-
 // Multiple Selection Row (Checkbox Style)
 struct MultipleSelectionRow: View {
     let modifier: MenuItemModifier
@@ -532,14 +502,183 @@ struct MultipleSelectionRow: View {
     }
 }
 
+// Segmented Modifier Picker (for 3 or fewer options)
+struct SegmentedModifierPicker: View {
+    let modifierList: MenuItemModifierList
+    @Binding var selectedModifiers: Set<String>
+    
+    var selectedModifierId: String {
+        selectedModifiers.first ?? ""
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Picker(modifierList.name, selection: Binding(
+                get: { selectedModifierId },
+                set: { newValue in
+                    selectedModifiers.removeAll()
+                    if !newValue.isEmpty {
+                        selectedModifiers.insert(newValue)
+                    }
+                }
+            )) {
+                ForEach(modifierList.modifiers) { modifier in
+                    HStack {
+                        Text(modifier.name)
+                        if modifier.price > 0 {
+                            Text("+$\(modifier.price, specifier: "%.2f")")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .tag(modifier.id)
+                }
+            }
+            .pickerStyle(.segmented)
+            
+            // Show pricing info below segmented control if any modifiers have prices
+            if modifierList.modifiers.contains(where: { $0.price > 0 }) {
+                HStack {
+                    Spacer()
+                    if let selectedId = selectedModifiers.first,
+                       let selectedModifier = modifierList.modifiers.first(where: { $0.id == selectedId }),
+                       selectedModifier.price > 0 {
+                        Text("+$\(selectedModifier.price, specifier: "%.2f")")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Default Modifier Picker (for more than 3 options)
+struct DefaultModifierPicker: View {
+    let modifierList: MenuItemModifierList
+    @Binding var selectedModifiers: Set<String>
+    
+    var selectedModifierId: String {
+        selectedModifiers.first ?? ""
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Picker(modifierList.name, selection: Binding(
+                get: { selectedModifierId },
+                set: { newValue in
+                    selectedModifiers.removeAll()
+                    if !newValue.isEmpty {
+                        selectedModifiers.insert(newValue)
+                    }
+                }
+            )) {
+                ForEach(modifierList.modifiers) { modifier in
+                    HStack {
+                        Text(modifier.name)
+                        Spacer()
+                        if modifier.price > 0 {
+                            Text("+$\(modifier.price, specifier: "%.2f")")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .tag(modifier.id)
+                }
+            }
+            .pickerStyle(.wheel)
+            .frame(height: 100)
+        }
+    }
+}
+
 struct MenuItemsView_Previews: PreviewProvider {
     static var previews: some View {
         let sampleShop = DataService.loadCoffeeShops().first!
-        // Create a sample category since we can't access shop.menu directly anymore
+        
+        // Create sample modifier lists to demonstrate different picker types
+        
+        // Size modifier list (3 options - will use segmented picker)
+        let sizeModifierList = MenuItemModifierList(
+            id: "size_list",
+            name: "Size",
+            selectionType: "SINGLE",
+            minSelections: 1,
+            maxSelections: 1,
+            modifiers: [
+                MenuItemModifier(id: "small", name: "Small", price: 0.0, isDefault: false),
+                MenuItemModifier(id: "medium", name: "Medium", price: 0.50, isDefault: true),
+                MenuItemModifier(id: "large", name: "Large", price: 1.00, isDefault: false)
+            ]
+        )
+        
+        // Milk modifier list (6 options - will use wheel picker)
+        let milkModifierList = MenuItemModifierList(
+            id: "milk_list",
+            name: "Milk Options",
+            selectionType: "SINGLE",
+            minSelections: 1,
+            maxSelections: 1,
+            modifiers: [
+                MenuItemModifier(id: "whole", name: "Whole Milk", price: 0.0, isDefault: true),
+                MenuItemModifier(id: "skim", name: "Skim Milk", price: 0.0, isDefault: false),
+                MenuItemModifier(id: "almond", name: "Almond Milk", price: 0.65, isDefault: false),
+                MenuItemModifier(id: "oat", name: "Oat Milk", price: 0.65, isDefault: false),
+                MenuItemModifier(id: "soy", name: "Soy Milk", price: 0.60, isDefault: false),
+                MenuItemModifier(id: "coconut", name: "Coconut Milk", price: 0.70, isDefault: false)
+            ]
+        )
+        
+        // Add-ons modifier list (multiple selection - will use checkbox list)
+        let addonsModifierList = MenuItemModifierList(
+            id: "addons_list",
+            name: "Add-ons",
+            selectionType: "MULTIPLE",
+            minSelections: 0,
+            maxSelections: 3,
+            modifiers: [
+                MenuItemModifier(id: "extra_shot", name: "Extra Shot", price: 0.75, isDefault: false),
+                MenuItemModifier(id: "decaf", name: "Make it Decaf", price: 0.0, isDefault: false),
+                MenuItemModifier(id: "whipped_cream", name: "Whipped Cream", price: 0.50, isDefault: false),
+                MenuItemModifier(id: "vanilla_syrup", name: "Vanilla Syrup", price: 0.60, isDefault: false),
+                MenuItemModifier(id: "caramel_syrup", name: "Caramel Syrup", price: 0.60, isDefault: false)
+            ]
+        )
+        
+        // Sample items with different modifier combinations
         let sampleCategory = MenuCategory(name: "Hot Coffee", items: [
-            MenuItem(name: "Americano", price: 3.50, customizations: ["size", "milk", "sugar"], imageURL: nil, modifierLists: nil),
-            MenuItem(name: "Latte", price: 4.25, customizations: ["size", "milk", "sugar"], imageURL: nil, modifierLists: nil)
+            // Item with all three types of modifiers
+            MenuItem(
+                name: "Americano",
+                price: 3.50,
+                customizations: ["size", "milk", "other"],
+                imageURL: nil,
+                modifierLists: [sizeModifierList, milkModifierList, addonsModifierList]
+            ),
+            // Item with just size (segmented picker)
+            MenuItem(
+                name: "Espresso",
+                price: 2.25,
+                customizations: ["size"],
+                imageURL: nil,
+                modifierLists: [sizeModifierList]
+            ),
+            // Item with size and milk (segmented + wheel)
+            MenuItem(
+                name: "Latte",
+                price: 4.25,
+                customizations: ["size", "milk"],
+                imageURL: nil,
+                modifierLists: [sizeModifierList, milkModifierList]
+            ),
+            // Item with no modifiers
+            MenuItem(
+                name: "Drip Coffee",
+                price: 2.75,
+                customizations: nil,
+                imageURL: nil,
+                modifierLists: nil
+            )
         ])
+        
         MenuItemsView(shop: sampleShop, category: sampleCategory)
             .environmentObject(CartManager())
     }
