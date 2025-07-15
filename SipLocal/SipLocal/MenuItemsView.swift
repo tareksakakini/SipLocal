@@ -8,11 +8,8 @@ struct MenuItemsView: View {
     @StateObject private var menuDataManager = MenuDataManager.shared
     @State private var showingCart = false
     @State private var customizingItem: MenuItem? = nil
-    // Store customization selections
-    @State private var selectedIce: String = "Regular"
-    @State private var selectedMilk: String = "Whole"
-    @State private var selectedSugar: String = "Regular"
-    @State private var selectedSize: String = "Medium"
+    // Store customization selections - maps modifier list ID to selected modifier IDs
+    @State private var selectedModifiers: [String: Set<String>] = [:]
     
     var body: some View {
         NavigationStack {
@@ -55,11 +52,8 @@ struct MenuItemsView: View {
                                 cartManager: cartManager,
                                 onAdd: {
                                     customizingItem = item
-                                    // Reset selections
-                                    selectedIce = "Regular"
-                                    selectedMilk = "Whole"
-                                    selectedSugar = "Regular"
-                                    selectedSize = "Medium"
+                                    // Initialize selections with defaults
+                                    initializeModifierSelections(for: item)
                                 }
                             )
                         }
@@ -116,11 +110,7 @@ struct MenuItemsView: View {
             .sheet(item: $customizingItem) { item in
                 DrinkCustomizationSheet(
                     item: item,
-                    customizations: item.customizations ?? [],
-                    selectedIce: $selectedIce,
-                    selectedMilk: $selectedMilk,
-                    selectedSugar: $selectedSugar,
-                    selectedSize: $selectedSize,
+                    selectedModifiers: $selectedModifiers,
                     onAdd: {
                         // Add to cart with customizations as a string description
                         let customizationDesc = customizationDescription(for: item)
@@ -148,14 +138,52 @@ struct MenuItemsView: View {
         }
     }
     
+    // Initialize modifier selections with default values
+    private func initializeModifierSelections(for item: MenuItem) {
+        selectedModifiers.removeAll()
+        
+        guard let modifierLists = item.modifierLists else { return }
+        
+        for modifierList in modifierLists {
+            var defaultSelections: Set<String> = []
+            
+            // Find default modifiers
+            for modifier in modifierList.modifiers {
+                if modifier.isDefault {
+                    defaultSelections.insert(modifier.id)
+                }
+            }
+            
+            // If no defaults and minimum selection required, select first modifier
+            if defaultSelections.isEmpty && modifierList.minSelections > 0 {
+                if let firstModifier = modifierList.modifiers.first {
+                    defaultSelections.insert(firstModifier.id)
+                }
+            }
+            
+            selectedModifiers[modifierList.id] = defaultSelections
+        }
+    }
+    
     // Helper to build customization description
     private func customizationDescription(for item: MenuItem) -> String {
+        guard let modifierLists = item.modifierLists else { return "" }
+        
         var desc: [String] = []
-        if item.customizations?.contains("ice") == true { desc.append("Ice: \(selectedIce)") }
-        if item.customizations?.contains("milk") == true { desc.append("Milk: \(selectedMilk)") }
-        if item.customizations?.contains("sugar") == true { desc.append("Sugar: \(selectedSugar)") }
-        if item.customizations?.contains("size") == true { desc.append("Size: \(selectedSize)") }
-        return desc.joined(separator: ", ")
+        
+        for modifierList in modifierLists {
+            if let selectedModifierIds = selectedModifiers[modifierList.id], !selectedModifierIds.isEmpty {
+                let selectedModifierNames = modifierList.modifiers.compactMap { modifier in
+                    selectedModifierIds.contains(modifier.id) ? modifier.name : nil
+                }
+                
+                if !selectedModifierNames.isEmpty {
+                    desc.append("\(modifierList.name): \(selectedModifierNames.joined(separator: ", "))")
+                }
+            }
+        }
+        
+        return desc.joined(separator: " | ")
     }
 }
 
@@ -271,51 +299,49 @@ struct RoundedCorner: Shape {
 // Customization Sheet
 struct DrinkCustomizationSheet: View {
     let item: MenuItem
-    let customizations: [String]
-    @Binding var selectedIce: String
-    @Binding var selectedMilk: String
-    @Binding var selectedSugar: String
-    @Binding var selectedSize: String
+    @Binding var selectedModifiers: [String: Set<String>]
     var onAdd: () -> Void
     var onCancel: () -> Void
+    
+    var totalPrice: Double {
+        var total = item.price
+        
+        guard let modifierLists = item.modifierLists else { return total }
+        
+        for modifierList in modifierLists {
+            if let selectedModifierIds = selectedModifiers[modifierList.id] {
+                for modifier in modifierList.modifiers {
+                    if selectedModifierIds.contains(modifier.id) {
+                        total += modifier.price
+                    }
+                }
+            }
+        }
+        
+        return total
+    }
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        if customizations.contains("size") {
-                            CustomizationSection(title: "Size") {
-                                Picker("Size", selection: $selectedSize) {
-                                    ForEach(["Small", "Medium", "Large"], id: \.self) { Text($0) }
-                                }.pickerStyle(.segmented)
+                        if let modifierLists = item.modifierLists {
+                            ForEach(modifierLists) { modifierList in
+                                ModifierListSection(
+                                    modifierList: modifierList,
+                                    selectedModifiers: Binding(
+                                        get: { selectedModifiers[modifierList.id] ?? [] },
+                                        set: { selectedModifiers[modifierList.id] = $0 }
+                                    )
+                                )
                             }
-                        }
-                        
-                        if customizations.contains("ice") {
-                            CustomizationSection(title: "Ice") {
-                                Picker("Ice", selection: $selectedIce) {
-                                    ForEach(["None", "Light", "Regular", "Extra"], id: \.self) { Text($0) }
-                                }.pickerStyle(.segmented)
-                            }
-                        }
-                        
-                        if customizations.contains("milk") {
-                            CustomizationSection(title: "Milk Options") {
-                                Picker("Milk", selection: $selectedMilk) {
-                                    ForEach(["None", "Whole", "Skim", "Oat", "Almond", "Soy"], id: \.self) { Text($0) }
-                                }
-                                .pickerStyle(.wheel)
-                                .frame(height: 100)
-                            }
-                        }
-                        
-                        if customizations.contains("sugar") {
-                            CustomizationSection(title: "Sugar") {
-                                Picker("Sugar", selection: $selectedSugar) {
-                                    ForEach(["No Sugar", "Regular"], id: \.self) { Text($0) }
-                                }.pickerStyle(.segmented)
-                            }
+                        } else {
+                            // Show message if no modifiers available
+                            Text("No customization options available")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding()
                         }
                     }
                     .padding()
@@ -328,7 +354,7 @@ struct DrinkCustomizationSheet: View {
                         Text("Price")
                             .font(.headline)
                         Spacer()
-                        Text("$\(item.price, specifier: "%.2f")")
+                        Text("$\(totalPrice, specifier: "%.2f")")
                             .font(.title2)
                             .fontWeight(.bold)
                     }
@@ -361,22 +387,148 @@ struct DrinkCustomizationSheet: View {
     }
 }
 
-// Reusable Section View for Customizations
-struct CustomizationSection<Content: View>: View {
-    let title: String
-    @ViewBuilder let content: Content
+// Modifier List Section View
+struct ModifierListSection: View {
+    let modifierList: MenuItemModifierList
+    @Binding var selectedModifiers: Set<String>
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.title3)
-                .fontWeight(.semibold)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(modifierList.name)
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                
+                // Show selection requirements
+                if modifierList.minSelections > 0 || modifierList.maxSelections != 1 {
+                    let requirementText = buildRequirementText()
+                    if !requirementText.isEmpty {
+                        Text(requirementText)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
             
-            content
+            if modifierList.selectionType == "SINGLE" || modifierList.maxSelections == 1 {
+                // Single selection (radio buttons)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(modifierList.modifiers) { modifier in
+                        SingleSelectionRow(
+                            modifier: modifier,
+                            isSelected: selectedModifiers.contains(modifier.id),
+                            onSelect: {
+                                selectedModifiers.removeAll()
+                                selectedModifiers.insert(modifier.id)
+                            }
+                        )
+                    }
+                }
+            } else {
+                // Multiple selection (checkboxes)
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(modifierList.modifiers) { modifier in
+                        MultipleSelectionRow(
+                            modifier: modifier,
+                            isSelected: selectedModifiers.contains(modifier.id),
+                            onToggle: {
+                                if selectedModifiers.contains(modifier.id) {
+                                    // Don't allow deselection if at minimum
+                                    if selectedModifiers.count > modifierList.minSelections {
+                                        selectedModifiers.remove(modifier.id)
+                                    }
+                                } else {
+                                    // Don't allow selection if at maximum
+                                    if selectedModifiers.count < modifierList.maxSelections {
+                                        selectedModifiers.insert(modifier.id)
+                                    }
+                                }
+                            }
+                        )
+                    }
+                }
+            }
         }
         .padding()
         .background(Color.white)
         .cornerRadius(12)
+    }
+    
+    private func buildRequirementText() -> String {
+        if modifierList.minSelections > 0 && modifierList.maxSelections > 1 {
+            if modifierList.minSelections == modifierList.maxSelections {
+                return "Select \(modifierList.minSelections)"
+            } else {
+                return "Select \(modifierList.minSelections)-\(modifierList.maxSelections)"
+            }
+        } else if modifierList.minSelections > 0 {
+            return "Select at least \(modifierList.minSelections)"
+        } else if modifierList.maxSelections > 1 {
+            return "Select up to \(modifierList.maxSelections)"
+        }
+        return ""
+    }
+}
+
+// Single Selection Row (Radio Button Style)
+struct SingleSelectionRow: View {
+    let modifier: MenuItemModifier
+    let isSelected: Bool
+    let onSelect: () -> Void
+    
+    var body: some View {
+        Button(action: onSelect) {
+            HStack {
+                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                    .foregroundColor(isSelected ? .blue : .gray)
+                    .font(.system(size: 20))
+                
+                Text(modifier.name)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if modifier.price > 0 {
+                    Text("+$\(modifier.price, specifier: "%.2f")")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
+// Multiple Selection Row (Checkbox Style)
+struct MultipleSelectionRow: View {
+    let modifier: MenuItemModifier
+    let isSelected: Bool
+    let onToggle: () -> Void
+    
+    var body: some View {
+        Button(action: onToggle) {
+            HStack {
+                Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+                    .foregroundColor(isSelected ? .blue : .gray)
+                    .font(.system(size: 20))
+                
+                Text(modifier.name)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                
+                Spacer()
+                
+                if modifier.price > 0 {
+                    Text("+$\(modifier.price, specifier: "%.2f")")
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 4)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
