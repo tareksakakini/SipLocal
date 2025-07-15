@@ -184,10 +184,6 @@ struct CartItemRow: View {
                 Text("\(cartItem.category) • \(cartItem.shop.name)")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
-                
-                Text("$\(cartItem.menuItem.price, specifier: "%.2f") each")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
             
             Spacer()

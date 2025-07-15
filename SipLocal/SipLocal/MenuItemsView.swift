@@ -468,8 +468,6 @@ struct ModifierListSection: View {
             return "Select at least \(modifierList.minSelections)"
         } else if modifierList.maxSelections > 1 {
             return "Select up to \(modifierList.maxSelections)"
-        } else if modifierList.maxSelections == -1 {
-            return "Select any number"
         }
         return ""
     }
