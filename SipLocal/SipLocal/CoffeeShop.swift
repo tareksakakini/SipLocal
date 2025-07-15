@@ -1,12 +1,29 @@
 import Foundation
 import CoreLocation
 
+struct MenuItemModifier: Codable, Identifiable {
+    let id: String
+    let name: String
+    let price: Double
+    let isDefault: Bool
+}
+
+struct MenuItemModifierList: Codable, Identifiable {
+    let id: String
+    let name: String
+    let selectionType: String // "SINGLE" or "MULTIPLE"
+    let minSelections: Int
+    let maxSelections: Int
+    let modifiers: [MenuItemModifier]
+}
+
 struct MenuItem: Codable, Identifiable {
     var id: String { name }
     let name: String
     let price: Double
-    let customizations: [String]?
+    let customizations: [String]? // Keep for backward compatibility
     let imageURL: String?
+    let modifierLists: [MenuItemModifierList]?
 }
 
 struct MenuCategory: Codable, Identifiable {

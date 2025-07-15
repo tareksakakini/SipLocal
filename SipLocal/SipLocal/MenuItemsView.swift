@@ -385,8 +385,8 @@ struct MenuItemsView_Previews: PreviewProvider {
         let sampleShop = DataService.loadCoffeeShops().first!
         // Create a sample category since we can't access shop.menu directly anymore
         let sampleCategory = MenuCategory(name: "Hot Coffee", items: [
-            MenuItem(name: "Americano", price: 3.50, customizations: ["size", "milk", "sugar"], imageURL: nil),
-            MenuItem(name: "Latte", price: 4.25, customizations: ["size", "milk", "sugar"], imageURL: nil)
+            MenuItem(name: "Americano", price: 3.50, customizations: ["size", "milk", "sugar"], imageURL: nil, modifierLists: nil),
+            MenuItem(name: "Latte", price: 4.25, customizations: ["size", "milk", "sugar"], imageURL: nil, modifierLists: nil)
         ])
         MenuItemsView(shop: sampleShop, category: sampleCategory)
             .environmentObject(CartManager())

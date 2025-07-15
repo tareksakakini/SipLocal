@@ -21,9 +21,9 @@ class SquareAPIService {
             throw SquareAPIError.invalidURL
         }
         
-        // Create search request body to get items, categories, and images
+        // Create search request body to get items, categories, images, and modifier lists
         let searchRequest: [String: Any] = [
-            "object_types": ["ITEM", "CATEGORY", "IMAGE"],
+            "object_types": ["ITEM", "CATEGORY", "IMAGE", "MODIFIER_LIST"],
             "include_related_objects": true
         ]
         
@@ -76,28 +76,19 @@ class SquareAPIService {
     }
     
     private func processCatalogObjects(_ objects: [SquareCatalogObject]) -> [MenuCategory] {
-        // Separate categories, items, and images
+        // Separate categories, items, images, and modifier lists
         let categories = objects.filter { $0.type == "CATEGORY" }
         let items = objects.filter { $0.type == "ITEM" }
         let images = objects.filter { $0.type == "IMAGE" }
+        let modifierLists = objects.filter { $0.type == "MODIFIER_LIST" }
         
-        print("DEBUG: Found \(categories.count) categories, \(items.count) items, and \(images.count) images")
-        
-        // Debug: Print image information
-        print("DEBUG: Images:")
-        for image in images {
-            print("  - ID: \(image.id), URL: \(image.imageData?.url ?? "nil")")
-        }
-        
-        // Debug: Print items with their imageIds
-        print("DEBUG: Items with imageIds:")
-        for item in items {
-            let imageIds = item.itemData?.imageIds ?? []
-            print("  - \(item.itemData?.name ?? "Unknown"): imageIds = \(imageIds)")
-        }
+        print("DEBUG: Found \(categories.count) categories, \(items.count) items, \(images.count) images, and \(modifierLists.count) modifier lists")
         
         // Create image mapping (image ID -> image URL)
         let imageMapping = createImageMapping(from: images)
+        
+        // Create modifier list mapping (modifier list ID -> modifier list data)
+        let modifierListMapping = createModifierListMapping(from: modifierLists)
         
         // Create menu categories
         var menuCategories: [MenuCategory] = []
@@ -127,17 +118,21 @@ class SquareAPIService {
                 let priceInCents = variationData?.priceMoney?.amount ?? 0
                 let price = Double(priceInCents) / 100.0
                 
-                // Determine customizations based on item type/name
-                let customizations = determineCustomizations(for: itemData.name)
+                // Get modifier lists for this item
+                let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
                 
                 // Get image URL for this item
                 let imageURL = getImageURL(for: itemData, from: imageMapping)
+                
+                // Keep legacy customizations for backward compatibility
+                let customizations = extractCustomizationTypes(from: modifierLists)
                 
                 return MenuItem(
                     name: itemData.name,
                     price: price,
                     customizations: customizations,
-                    imageURL: imageURL
+                    imageURL: imageURL,
+                    modifierLists: modifierLists
                 )
             }
             
@@ -165,17 +160,21 @@ class SquareAPIService {
             let priceInCents = variationData?.priceMoney?.amount ?? 0
             let price = Double(priceInCents) / 100.0
             
-            // Determine customizations based on item type/name
-            let customizations = determineCustomizations(for: itemData.name)
+            // Get modifier lists for this item
+            let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
             
             // Get image URL for this item
             let imageURL = getImageURL(for: itemData, from: imageMapping)
+            
+            // Keep legacy customizations for backward compatibility
+            let customizations = extractCustomizationTypes(from: modifierLists)
             
             return MenuItem(
                 name: itemData.name,
                 price: price,
                 customizations: customizations,
-                imageURL: imageURL
+                imageURL: imageURL,
+                modifierLists: modifierLists
             )
         }
         
@@ -195,16 +194,21 @@ class SquareAPIService {
                 let priceInCents = variationData?.priceMoney?.amount ?? 0
                 let price = Double(priceInCents) / 100.0
                 
-                let customizations = determineCustomizations(for: itemData.name)
+                // Get modifier lists for this item
+                let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
                 
                 // Get image URL for this item
                 let imageURL = getImageURL(for: itemData, from: imageMapping)
+                
+                // Keep legacy customizations for backward compatibility
+                let customizations = extractCustomizationTypes(from: modifierLists)
                 
                 return MenuItem(
                     name: itemData.name,
                     price: price,
                     customizations: customizations,
-                    imageURL: imageURL
+                    imageURL: imageURL,
+                    modifierLists: modifierLists
                 )
             }
             
@@ -216,22 +220,99 @@ class SquareAPIService {
         return menuCategories
     }
     
-    private func determineCustomizations(for itemName: String) -> [String]? {
-        let lowercaseName = itemName.lowercased()
+    private func createModifierListMapping(from modifierLists: [SquareCatalogObject]) -> [String: MenuItemModifierList] {
+        var mapping: [String: MenuItemModifierList] = [:]
         
-        // Determine if item is customizable based on name
-        if lowercaseName.contains("coffee") || lowercaseName.contains("latte") || 
-           lowercaseName.contains("cappuccino") || lowercaseName.contains("espresso") ||
-           lowercaseName.contains("americano") || lowercaseName.contains("mocha") {
-            return ["size", "milk", "sugar"]
-        } else if lowercaseName.contains("iced") || lowercaseName.contains("cold") ||
-                  lowercaseName.contains("frappe") || lowercaseName.contains("smoothie") {
-            return ["size", "ice", "milk", "sugar"]
-        } else if lowercaseName.contains("tea") {
-            return ["size", "sugar"]
+        for modifierListObject in modifierLists {
+            guard let modifierListData = modifierListObject.modifierListData else { continue }
+            
+            // Convert Square modifiers to app modifiers
+            let appModifiers = modifierListData.modifiers?.compactMap { squareModifier -> MenuItemModifier? in
+                guard let modifierData = squareModifier.modifierData else { return nil }
+                
+                let priceInCents = modifierData.priceMoney?.amount ?? 0
+                let price = Double(priceInCents) / 100.0
+                
+                return MenuItemModifier(
+                    id: squareModifier.id,
+                    name: modifierData.name,
+                    price: price,
+                    isDefault: modifierData.onByDefault ?? false
+                )
+            } ?? []
+            
+            let appModifierList = MenuItemModifierList(
+                id: modifierListObject.id,
+                name: modifierListData.name,
+                selectionType: modifierListData.selectionType ?? "SINGLE",
+                minSelections: 0, // Will be updated when processing items
+                maxSelections: 1, // Will be updated when processing items
+                modifiers: appModifiers
+            )
+            
+            mapping[modifierListObject.id] = appModifierList
         }
         
-        return nil
+        print("DEBUG: Created modifier list mapping with \(mapping.count) modifier lists")
+        return mapping
+    }
+    
+    private func getModifierLists(for itemData: SquareItemData, from mapping: [String: MenuItemModifierList]) -> [MenuItemModifierList] {
+        guard let modifierListInfos = itemData.modifierListInfo else { return [] }
+        
+        var modifierLists: [MenuItemModifierList] = []
+        
+        for modifierListInfo in modifierListInfos {
+            // Skip if disabled or hidden from customer
+            if modifierListInfo.enabled == false || modifierListInfo.hiddenFromCustomer == true {
+                continue
+            }
+            
+            guard var modifierList = mapping[modifierListInfo.modifierListId] else { continue }
+            
+            // Update min/max selections based on item's modifier list info
+            let minSelections = max(0, modifierListInfo.minSelectedModifiers ?? 0)
+            let maxSelections = modifierListInfo.maxSelectedModifiers ?? 1
+            
+            // Create updated modifier list with correct min/max selections
+            let updatedModifierList = MenuItemModifierList(
+                id: modifierList.id,
+                name: modifierList.name,
+                selectionType: modifierList.selectionType,
+                minSelections: minSelections,
+                maxSelections: maxSelections,
+                modifiers: modifierList.modifiers
+            )
+            
+            modifierLists.append(updatedModifierList)
+        }
+        
+        return modifierLists
+    }
+    
+    private func extractCustomizationTypes(from modifierLists: [MenuItemModifierList]) -> [String]? {
+        guard !modifierLists.isEmpty else { return nil }
+        
+        var customizations: [String] = []
+        
+        for modifierList in modifierLists {
+            let name = modifierList.name.lowercased()
+            
+            if name.contains("size") {
+                customizations.append("size")
+            } else if name.contains("ice") {
+                customizations.append("ice")
+            } else if name.contains("milk") {
+                customizations.append("milk")
+            } else if name.contains("sugar") || name.contains("sweet") {
+                customizations.append("sugar")
+            } else {
+                // For other modifier lists, use a generic type
+                customizations.append("other")
+            }
+        }
+        
+        return customizations.isEmpty ? nil : customizations
     }
     
     private func createImageMapping(from images: [SquareCatalogObject]) -> [String: String] {
