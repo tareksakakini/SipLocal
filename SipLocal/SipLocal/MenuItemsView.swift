@@ -439,8 +439,8 @@ struct ModifierListSection: View {
                                         selectedModifiers.remove(modifier.id)
                                     }
                                 } else {
-                                    // Don't allow selection if at maximum
-                                    if selectedModifiers.count < modifierList.maxSelections {
+                                    // Don't allow selection if at maximum (handle -1 as unlimited)
+                                    if modifierList.maxSelections == -1 || selectedModifiers.count < modifierList.maxSelections {
                                         selectedModifiers.insert(modifier.id)
                                     }
                                 }
@@ -457,7 +457,9 @@ struct ModifierListSection: View {
     
     private func buildRequirementText() -> String {
         if modifierList.minSelections > 0 && modifierList.maxSelections > 1 {
-            if modifierList.minSelections == modifierList.maxSelections {
+            if modifierList.maxSelections == -1 {
+                return "Select at least \(modifierList.minSelections)"
+            } else if modifierList.minSelections == modifierList.maxSelections {
                 return "Select \(modifierList.minSelections)"
             } else {
                 return "Select \(modifierList.minSelections)-\(modifierList.maxSelections)"
@@ -466,6 +468,8 @@ struct ModifierListSection: View {
             return "Select at least \(modifierList.minSelections)"
         } else if modifierList.maxSelections > 1 {
             return "Select up to \(modifierList.maxSelections)"
+        } else if modifierList.maxSelections == -1 {
+            return "Select any number"
         }
         return ""
     }
