@@ -5,6 +5,7 @@ struct MenuItemsView: View {
     let category: MenuCategory
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var cartManager: CartManager
+    @StateObject private var menuDataManager = MenuDataManager.shared
     @State private var showingCart = false
     @State private var customizingItem: MenuItem? = nil
     // Store customization selections
@@ -347,7 +348,11 @@ struct CustomizationSection<Content: View>: View {
 struct MenuItemsView_Previews: PreviewProvider {
     static var previews: some View {
         let sampleShop = DataService.loadCoffeeShops().first!
-        let sampleCategory = sampleShop.menu.first!
+        // Create a sample category since we can't access shop.menu directly anymore
+        let sampleCategory = MenuCategory(name: "Hot Coffee", items: [
+            MenuItem(name: "Americano", price: 3.50, customizations: ["size", "milk", "sugar"]),
+            MenuItem(name: "Latte", price: 4.25, customizations: ["size", "milk", "sugar"])
+        ])
         MenuItemsView(shop: sampleShop, category: sampleCategory)
             .environmentObject(CartManager())
     }

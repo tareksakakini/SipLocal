@@ -4,6 +4,7 @@ struct MenuCategorySelectionView: View {
     let shop: CoffeeShop
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var cartManager: CartManager
+    @StateObject private var menuDataManager = MenuDataManager.shared
     @State private var showingCart = false
     
     var body: some View {
@@ -23,49 +24,18 @@ struct MenuCategorySelectionView: View {
                     .padding(.horizontal)
                     .padding(.top)
                     
-                    // Category Cards
-                    VStack(spacing: 16) {
-                        ForEach(shop.menu) { category in
-                            NavigationLink(destination: MenuItemsView(shop: shop, category: category)) {
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        HStack {
-                                            Image(systemName: categoryIcon(for: category.name))
-                                                .font(.title2)
-                                                .foregroundColor(.primary)
-                                            
-                                            Text(category.name)
-                                                .font(.title2)
-                                                .fontWeight(.semibold)
-                                                .foregroundColor(.primary)
-                                        }
-                                        
-                                        Text("\(category.items.count) items")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                        
-                                        // Show first few item names as preview
-                                        Text(category.items.prefix(3).map { $0.name }.joined(separator: ", "))
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(2)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    Image(systemName: "chevron.right")
-                                        .font(.title3)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding(20)
-                                .background(Color.white)
-                                .cornerRadius(16)
-                                .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+                    // Content based on loading state
+                    if menuDataManager.isLoading(for: shop) {
+                        LoadingView()
+                    } else if let errorMessage = menuDataManager.getErrorMessage(for: shop) {
+                        ErrorView(errorMessage: errorMessage) {
+                            Task {
+                                await menuDataManager.refreshMenuData(for: shop)
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
+                    } else {
+                        CategoryCardsView(shop: shop, categories: menuDataManager.getMenuCategories(for: shop))
                     }
-                    .padding(.horizontal)
                     
                     Spacer(minLength: 100)
                 }
@@ -114,6 +84,67 @@ struct MenuCategorySelectionView: View {
                 CartView()
                     .environmentObject(cartManager)
             }
+            .task {
+                // Load menu data when view appears
+                if menuDataManager.getMenuCategories(for: shop).isEmpty {
+                    await menuDataManager.fetchMenuData(for: shop)
+                }
+            }
+        }
+    }
+}
+
+struct CategoryCardsView: View {
+    let shop: CoffeeShop
+    let categories: [MenuCategory]
+    
+    var body: some View {
+        if categories.isEmpty {
+            EmptyMenuView()
+        } else {
+            // Category Cards
+            VStack(spacing: 16) {
+                ForEach(categories) { category in
+                    NavigationLink(destination: MenuItemsView(shop: shop, category: category)) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: categoryIcon(for: category.name))
+                                        .font(.title2)
+                                        .foregroundColor(.primary)
+                                    
+                                    Text(category.name)
+                                        .font(.title2)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.primary)
+                                }
+                                
+                                Text("\(category.items.count) items")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                
+                                // Show first few item names as preview
+                                Text(category.items.prefix(3).map { $0.name }.joined(separator: ", "))
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(2)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.title3)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(20)
+                        .background(Color.white)
+                        .cornerRadius(16)
+                        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+            .padding(.horizontal)
         }
     }
     

@@ -55,3 +55,7 @@ integration_logs/
 
 
 *.plist
+
+SipLocal/SipLocal/CoffeeShops.json
+
+SipLocal/SipLocal/CoffeeShops_Archive.json

@@ -14,6 +14,13 @@ struct MenuCategory: Codable, Identifiable {
     let items: [MenuItem]
 }
 
+// Square credentials structure
+struct SquareCredentials: Codable {
+    let appID: String
+    let accessToken: String
+    let locationId: String
+}
+
 struct CoffeeShop: Codable, Identifiable {
     let id: String
     let name: String
@@ -25,7 +32,7 @@ struct CoffeeShop: Codable, Identifiable {
     let description: String
     let imageName: String
     let stampName: String
-    let menu: [MenuCategory]
+    let menu: SquareCredentials
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -44,10 +51,15 @@ class DataService {
         
         let decoder = JSONDecoder()
         
-        guard let coffeeShops = try? decoder.decode([CoffeeShop].self, from: data) else {
-            fatalError("Could not decode CoffeeShops.json from the bundle.")
+        do {
+            let coffeeShops = try decoder.decode([CoffeeShop].self, from: data)
+            return coffeeShops
+        } catch {
+            print("JSON decoding error: \(error)")
+            if let jsonString = String(data: data, encoding: .utf8) {
+                print("JSON content: \(jsonString)")
+            }
+            fatalError("Could not decode CoffeeShops.json from the bundle. Error: \(error)")
         }
-        
-        return coffeeShops
     }
 } 
