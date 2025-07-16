@@ -10,6 +10,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,8 +30,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -40,9 +44,21 @@ import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
+import com.example.siplocalandroid.R
 import com.example.siplocalandroid.data.CoffeeShop
 import com.example.siplocalandroid.data.DataService
-import androidx.compose.ui.draw.scale
+
+// Helper function to get drawable resource ID from imageName
+fun getDrawableResourceIdExplore(imageName: String): Int {
+    return when (imageName) {
+        "qisa" -> R.drawable.qisa
+        "qamaria" -> R.drawable.qamaria
+        "sanaa" -> R.drawable.sanaa
+        "estelle" -> R.drawable.estelle
+        "themill" -> R.drawable.themill
+        else -> R.drawable.qisa // Default fallback
+    }
+}
 
 @Composable
 fun ExploreScreen(
@@ -299,20 +315,15 @@ fun SearchResults(
                         .padding(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(
+                    // Coffee shop thumbnail
+                    Image(
+                        painter = painterResource(id = getDrawableResourceIdExplore(shop.imageName)),
+                        contentDescription = shop.name,
                         modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFFFF9800)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Place,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Crop
+                    )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(

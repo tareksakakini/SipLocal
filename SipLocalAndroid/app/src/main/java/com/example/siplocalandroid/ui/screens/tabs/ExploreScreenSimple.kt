@@ -5,6 +5,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -25,13 +26,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import com.example.siplocalandroid.R
 import com.example.siplocalandroid.data.CoffeeShop
 import com.example.siplocalandroid.data.DataService
+
+// Helper function to get drawable resource ID from imageName
+fun getDrawableResourceIdSimple(imageName: String): Int {
+    return when (imageName) {
+        "qisa" -> R.drawable.qisa
+        "qamaria" -> R.drawable.qamaria
+        "sanaa" -> R.drawable.sanaa
+        "estelle" -> R.drawable.estelle
+        "themill" -> R.drawable.themill
+        else -> R.drawable.qisa // Default fallback
+    }
+}
 
 @Composable
 fun ExploreScreenSimple() {
@@ -97,19 +113,37 @@ fun ExploreScreenSimple() {
                                 .clickable { selectedShop = shop },
                             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp)
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = shop.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Bold
+                                // Coffee shop thumbnail
+                                Image(
+                                    painter = painterResource(id = getDrawableResourceIdSimple(shop.imageName)),
+                                    contentDescription = shop.name,
+                                    modifier = Modifier
+                                        .size(60.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                    contentScale = ContentScale.Crop
                                 )
-                                Text(
-                                    text = shop.address,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
-                                )
+                                
+                                Spacer(modifier = Modifier.width(12.dp))
+                                
+                                // Coffee shop info
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = shop.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = shop.address,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.Gray
+                                    )
+                                }
                             }
                         }
                     }

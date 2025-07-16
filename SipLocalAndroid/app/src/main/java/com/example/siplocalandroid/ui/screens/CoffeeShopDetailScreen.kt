@@ -33,6 +33,18 @@ import androidx.compose.ui.zIndex
 import com.example.siplocalandroid.R
 import com.example.siplocalandroid.data.CoffeeShop
 
+// Helper function to get drawable resource ID from imageName
+fun getDrawableResourceId(imageName: String): Int {
+    return when (imageName) {
+        "qisa" -> R.drawable.qisa
+        "qamaria" -> R.drawable.qamaria
+        "sanaa" -> R.drawable.sanaa
+        "estelle" -> R.drawable.estelle
+        "themill" -> R.drawable.themill
+        else -> R.drawable.qisa // Default fallback
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CoffeeShopDetailScreen(
@@ -57,35 +69,12 @@ fun CoffeeShopDetailScreen(
                     .fillMaxWidth()
                     .height(300.dp)
             ) {
-                // Placeholder image (since we don't have the actual images in Android)
-                // In a real app, you'd load the actual image using shop.imageName
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Gray.copy(alpha = 0.3f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "☕",
-                            fontSize = 64.sp
-                        )
-                        Text(
-                            text = "Coffee Shop Image",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center
-                        )
-                        Text(
-                            text = shop.imageName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
+                Image(
+                    painter = painterResource(id = getDrawableResourceId(shop.imageName)),
+                    contentDescription = shop.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
             }
             
             // Content Section
