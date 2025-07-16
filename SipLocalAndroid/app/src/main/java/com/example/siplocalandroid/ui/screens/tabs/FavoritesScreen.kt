@@ -44,7 +44,13 @@ fun FavoritesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Favorites") }
+                title = {
+                    Text(
+                        "Favorites",
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             )
         }
     ) { paddingValues ->
