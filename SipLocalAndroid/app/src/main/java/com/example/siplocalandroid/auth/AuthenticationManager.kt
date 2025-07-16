@@ -124,6 +124,16 @@ class AuthenticationManager {
         }
     }
 
+    suspend fun getFavoriteShopIds(): List<String> {
+        val userId = currentUser?.uid ?: return emptyList()
+        return try {
+            val document = firestore.collection("users").document(userId).get().await()
+            document.get("favorites") as? List<String> ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     suspend fun sendVerificationEmail(): Result<String> {
         return try {
             auth.currentUser?.sendEmailVerification()?.await()

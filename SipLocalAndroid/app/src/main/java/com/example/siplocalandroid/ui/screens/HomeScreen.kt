@@ -108,7 +108,7 @@ fun NavigationHost(navController: NavHostController, onSignOut: () -> Unit) {
                 )
             }
         }
-        composable("favorites") { FavoritesScreen() }
+        composable("favorites") { FavoritesScreen(navController = navController) }
         composable("order") { OrderScreen() }
         composable("passport") { PassportScreen() }
         composable("profile") { ProfileScreen(onSignOut = onSignOut) }
