@@ -14,7 +14,7 @@ class AuthenticationManager {
     val currentUser = auth.currentUser
     val isAuthenticated = currentUser != null
     
-    suspend fun signUp(email: String, password: String, userData: UserData): Result<String> {
+    suspend fun signUp(email: String, password: String, userData: UserData): Result<Unit> {
         return try {
             // Check if Firebase is properly configured
             if (!isFirebaseConfigured()) {
@@ -31,7 +31,7 @@ class AuthenticationManager {
             // Send verification email
             user.sendEmailVerification().await()
             
-            Result.success("Account created successfully! Please check your email to verify your account.")
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -88,6 +88,24 @@ class AuthenticationManager {
         )
         
         userDocument.set(userDataMap).await()
+    }
+
+    suspend fun sendVerificationEmail(): Result<String> {
+        return try {
+            auth.currentUser?.sendEmailVerification()?.await()
+            Result.success("A new verification email has been sent to your address.")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun reloadUser(): Boolean {
+        return try {
+            auth.currentUser?.reload()?.await()
+            auth.currentUser?.isEmailVerified ?: false
+        } catch (e: Exception) {
+            false
+        }
     }
     
     suspend fun sendPasswordReset(email: String): Result<String> {

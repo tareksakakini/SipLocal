@@ -21,9 +21,8 @@ data class SignupUiState(
     val isConfirmPasswordVisible: Boolean = false,
     val usernameStatus: UsernameStatus = UsernameStatus.NONE,
     val isLoading: Boolean = false,
-    val showSuccessDialog: Boolean = false,
+    val signupSuccess: Boolean = false,
     val showErrorDialog: Boolean = false,
-    val successMessage: String = "",
     val errorMessage: String = "",
     val isFormValid: Boolean = false
 )
@@ -69,9 +68,9 @@ class SignupViewModel : ViewModel() {
     fun toggleConfirmPasswordVisibility() {
         _uiState.value = _uiState.value.copy(isConfirmPasswordVisible = !_uiState.value.isConfirmPasswordVisible)
     }
-    
-    fun dismissSuccessDialog() {
-        _uiState.value = _uiState.value.copy(showSuccessDialog = false)
+
+    fun onSignupNavigated() {
+        _uiState.value = _uiState.value.copy(signupSuccess = false)
     }
     
     fun dismissErrorDialog() {
@@ -139,11 +138,8 @@ class SignupViewModel : ViewModel() {
             _uiState.value = _uiState.value.copy(isLoading = false)
             
             result.fold(
-                onSuccess = { message ->
-                    _uiState.value = _uiState.value.copy(
-                        showSuccessDialog = true,
-                        successMessage = message
-                    )
+                onSuccess = {
+                    _uiState.value = _uiState.value.copy(signupSuccess = true)
                 },
                 onFailure = { exception ->
                     _uiState.value = _uiState.value.copy(

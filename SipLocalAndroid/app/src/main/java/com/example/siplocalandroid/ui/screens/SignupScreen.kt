@@ -32,29 +32,17 @@ enum class UsernameStatus {
 @Composable
 fun SignupScreen(
     onNavigateBack: () -> Unit = {},
-    onSignupSuccess: () -> Unit = {}
+    onSignupSuccess: () -> Unit = {},
+    onNavigateToLogin: () -> Unit = {}
 ) {
     val viewModel: SignupViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
-    
-    // Show success dialog
-    if (uiState.showSuccessDialog) {
-        AlertDialog(
-            onDismissRequest = { 
-                viewModel.dismissSuccessDialog()
-                onSignupSuccess()
-            },
-            title = { Text("Success") },
-            text = { Text(uiState.successMessage) },
-            confirmButton = {
-                TextButton(onClick = { 
-                    viewModel.dismissSuccessDialog()
-                    onSignupSuccess()
-                }) {
-                    Text("OK")
-                }
-            }
-        )
+
+    if (uiState.signupSuccess) {
+        LaunchedEffect(Unit) {
+            onSignupSuccess()
+            viewModel.onSignupNavigated()
+        }
     }
     
     // Show error dialog
@@ -218,7 +206,7 @@ fun SignupScreen(
                         
                         // Back to Login
                         TextButton(
-                            onClick = onNavigateBack,
+                            onClick = onNavigateToLogin,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(bottom = 8.dp)
