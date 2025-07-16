@@ -59,3 +59,31 @@ integration_logs/
 SipLocal/SipLocal/CoffeeShops.json
 
 SipLocal/SipLocal/CoffeeShops_Archive.json
+
+# Android
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+*.jar
+*.keystore
+local.properties
+.idea/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+*.iml
+gadle.properties
+captures/
+.cxx/
+*build/
+*release/
+*debug/
+*.jks
+/SipLocalAndroid/app/src/main/res/raw/
+/SipLocalAndroid/app/src/main/assets/
+/SipLocalAndroid/app/google-services.json
