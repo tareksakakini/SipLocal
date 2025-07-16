@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.example.siplocalandroid.R
 import com.example.siplocalandroid.ui.theme.SipLocalAndroidTheme
@@ -60,6 +61,7 @@ fun LandingScreen() {
                 PlayerView(it).apply {
                     player = exoPlayer
                     useController = false
+                    resizeMode = AspectRatioFrameLayout.RESIZE_MODE_ZOOM
                 }
             },
             modifier = Modifier.fillMaxSize()
