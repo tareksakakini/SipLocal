@@ -46,7 +46,7 @@ class MainActivity : ComponentActivity() {
                         onForgotPassword = { currentScreen = "forgot_password" }
                     )
                     "home" -> HomeScreen(
-                        onLogout = {
+                        onSignOut = {
                             AuthenticationManager().signOut()
                             currentScreen = "landing"
                         }
