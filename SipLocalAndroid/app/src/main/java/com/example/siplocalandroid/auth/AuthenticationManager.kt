@@ -134,6 +134,38 @@ class AuthenticationManager {
         }
     }
 
+    suspend fun addStamp(shopId: String): Result<Unit> {
+        val userId = currentUser?.uid ?: return Result.failure(Exception("User not authenticated"))
+        return try {
+            val userDocRef = firestore.collection("users").document(userId)
+            userDocRef.update("stampedShops", FieldValue.arrayUnion(shopId)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeStamp(shopId: String): Result<Unit> {
+        val userId = currentUser?.uid ?: return Result.failure(Exception("User not authenticated"))
+        return try {
+            val userDocRef = firestore.collection("users").document(userId)
+            userDocRef.update("stampedShops", FieldValue.arrayRemove(shopId)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getStampedShopIds(): List<String> {
+        val userId = currentUser?.uid ?: return emptyList()
+        return try {
+            val document = firestore.collection("users").document(userId).get().await()
+            document.get("stampedShops") as? List<String> ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     suspend fun sendVerificationEmail(): Result<String> {
         return try {
             auth.currentUser?.sendEmailVerification()?.await()
