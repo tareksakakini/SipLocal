@@ -45,7 +45,9 @@ import com.example.siplocalandroid.data.DataService
 import androidx.compose.ui.draw.scale
 
 @Composable
-fun ExploreScreen() {
+fun ExploreScreen(
+    onNavigateToDetail: (CoffeeShop) -> Unit = {}
+) {
     val context = LocalContext.current
     val coffeeShops = remember { 
         try {
@@ -212,7 +214,8 @@ fun ExploreScreen() {
             selectedShop?.let { shop ->
                 CoffeeShopDetailCard(
                     shop = shop,
-                    onDismiss = { selectedShop = null }
+                    onDismiss = { selectedShop = null },
+                    onNavigateToDetail = onNavigateToDetail
                 )
             }
         }
@@ -339,7 +342,8 @@ fun SearchResults(
 @Composable
 fun CoffeeShopDetailCard(
     shop: CoffeeShop,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onNavigateToDetail: (CoffeeShop) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -416,7 +420,7 @@ fun CoffeeShopDetailCard(
 
             // View More button
             Button(
-                onClick = { /* TODO: Navigate to detail view */ },
+                onClick = { onNavigateToDetail(shop) },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.Blue

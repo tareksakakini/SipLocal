@@ -19,12 +19,22 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.siplocalandroid.ui.screens.tabs.*
 import com.example.siplocalandroid.ui.theme.SipLocalAndroidTheme
+import com.example.siplocalandroid.data.CoffeeShop
+import com.example.siplocalandroid.data.DataService
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun HomeScreen(onSignOut: () -> Unit) {
     val navController = rememberNavController()
+    val currentRoute = currentRoute(navController)
+    
     Scaffold(
-        bottomBar = { BottomNavigationBar(navController) }
+        bottomBar = { 
+            // Hide bottom navigation on detail screen
+            if (currentRoute != null && !currentRoute.startsWith("detail/")) {
+                BottomNavigationBar(navController)
+            }
+        }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
             NavigationHost(navController = navController, onSignOut = onSignOut)
@@ -73,8 +83,31 @@ fun BottomNavigationBar(navController: NavController) {
 
 @Composable
 fun NavigationHost(navController: NavHostController, onSignOut: () -> Unit) {
+    val context = LocalContext.current
+    
     NavHost(navController = navController, startDestination = "explore") {
-        composable("explore") { ExploreScreen() }
+        composable("explore") { 
+            ExploreScreen(
+                onNavigateToDetail = { shop ->
+                    navController.navigate("detail/${shop.id}")
+                }
+            )
+        }
+        composable("detail/{shopId}") { backStackEntry ->
+            val shopId = backStackEntry.arguments?.getString("shopId")
+            val shop = shopId?.let { DataService.getCoffeeShopById(context, it) }
+            
+            if (shop != null) {
+                CoffeeShopDetailScreen(
+                    shop = shop,
+                    onBackClick = { navController.popBackStack() },
+                    onMenuClick = { 
+                        // TODO: Navigate to menu screen when it's implemented
+                        // navController.navigate("menu/${shop.id}")
+                    }
+                )
+            }
+        }
         composable("favorites") { FavoritesScreen() }
         composable("order") { OrderScreen() }
         composable("passport") { PassportScreen() }

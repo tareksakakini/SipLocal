@@ -151,7 +151,8 @@ fun ExploreScreenSimple() {
             selectedShop?.let { shop ->
                 CoffeeShopDetailCard(
                     shop = shop,
-                    onDismiss = { selectedShop = null }
+                    onDismiss = { selectedShop = null },
+                    onNavigateToDetail = {}
                 )
             }
         }
