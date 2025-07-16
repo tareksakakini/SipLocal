@@ -36,7 +36,10 @@ import com.example.siplocalandroid.R
 import com.example.siplocalandroid.ui.theme.SipLocalAndroidTheme
 
 @Composable
-fun LandingScreen() {
+fun LandingScreen(
+    onSignupClick: () -> Unit = {},
+    onLoginClick: () -> Unit = {}
+) {
     val context = LocalContext.current
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
@@ -90,7 +93,7 @@ fun LandingScreen() {
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 Button(
-                    onClick = { /* TODO: Navigate to Login */ },
+                    onClick = onLoginClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(55.dp),
@@ -110,7 +113,7 @@ fun LandingScreen() {
                 }
                 Spacer(modifier = Modifier.height(20.dp))
                 Button(
-                    onClick = { /* TODO: Navigate to Signup */ },
+                    onClick = onSignupClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(55.dp),
