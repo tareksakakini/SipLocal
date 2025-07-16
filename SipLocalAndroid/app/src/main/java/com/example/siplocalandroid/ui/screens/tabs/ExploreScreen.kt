@@ -1,6 +1,11 @@
 package com.example.siplocalandroid.ui.screens.tabs
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,11 +36,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
 import com.example.siplocalandroid.data.CoffeeShop
 import com.example.siplocalandroid.data.DataService
+import androidx.compose.ui.draw.scale
 
 @Composable
 fun ExploreScreen() {
@@ -68,6 +75,19 @@ fun ExploreScreen() {
         }
     }
 
+    // Animate camera when a shop is selected
+    LaunchedEffect(selectedShop) {
+        selectedShop?.let { shop ->
+            cameraPositionState.animate(
+                update = CameraUpdateFactory.newLatLngZoom(
+                    shop.coordinate,
+                    15f
+                ),
+                durationMs = 800
+            )
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // Google Map
         GoogleMap(
@@ -80,15 +100,81 @@ fun ExploreScreen() {
         ) {
             // Coffee shop markers
             coffeeShops.forEach { shop ->
-                Marker(
+                MarkerComposable(
                     state = MarkerState(position = shop.coordinate),
-                    title = shop.name,
-                    snippet = shop.address,
                     onClick = {
                         selectedShop = shop
                         true
                     }
-                )
+                ) {
+                    val isSelected = selectedShop?.id == shop.id
+                    
+                    // Animated scale with spring animation
+                    val animatedScale by animateFloatAsState(
+                        targetValue = if (isSelected) 1.3f else 1.0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "marker_scale"
+                    )
+                    
+                    // Animated color for the marker background
+                    val animatedColor by animateColorAsState(
+                        targetValue = if (isSelected) Color(0xFFE91E63) else Color(0xFFFF9800), // Pink when selected, orange otherwise
+                        animationSpec = tween(durationMillis = 300),
+                        label = "marker_color"
+                    )
+                    
+                    // Animated text background opacity
+                    val animatedTextAlpha by animateFloatAsState(
+                        targetValue = if (isSelected) 1.0f else 0.9f,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "text_alpha"
+                    )
+                    
+                    // Animated text color
+                    val animatedTextColor by animateColorAsState(
+                        targetValue = if (isSelected) Color(0xFFE91E63) else Color.Black,
+                        animationSpec = tween(durationMillis = 300),
+                        label = "text_color"
+                    )
+                    
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier
+                            .scale(animatedScale)
+                            .zIndex(if (isSelected) 1f else 0f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(animatedColor),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Place,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = shop.name,
+                            modifier = Modifier
+                                .background(
+                                    color = Color.White.copy(alpha = animatedTextAlpha),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = animatedTextColor
+                        )
+                    }
+                }
             }
         }
 
@@ -116,11 +202,6 @@ fun ExploreScreen() {
                     onShopSelected = { shop ->
                         selectedShop = shop
                         searchText = ""
-                        // Move camera to selected shop
-                        cameraPositionState.position = CameraPosition.fromLatLngZoom(
-                            shop.coordinate,
-                            15f
-                        )
                     }
                 )
             }
