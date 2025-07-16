@@ -2,6 +2,7 @@ package com.example.siplocalandroid.ui.screens
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -24,14 +25,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.siplocalandroid.R
 import com.example.siplocalandroid.data.CoffeeShop
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 // Helper function to get drawable resource ID from imageName
 fun getDrawableResourceId(imageName: String): Int {
@@ -52,8 +56,12 @@ fun CoffeeShopDetailScreen(
     onBackClick: () -> Unit,
     onMenuClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    var isFavorite by remember { mutableStateOf(false) } // TODO: Connect to AuthenticationManager
+    val viewModel: CoffeeShopDetailViewModel = viewModel(
+        factory = CoffeeShopDetailViewModelFactory(shop.id)
+    )
+    val isFavorite by viewModel.isFavorite.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val uriHandler = LocalUriHandler.current
     val scrollState = rememberScrollState()
     
     Box(modifier = Modifier.fillMaxSize()) {
@@ -143,7 +151,12 @@ fun CoffeeShopDetailScreen(
                     // Website
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .clickable { 
+                                uriHandler.openUri(shop.website) 
+                            }
+                            .padding(vertical = 4.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Public,
@@ -153,7 +166,8 @@ fun CoffeeShopDetailScreen(
                         Text(
                             text = "Visit Website",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Blue
+                            color = Color.Blue,
+                            textDecoration = TextDecoration.Underline
                         )
                     }
                 }
@@ -234,19 +248,26 @@ fun CoffeeShopDetailScreen(
             // Favorite Button
             IconButton(
                 onClick = { 
-                    isFavorite = !isFavorite
-                    // TODO: Connect to AuthenticationManager to add/remove favorite
+                    viewModel.toggleFavorite()
                 },
                 modifier = Modifier
                     .size(48.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.9f))
+                    .background(Color.White.copy(alpha = 0.9f)),
+                enabled = !isLoading
             ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Favorite",
-                    tint = if (isFavorite) Color.Red else Color.Black
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Favorite",
+                        tint = if (isFavorite) Color.Red else Color.Black
+                    )
+                }
             }
         }
     }

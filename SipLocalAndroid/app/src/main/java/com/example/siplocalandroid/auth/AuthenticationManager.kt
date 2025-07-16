@@ -84,10 +84,44 @@ class AuthenticationManager {
             "username" to userData.username,
             "email" to userData.email,
             "createdAt" to Date(),
-            "isActive" to true
+            "isActive" to true,
+            "favorites" to emptyList<String>() // Initialize favorites field
         )
         
         userDocument.set(userDataMap).await()
+    }
+
+    suspend fun addFavorite(shopId: String): Result<Unit> {
+        val userId = currentUser?.uid ?: return Result.failure(Exception("User not authenticated"))
+        return try {
+            val userDocRef = firestore.collection("users").document(userId)
+            userDocRef.update("favorites", FieldValue.arrayUnion(shopId)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun removeFavorite(shopId: String): Result<Unit> {
+        val userId = currentUser?.uid ?: return Result.failure(Exception("User not authenticated"))
+        return try {
+            val userDocRef = firestore.collection("users").document(userId)
+            userDocRef.update("favorites", FieldValue.arrayRemove(shopId)).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun isFavorite(shopId: String): Boolean {
+        val userId = currentUser?.uid ?: return false
+        return try {
+            val document = firestore.collection("users").document(userId).get().await()
+            val favorites = document.get("favorites") as? List<*>
+            favorites?.contains(shopId) ?: false
+        } catch (e: Exception) {
+            false
+        }
     }
 
     suspend fun sendVerificationEmail(): Result<String> {
