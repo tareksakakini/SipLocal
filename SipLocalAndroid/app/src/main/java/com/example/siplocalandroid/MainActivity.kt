@@ -51,6 +51,11 @@ class MainActivity : ComponentActivity() {
                             // Clear all cached ViewModels so UI state is reset
                             this@MainActivity.viewModelStore.clear()
                             currentScreen = "landing"
+                        },
+                        onAccountDeleted = {
+                            // Clear all cached ViewModels so UI state is reset
+                            this@MainActivity.viewModelStore.clear()
+                            currentScreen = "landing"
                         }
                     )
                     "forgot_password" -> ForgotPasswordScreen(

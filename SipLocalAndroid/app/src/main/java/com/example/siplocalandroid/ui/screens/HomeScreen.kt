@@ -24,7 +24,10 @@ import com.example.siplocalandroid.data.DataService
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
-fun HomeScreen(onSignOut: () -> Unit) {
+fun HomeScreen(
+    onSignOut: () -> Unit,
+    onAccountDeleted: () -> Unit = {}
+) {
     val navController = rememberNavController()
     val currentRoute = currentRoute(navController)
     
@@ -37,7 +40,7 @@ fun HomeScreen(onSignOut: () -> Unit) {
         }
     ) { paddingValues ->
         Box(modifier = Modifier.padding(paddingValues)) {
-            NavigationHost(navController = navController, onSignOut = onSignOut)
+            NavigationHost(navController = navController, onSignOut = onSignOut, onAccountDeleted = onAccountDeleted)
         }
     }
 }
@@ -82,7 +85,11 @@ fun BottomNavigationBar(navController: NavController) {
 }
 
 @Composable
-fun NavigationHost(navController: NavHostController, onSignOut: () -> Unit) {
+fun NavigationHost(
+    navController: NavHostController, 
+    onSignOut: () -> Unit,
+    onAccountDeleted: () -> Unit = {}
+) {
     val context = LocalContext.current
     
     NavHost(navController = navController, startDestination = "explore") {
@@ -111,7 +118,7 @@ fun NavigationHost(navController: NavHostController, onSignOut: () -> Unit) {
         composable("favorites") { FavoritesScreen(navController = navController) }
         composable("order") { OrderScreen() }
         composable("passport") { PassportScreen() }
-        composable("profile") { ProfileScreen(onSignOut = onSignOut) }
+        composable("profile") { ProfileScreen(onSignOut = onSignOut, onAccountDeleted = onAccountDeleted) }
     }
 }
 
@@ -127,6 +134,6 @@ fun currentRoute(navController: NavController): String? {
 @Composable
 fun HomeScreenPreview() {
     SipLocalAndroidTheme {
-        HomeScreen(onSignOut = {})
+        HomeScreen(onSignOut = {}, onAccountDeleted = {})
     }
 } 

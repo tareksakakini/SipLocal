@@ -30,7 +30,10 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(onSignOut: () -> Unit) {
+fun ProfileScreen(
+    onSignOut: () -> Unit,
+    onAccountDeleted: () -> Unit = {}
+) {
     val authManager = remember { AuthenticationManager() }
     var userData by remember { mutableStateOf<UserData?>(null) }
     var isLoading by remember { mutableStateOf(true) }
@@ -401,16 +404,17 @@ fun ProfileScreen(onSignOut: () -> Unit) {
                         scope.launch {
                             val result = authManager.deleteUserAccount()
                             isDeletingAccount = false
-                            deleteResult = if (result.isSuccess) {
-                                Pair(true, result.getOrNull() ?: "Account deleted successfully")
+                            if (result.isSuccess) {
+                                // Account deleted successfully, navigate to landing page
+                                onAccountDeleted()
                             } else {
-                                Pair(false, result.exceptionOrNull()?.message ?: "Failed to delete account")
+                                deleteResult = Pair(false, result.exceptionOrNull()?.message ?: "Failed to delete account")
+                                showDeleteResult = true
+                                
+                                // Auto-hide the message after 4 seconds
+                                kotlinx.coroutines.delay(4000)
+                                showDeleteResult = false
                             }
-                            showDeleteResult = true
-                            
-                            // Auto-hide the message after 4 seconds
-                            kotlinx.coroutines.delay(4000)
-                            showDeleteResult = false
                         }
                     }
                 ) {
@@ -430,6 +434,6 @@ fun ProfileScreen(onSignOut: () -> Unit) {
 @Composable
 fun ProfileScreenPreview() {
     SipLocalAndroidTheme {
-        ProfileScreen(onSignOut = {})
+        ProfileScreen(onSignOut = {}, onAccountDeleted = {})
     }
 } 
