@@ -198,6 +198,49 @@ class AuthenticationManager {
         }
     }
     
+    suspend fun getUserData(userId: String): UserData? {
+        return try {
+            if (!isFirebaseConfigured()) {
+                return null
+            }
+            
+            val document = firestore.collection("users").document(userId).get().await()
+            if (document.exists()) {
+                UserData(
+                    fullName = document.getString("fullName") ?: "",
+                    username = document.getString("username") ?: "",
+                    email = document.getString("email") ?: "",
+                    profileImageUrl = document.getString("profileImageUrl")
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    suspend fun deleteUserAccount(): Result<String> {
+        return try {
+            val user = currentUser ?: return Result.failure(Exception("No user logged in"))
+            val userId = user.uid
+            
+            if (!isFirebaseConfigured()) {
+                return Result.failure(Exception("Firebase is not configured"))
+            }
+            
+            // Delete user data from Firestore
+            firestore.collection("users").document(userId).delete().await()
+            
+            // Delete the Firebase Auth user
+            user.delete().await()
+            
+            Result.success("Account deleted successfully")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
     private fun isFirebaseConfigured(): Boolean {
         return try {
             // Try to get the Firebase app instance
