@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
                     "home" -> HomeScreen(
                         onSignOut = {
                             AuthenticationManager().signOut()
+                            // Clear all cached ViewModels so UI state is reset
+                            this@MainActivity.viewModelStore.clear()
                             currentScreen = "landing"
                         }
                     )
@@ -59,6 +61,8 @@ class MainActivity : ComponentActivity() {
                         onEmailVerified = { currentScreen = "home" },
                         onSignOut = {
                             AuthenticationManager().signOut()
+                            // Clear all cached ViewModels so UI state is reset
+                            this@MainActivity.viewModelStore.clear()
                             currentScreen = "landing"
                         }
                     )

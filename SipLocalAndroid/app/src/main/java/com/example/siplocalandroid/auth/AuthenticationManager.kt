@@ -11,8 +11,9 @@ class AuthenticationManager {
     private val auth = FirebaseAuth.getInstance()
     private val firestore = FirebaseFirestore.getInstance()
     
-    val currentUser = auth.currentUser
-    val isAuthenticated = currentUser != null
+    // Expose authentication state as computed properties so they always reflect the latest FirebaseAuth status
+    val currentUser get() = auth.currentUser
+    val isAuthenticated get() = auth.currentUser != null
     
     suspend fun signUp(email: String, password: String, userData: UserData): Result<Unit> {
         return try {
