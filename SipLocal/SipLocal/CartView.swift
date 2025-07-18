@@ -53,9 +53,7 @@ struct CartView: View {
                         }
                         .padding(.horizontal)
                         
-                        Button(action: {
-                            // TODO: Implement checkout
-                        }) {
+                        NavigationLink(destination: CheckoutView().environmentObject(cartManager)) {
                             Text("Checkout")
                                 .font(.headline)
                                 .fontWeight(.semibold)

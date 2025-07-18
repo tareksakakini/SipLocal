@@ -8,12 +8,20 @@
 import SwiftUI
 import FirebaseCore
 import Firebase
+import SquareInAppPaymentsSDK
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey : Any]? = nil) -> Bool {
         FirebaseApp.configure()
         print("Firebase Configured")
+        
+        // Initialize Square In-App Payments SDK
+        // Note: You'll need to replace this with your actual Square Application ID
+        // For now, using a placeholder - this will be configured in the next step
+        SQIPInAppPaymentsSDK.squareApplicationID = "REPLACE_WITH_YOUR_SQUARE_APP_ID"
+        print("Square In-App Payments SDK initialized")
+        
         return true
     }
 }
