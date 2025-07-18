@@ -19,7 +19,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Initialize Square In-App Payments SDK
         // Note: You'll need to replace this with your actual Square Application ID
         // For now, using a placeholder - this will be configured in the next step
-        SQIPInAppPaymentsSDK.squareApplicationID = "REPLACE_WITH_YOUR_SQUARE_APP_ID"
+        SQIPInAppPaymentsSDK.squareApplicationID = "sandbox-sq0idb-rQ0tQ8bixxpZyp3kiP4SEA"
         print("Square In-App Payments SDK initialized")
         
         return true
