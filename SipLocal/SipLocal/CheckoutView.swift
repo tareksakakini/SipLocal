@@ -12,6 +12,9 @@ struct CheckoutView: View {
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
     
+    // Add an instance of our payment service
+    private let paymentService = PaymentService()
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -117,8 +120,8 @@ struct CheckoutView: View {
         }
         .onReceive(cardEntryDelegate.$cardDetails) { cardDetails in
             if let details = cardDetails {
-                self.paymentResult = "Successfully obtained nonce: \(details.nonce)"
-                self.showingCardEntry = false
+                // We have the nonce, now process the payment
+                processPayment(nonce: details.nonce)
             }
         }
         .onReceive(cardEntryDelegate.$wasCancelled) { wasCancelled in
@@ -129,19 +132,48 @@ struct CheckoutView: View {
         }
     }
     
-    // This function is no longer needed as the button now shows the card entry form
-    /*
-    private func processPayment() {
+    private func processPayment(nonce: String) {
         isProcessingPayment = true
-        paymentResult = "Square SDK initialized and ready for payment processing"
+        paymentResult = "Processing payment..."
         
-        // Simulate processing time
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        // Get the location ID from the first item in the cart
+        // In a real app, you might want to validate that all items are from the same shop
+        guard let firstItem = cartManager.items.first else {
+            paymentResult = "No items in cart"
             isProcessingPayment = false
-            paymentResult = "Payment integration ready - next step: implement Square card entry"
+            return
+        }
+        
+        let locationId = firstItem.shop.menu.locationId
+        
+        // Debug: Print the values we're sending
+        print("Debug - Sending to Firebase:")
+        print("  nonce: \(nonce)")
+        print("  amount: \(cartManager.totalPrice)")
+        print("  locationId: \(locationId)")
+        
+        Task {
+            let result = await paymentService.processPayment(
+                nonce: nonce, 
+                amount: cartManager.totalPrice,
+                locationId: locationId
+            )
+            
+            // Update the UI on the main thread
+            await MainActor.run {
+                switch result {
+                case .success(let transaction):
+                    paymentResult = transaction.message
+                    // In a real app, you would likely clear the cart here
+                    // cartManager.clearCart()
+                case .failure(let error):
+                    paymentResult = error.localizedDescription
+                }
+                isProcessingPayment = false
+                self.showingCardEntry = false
+            }
         }
     }
-    */
 }
 
 // 2. Create a UIViewControllerRepresentable to wrap the Square SDK's view controller

@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		E621FFEB2E2AB0260070209A /* SquareBuyerVerificationSDK in Frameworks */ = {isa = PBXBuildFile; productRef = E621FFEA2E2AB0260070209A /* SquareBuyerVerificationSDK */; };
 		E621FFED2E2AB0260070209A /* SquareInAppPaymentsSDK in Frameworks */ = {isa = PBXBuildFile; productRef = E621FFEC2E2AB0260070209A /* SquareInAppPaymentsSDK */; };
+		E621FFFF2E2B15F20070209A /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = E621FFFE2E2B15F20070209A /* FirebaseFunctions */; };
 		E6913D382E1C321C0082D6F5 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = E6913D372E1C321C0082D6F5 /* FirebaseAuth */; };
 		E6913D3A2E1C321C0082D6F5 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = E6913D392E1C321C0082D6F5 /* FirebaseCore */; };
 		E6913D3C2E1C321C0082D6F5 /* FirebaseDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = E6913D3B2E1C321C0082D6F5 /* FirebaseDatabase */; };
@@ -36,6 +37,7 @@
 				E6913D3C2E1C321C0082D6F5 /* FirebaseDatabase in Frameworks */,
 				E6913D3E2E1C321C0082D6F5 /* FirebaseFirestore in Frameworks */,
 				E621FFED2E2AB0260070209A /* SquareInAppPaymentsSDK in Frameworks */,
+				E621FFFF2E2B15F20070209A /* FirebaseFunctions in Frameworks */,
 				E6913D3A2E1C321C0082D6F5 /* FirebaseCore in Frameworks */,
 				E6913D402E1C321C0082D6F5 /* FirebaseStorage in Frameworks */,
 				E6913D382E1C321C0082D6F5 /* FirebaseAuth in Frameworks */,
@@ -46,10 +48,18 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E621FFFD2E2B15F20070209A /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		E6913D182E1C221E0082D6F5 = {
 			isa = PBXGroup;
 			children = (
 				E6913D232E1C221E0082D6F5 /* SipLocal */,
+				E621FFFD2E2B15F20070209A /* Frameworks */,
 				E6913D222E1C221E0082D6F5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -90,6 +100,7 @@
 				E6913D3F2E1C321C0082D6F5 /* FirebaseStorage */,
 				E621FFEA2E2AB0260070209A /* SquareBuyerVerificationSDK */,
 				E621FFEC2E2AB0260070209A /* SquareInAppPaymentsSDK */,
+				E621FFFE2E2B15F20070209A /* FirebaseFunctions */,
 			);
 			productName = SipLocal;
 			productReference = E6913D212E1C221E0082D6F5 /* SipLocal.app */;
@@ -405,6 +416,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = E621FFE92E2AB0260070209A /* XCRemoteSwiftPackageReference "in-app-payments-ios" */;
 			productName = SquareInAppPaymentsSDK;
+		};
+		E621FFFE2E2B15F20070209A /* FirebaseFunctions */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E6913D362E1C321C0082D6F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFunctions;
 		};
 		E6913D372E1C321C0082D6F5 /* FirebaseAuth */ = {
 			isa = XCSwiftPackageProductDependency;
