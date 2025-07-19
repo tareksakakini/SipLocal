@@ -8,6 +8,9 @@ struct CheckoutView: View {
     @State private var isProcessingPayment = false
     @State private var paymentResult: String = ""
     @State private var showingCardEntry = false
+    @State private var showingPaymentResult = false
+    @State private var paymentSuccess = false
+    @State private var transactionId: String?
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
@@ -86,13 +89,6 @@ struct CheckoutView: View {
                     .padding(.horizontal)
                     .padding(.bottom)
                     
-                    // Payment result (for testing)
-                    if !paymentResult.isEmpty {
-                        Text(paymentResult)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal)
-                    }
                 }
                 .background(Color(.systemGray6))
             }
@@ -117,6 +113,19 @@ struct CheckoutView: View {
         }
         .sheet(isPresented: $showingCardEntry) {
             CardEntryView(delegate: self.cardEntryDelegate)
+        }
+        .sheet(isPresented: $showingPaymentResult) {
+            PaymentResultView(
+                isSuccess: paymentSuccess,
+                transactionId: transactionId,
+                message: paymentResult
+            ) {
+                showingPaymentResult = false
+                if paymentSuccess {
+                    // Navigate back to main view on success
+                    presentationMode.wrappedValue.dismiss()
+                }
+            }
         }
         .onReceive(cardEntryDelegate.$cardDetails) { cardDetails in
             if let details = cardDetails {
@@ -164,13 +173,18 @@ struct CheckoutView: View {
                 switch result {
                 case .success(let transaction):
                     paymentResult = transaction.message
-                    // In a real app, you would likely clear the cart here
-                    // cartManager.clearCart()
+                    paymentSuccess = true
+                    transactionId = transaction.transactionId
+                    // Clear the cart on successful payment
+                    cartManager.clearCart()
                 case .failure(let error):
                     paymentResult = error.localizedDescription
+                    paymentSuccess = false
+                    transactionId = nil
                 }
                 isProcessingPayment = false
                 self.showingCardEntry = false
+                self.showingPaymentResult = true
             }
         }
     }
