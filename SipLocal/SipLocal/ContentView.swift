@@ -71,9 +71,8 @@ struct ContentView: View {
                 Color.black.opacity(0.4)
             .ignoresSafeArea()
             
-            VStack(spacing: 40) {
-                Spacer()
-                
+            VStack {
+                Spacer().frame(height: 150)
                 // Logo section
                 VStack(spacing: 20) {
                     Image("SipLocal_logo_white_on_transparent")
@@ -82,48 +81,42 @@ struct ContentView: View {
                         .frame(width: 300, height: 300)
                         .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
                 }
-                
                 Spacer()
-                
                 // Buttons section
                 VStack(spacing: 20) {
-                        Spacer().frame(height: 30) // Lower the buttons
                     NavigationLink(destination: LoginView().environmentObject(authManager)) {
                         Text("Login")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
-                                .frame(height: 55)
+                            .frame(height: 55)
                             .background(Color.white.opacity(0.2))
-                                .cornerRadius(27.5)
+                            .cornerRadius(27.5)
                             .overlay(
-                                    RoundedRectangle(cornerRadius: 27.5)
+                                RoundedRectangle(cornerRadius: 27.5)
                                     .stroke(Color.white, lineWidth: 1)
                             )
                     }
-                    
                     NavigationLink(destination: SignupView().environmentObject(authManager)) {
                         Text("Sign Up")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(.blue)
                             .frame(maxWidth: .infinity)
-                                .frame(height: 55)
+                            .frame(height: 55)
                             .background(Color.white)
-                                .cornerRadius(27.5)
+                            .cornerRadius(27.5)
                             .shadow(color: .black.opacity(0.2), radius: 5, x: 0, y: 2)
                     }
                 }
                 .padding(.horizontal, 40)
-                
                 Spacer()
-                
                 Text("Discover local flavors")
                     .font(.subheadline)
                     .fontDesign(.rounded)
                     .foregroundColor(.white.opacity(0.8))
-                                         .padding(.bottom, 30)
-             }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.bottom, 30)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .onAppear(perform: setupPlayer)
          }
