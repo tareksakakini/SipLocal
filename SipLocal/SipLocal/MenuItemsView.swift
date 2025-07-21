@@ -560,30 +560,28 @@ struct SegmentedModifierPicker: View {
                 }
             )) {
                 ForEach(modifierList.modifiers) { modifier in
-                    HStack {
-                        Text(modifier.name)
-                        if modifier.price > 0 {
-                            Text("+$\(modifier.price, specifier: "%.2f")")
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    .tag(modifier.id)
+                    Text(modifier.name)
+                        .tag(modifier.id)
                 }
             }
             .pickerStyle(.segmented)
             
-            // Show pricing info below segmented control if any modifiers have prices
-            if modifierList.modifiers.contains(where: { $0.price > 0 }) {
+            // Show pricing info below segmented control
+            if let selectedId = selectedModifiers.first,
+               let selectedModifier = modifierList.modifiers.first(where: { $0.id == selectedId }) {
                 HStack {
                     Spacer()
-                    if let selectedId = selectedModifiers.first,
-                       let selectedModifier = modifierList.modifiers.first(where: { $0.id == selectedId }),
-                       selectedModifier.price > 0 {
+                    if selectedModifier.price > 0 {
                         Text("+$\(selectedModifier.price, specifier: "%.2f")")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Text("No extra charge")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
+                .padding(.top, 4)
             }
         }
     }
