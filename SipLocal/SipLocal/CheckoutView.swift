@@ -101,7 +101,7 @@ struct CheckoutView: View {
                                     .scaleEffect(0.8)
                                 Text("Processing...")
                             } else {
-                                Text("Pay with Square")
+                                Text("Pay")
                                     .fontWeight(.semibold)
                             }
                         }
