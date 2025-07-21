@@ -8,6 +8,8 @@ struct MenuItemsView: View {
     @StateObject private var menuDataManager = MenuDataManager.shared
     @State private var showingCart = false
     @State private var customizingItem: MenuItem? = nil
+    @State private var showingDifferentShopAlert = false
+    @State private var pendingItem: (item: MenuItem, customizations: String?)?
     // Store customization selections - maps modifier list ID to selected modifier IDs
     @State private var selectedModifiers: [String: Set<String>] = [:]
     
@@ -114,13 +116,35 @@ struct MenuItemsView: View {
                     onAdd: {
                         // Add to cart with customizations as a string description
                         let customizationDesc = customizationDescription(for: item)
-                        cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc)
-                        customizingItem = nil
+                        let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc)
+                        
+                        if success {
+                            customizingItem = nil
+                        } else {
+                            // Store the pending item and show alert
+                            pendingItem = (item: item, customizations: customizationDesc)
+                            showingDifferentShopAlert = true
+                            customizingItem = nil
+                        }
                     },
                     onCancel: {
                         customizingItem = nil
                     }
                 )
+            }
+            .alert("Different Coffee Shop", isPresented: $showingDifferentShopAlert) {
+                Button("Clear Cart & Add Item", role: .destructive) {
+                    cartManager.clearCart()
+                    if let pending = pendingItem {
+                        let _ = cartManager.addItem(shop: shop, menuItem: pending.item, category: category.name, customizations: pending.customizations)
+                    }
+                    pendingItem = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingItem = nil
+                }
+            } message: {
+                Text("Your cart contains items from a different coffee shop. To add this item, you need to clear your current cart first.")
             }
         }
     }

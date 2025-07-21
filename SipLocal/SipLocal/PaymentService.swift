@@ -27,13 +27,16 @@ class PaymentService {
     
     // This function calls our Firebase Cloud Function to process the payment
     func processPayment(nonce: String, amount: Double, locationId: String) async -> Result<TransactionResult, PaymentError> {
+        // Convert dollars to cents for Square API (multiply by 100)
+        let amountInCents = Int(amount * 100)
+        
         print("Calling Firebase function with nonce: \(nonce)")
-        print("Calling Firebase function with amount: \(amount)")
+        print("Calling Firebase function with amount: \(amount) dollars (\(amountInCents) cents)")
         print("Calling Firebase function with locationId: \(locationId)")
         
         let callData: [String: Any] = [
             "nonce": nonce,
-            "amount": amount,
+            "amount": amountInCents,
             "locationId": locationId
         ]
         print("Calling Firebase function with data: \(callData)")

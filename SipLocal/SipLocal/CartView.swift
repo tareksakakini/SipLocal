@@ -7,6 +7,29 @@ struct CartView: View {
     var body: some View {
         NavigationStack {
             VStack {
+                // Coffee Shop Header (when cart has items)
+                if !cartManager.items.isEmpty, let firstItem = cartManager.items.first {
+                    VStack(spacing: 4) {
+                        HStack {
+                            Image(systemName: "house.fill")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            Text(firstItem.shop.name)
+                                .font(.headline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
+                        }
+                        
+                        Divider()
+                            .padding(.top, 4)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 8)
+                }
+                
                 if cartManager.items.isEmpty {
                     // Empty Cart State
                     VStack(spacing: 20) {
@@ -179,7 +202,7 @@ struct CartItemRow: View {
                     .padding(.vertical, 1)
                 }
                 
-                Text("\(cartItem.category) • \(cartItem.shop.name)")
+                Text(cartItem.category)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
             }

@@ -24,7 +24,12 @@ class CartManager: ObservableObject {
         return items.reduce(0) { $0 + $1.quantity }
     }
     
-    func addItem(shop: CoffeeShop, menuItem: MenuItem, category: String, customizations: String? = nil) {
+    func addItem(shop: CoffeeShop, menuItem: MenuItem, category: String, customizations: String? = nil) -> Bool {
+        // Check if cart has items from a different coffee shop
+        if !items.isEmpty && items.first?.shop.id != shop.id {
+            return false // Cannot add item from different shop
+        }
+        
         if let existingIndex = items.firstIndex(where: { 
             $0.shop.id == shop.id && $0.menuItem.name == menuItem.name && $0.customizations == customizations
         }) {
@@ -33,6 +38,7 @@ class CartManager: ObservableObject {
             let newItem = CartItem(shop: shop, menuItem: menuItem, category: category, quantity: 1, customizations: customizations)
             items.append(newItem)
         }
+        return true
     }
     
     func removeItem(cartItem: CartItem) {

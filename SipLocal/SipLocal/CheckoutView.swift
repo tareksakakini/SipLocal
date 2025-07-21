@@ -11,6 +11,9 @@ struct CheckoutView: View {
     @State private var showingPaymentResult = false
     @State private var paymentSuccess = false
     @State private var transactionId: String?
+    @State private var completedOrderItems: [CartItem] = []
+    @State private var completedOrderTotal: Double = 0.0
+    @State private var completedOrderShop: CoffeeShop?
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
@@ -33,6 +36,29 @@ struct CheckoutView: View {
                         }
                         .padding(.horizontal)
                         .padding(.top)
+                        
+                        // Coffee Shop Header
+                        if let firstItem = cartManager.items.first {
+                            VStack(spacing: 4) {
+                                HStack {
+                                    Image(systemName: "house.fill")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                    
+                                    Text(firstItem.shop.name)
+                                        .font(.headline)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.primary)
+                                    
+                                    Spacer()
+                                }
+                                
+                                Divider()
+                                    .padding(.top, 4)
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, 8)
+                        }
                         
                         // Cart Items
                         LazyVStack(spacing: 12) {
@@ -118,7 +144,10 @@ struct CheckoutView: View {
             PaymentResultView(
                 isSuccess: paymentSuccess,
                 transactionId: transactionId,
-                message: paymentResult
+                message: paymentResult,
+                coffeeShop: paymentSuccess ? completedOrderShop : nil,
+                orderItems: paymentSuccess ? completedOrderItems : nil,
+                totalAmount: paymentSuccess ? completedOrderTotal : nil
             ) {
                 showingPaymentResult = false
                 if paymentSuccess {
@@ -175,6 +204,10 @@ struct CheckoutView: View {
                     paymentResult = transaction.message
                     paymentSuccess = true
                     transactionId = transaction.transactionId
+                    // Store order details before clearing the cart
+                    completedOrderItems = cartManager.items
+                    completedOrderTotal = cartManager.totalPrice
+                    completedOrderShop = cartManager.items.first?.shop
                     // Clear the cart on successful payment
                     cartManager.clearCart()
                 case .failure(let error):
@@ -228,10 +261,6 @@ struct CheckoutItemRow: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                
-                Text(cartItem.shop.name)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
             
             Spacer()
