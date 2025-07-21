@@ -146,6 +146,9 @@ struct MenuItemsView: View {
             } message: {
                 Text("Your cart contains items from a different coffee shop. To add this item, you need to clear your current cart first.")
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToExploreTab"))) { _ in
+                showingCart = false
+            }
         }
     }
     

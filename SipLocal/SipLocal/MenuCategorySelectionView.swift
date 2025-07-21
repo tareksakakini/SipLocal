@@ -90,6 +90,9 @@ struct MenuCategorySelectionView: View {
                     await menuDataManager.fetchMenuData(for: shop)
                 }
             }
+            .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToExploreTab"))) { _ in
+                showingCart = false
+            }
         }
     }
 }

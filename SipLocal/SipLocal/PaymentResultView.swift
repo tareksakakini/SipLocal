@@ -8,6 +8,7 @@ struct PaymentResultView: View {
     let orderItems: [CartItem]?
     let totalAmount: Double?
     let onDismiss: () -> Void
+    let onTryAgain: (() -> Void)?
     
     var body: some View {
         NavigationStack {
@@ -49,6 +50,34 @@ struct PaymentResultView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }
+            }
+            
+            // Pickup Information Card (moved to show first)
+            if let coffeeShop = coffeeShop {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Image(systemName: "location.fill")
+                            .foregroundColor(.orange)
+                        Text("Pickup Location")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        Spacer()
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(coffeeShop.name)
+                            .font(.body)
+                            .fontWeight(.semibold)
+                        
+                        Text(coffeeShop.address)
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+                .padding()
+                .background(Color.white)
+                .cornerRadius(12)
             }
             
             // Order Summary Card
@@ -116,92 +145,6 @@ struct PaymentResultView: View {
                 .cornerRadius(12)
             }
             
-            // Pickup Information Card
-            if let coffeeShop = coffeeShop {
-                VStack(spacing: 16) {
-                    HStack {
-                        Image(systemName: "location.fill")
-                            .foregroundColor(.orange)
-                        Text("Pickup Information")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                        Spacer()
-                    }
-                    
-                    VStack(alignment: .leading, spacing: 12) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Pick up your order from:")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            Text(coffeeShop.name)
-                                .font(.body)
-                                .fontWeight(.semibold)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: "mappin.and.ellipse")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("Address")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textCase(.uppercase)
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            
-                            Text(coffeeShop.address)
-                                .font(.body)
-                                .multilineTextAlignment(.leading)
-                        }
-                        
-                        if !coffeeShop.phone.isEmpty {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Image(systemName: "phone")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                    Text("Phone")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                        .textCase(.uppercase)
-                                        .fontWeight(.medium)
-                                    Spacer()
-                                }
-                                
-                                Text(coffeeShop.phone)
-                                    .font(.body)
-                            }
-                        }
-                        
-                        // Estimated pickup time
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Image(systemName: "clock")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("Estimated Ready Time")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .textCase(.uppercase)
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            
-                            Text("15-20 minutes")
-                                .font(.body)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.orange)
-                        }
-                    }
-                }
-                .padding()
-                .background(Color.white)
-                .cornerRadius(12)
-            }
-            
             // Transaction ID
             if let transactionId = transactionId {
                 VStack(spacing: 8) {
@@ -225,7 +168,7 @@ struct PaymentResultView: View {
             
             // Action Button
             Button(action: onDismiss) {
-                Text("Continue Shopping")
+                Text("Done")
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -264,7 +207,9 @@ struct PaymentResultView: View {
             
             // Action Buttons
             VStack(spacing: 12) {
-                Button(action: onDismiss) {
+                Button(action: {
+                    onTryAgain?() ?? onDismiss()
+                }) {
                     Text("Try Again")
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
@@ -349,10 +294,12 @@ struct PaymentResultView_Previews: PreviewProvider {
                         customizations: nil
                     )
                 ],
-                totalAmount: 12.25
-            ) {
-                print("Dismissed")
-            }
+                totalAmount: 12.25,
+                onDismiss: {
+                    print("Dismissed")
+                },
+                onTryAgain: nil
+            )
             .previewDisplayName("Success")
             
             PaymentResultView(
@@ -361,10 +308,14 @@ struct PaymentResultView_Previews: PreviewProvider {
                 message: "Your payment could not be processed. Please check your payment method and try again.",
                 coffeeShop: nil,
                 orderItems: nil,
-                totalAmount: nil
-            ) {
-                print("Dismissed")
-            }
+                totalAmount: nil,
+                onDismiss: {
+                    print("Dismissed")
+                },
+                onTryAgain: {
+                    print("Try Again")
+                }
+            )
             .previewDisplayName("Failure")
         }
     }

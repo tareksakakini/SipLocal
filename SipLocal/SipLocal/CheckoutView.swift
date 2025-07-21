@@ -147,14 +147,28 @@ struct CheckoutView: View {
                 message: paymentResult,
                 coffeeShop: paymentSuccess ? completedOrderShop : nil,
                 orderItems: paymentSuccess ? completedOrderItems : nil,
-                totalAmount: paymentSuccess ? completedOrderTotal : nil
-            ) {
-                showingPaymentResult = false
-                if paymentSuccess {
-                    // Navigate back to main view on success
-                    presentationMode.wrappedValue.dismiss()
+                totalAmount: paymentSuccess ? completedOrderTotal : nil,
+                onDismiss: {
+                    showingPaymentResult = false
+                    if paymentSuccess {
+                        // Switch to Explore tab first, then dismiss checkout
+                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToExploreTab"), object: nil)
+                        
+                        // Dismiss the checkout view after a brief delay to ensure tab switch completes
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            presentationMode.wrappedValue.dismiss()
+                        }
+                    } else {
+                        // For failed payments, just dismiss normally
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                },
+                onTryAgain: paymentSuccess ? nil : {
+                    // For failed payments, show card entry again
+                    showingPaymentResult = false
+                    showingCardEntry = true
                 }
-            }
+            )
         }
         .onReceive(cardEntryDelegate.$cardDetails) { cardDetails in
             if let details = cardDetails {
