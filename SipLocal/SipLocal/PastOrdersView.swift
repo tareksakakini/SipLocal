@@ -109,6 +109,11 @@ struct OrderRow: View {
                         .font(.headline)
                         .fontWeight(.semibold)
                     
+                    Text(order.coffeeShop.address)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                    
                     Text(order.formattedDate)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -142,11 +147,23 @@ struct OrderRow: View {
             
             // Expanded details
             if isExpanded {
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     Divider()
                     
                     // Order items
-                    VStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Image(systemName: "cup.and.saucer.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text("Items")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .textCase(.uppercase)
+                                .fontWeight(.medium)
+                            Spacer()
+                        }
+                        
                         ForEach(order.items) { item in
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
@@ -171,31 +188,8 @@ struct OrderRow: View {
                                     .font(.body)
                                     .fontWeight(.medium)
                             }
-                            
-                            if item.id != order.items.last?.id {
-                                Divider()
-                            }
+                            .padding(.bottom, 2)
                         }
-                    }
-                    
-                    // Pickup location
-                    Divider()
-                    VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Image(systemName: "location.fill")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                            Text("Pickup Location")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .textCase(.uppercase)
-                                .fontWeight(.medium)
-                            Spacer()
-                        }
-                        
-                        Text(order.coffeeShop.address)
-                            .font(.body)
-                            .foregroundColor(.primary)
                     }
                     
                     // Transaction ID
