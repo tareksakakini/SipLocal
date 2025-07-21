@@ -76,9 +76,10 @@ struct ContentView: View {
                 
                 // Logo section
                 VStack(spacing: 20) {
-                    Text("SipLocal")
-                            .font(.system(size: 64, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                    Image("SipLocal_logo_white_on_transparent")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 300, height: 300)
                         .shadow(color: .black.opacity(0.3), radius: 5, x: 0, y: 2)
                 }
                 
