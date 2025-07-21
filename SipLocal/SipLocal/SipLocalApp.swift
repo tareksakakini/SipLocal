@@ -32,12 +32,14 @@ struct SipLocalApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var authManager = AuthenticationManager()
     @StateObject private var cartManager = CartManager()
+    @StateObject private var orderManager = OrderManager()
 
     var body: some Scene {
         WindowGroup {
             MainView()
                 .environmentObject(authManager)
                 .environmentObject(cartManager)
+                .environmentObject(orderManager)
         }
     }
 }

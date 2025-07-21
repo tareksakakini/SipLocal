@@ -4,6 +4,7 @@ import Combine
 
 struct CheckoutView: View {
     @EnvironmentObject var cartManager: CartManager
+    @EnvironmentObject var orderManager: OrderManager
     @Environment(\.presentationMode) var presentationMode
     @State private var isProcessingPayment = false
     @State private var paymentResult: String = ""
@@ -222,6 +223,17 @@ struct CheckoutView: View {
                     completedOrderItems = cartManager.items
                     completedOrderTotal = cartManager.totalPrice
                     completedOrderShop = cartManager.items.first?.shop
+                    
+                    // Save the order to order history
+                    if let shop = cartManager.items.first?.shop {
+                        orderManager.addOrder(
+                            coffeeShop: shop,
+                            items: cartManager.items,
+                            totalAmount: cartManager.totalPrice,
+                            transactionId: transaction.transactionId
+                        )
+                    }
+                    
                     // Clear the cart on successful payment
                     cartManager.clearCart()
                 case .failure(let error):
@@ -300,5 +312,6 @@ struct CheckoutView_Previews: PreviewProvider {
     static var previews: some View {
         CheckoutView()
             .environmentObject(CartManager())
+            .environmentObject(OrderManager())
     }
 } 

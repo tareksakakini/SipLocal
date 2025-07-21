@@ -1,12 +1,21 @@
 import Foundation
 
-struct CartItem: Identifiable {
-    let id = UUID()
+struct CartItem: Identifiable, Codable {
+    let id: UUID
     let shop: CoffeeShop
     let menuItem: MenuItem
     let category: String
     var quantity: Int
     var customizations: String?
+    
+    init(shop: CoffeeShop, menuItem: MenuItem, category: String, quantity: Int, customizations: String? = nil) {
+        self.id = UUID()
+        self.shop = shop
+        self.menuItem = menuItem
+        self.category = category
+        self.quantity = quantity
+        self.customizations = customizations
+    }
     
     var totalPrice: Double {
         return menuItem.price * Double(quantity)

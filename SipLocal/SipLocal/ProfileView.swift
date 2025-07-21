@@ -3,6 +3,7 @@ import PhotosUI
 
 struct ProfileView: View {
     @EnvironmentObject var authManager: AuthenticationManager
+    @EnvironmentObject var orderManager: OrderManager
     @State private var showSignOutConfirmation = false
     @State private var showDeleteConfirmation = false
     @State private var isDeletingAccount = false
@@ -21,6 +22,7 @@ struct ProfileView: View {
     @State private var selectedImage: UIImage?
     @State private var showImageCrop = false
     @State private var showFullSizeImage = false
+    @State private var showPastOrders = false
     
     var body: some View {
         NavigationStack {
@@ -203,6 +205,35 @@ struct ProfileView: View {
                             
                             // Action Buttons Section
                             VStack(spacing: 16) {
+                                // Past Orders Button
+                                Button(action: {
+                                    showPastOrders = true
+                                }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "clock.arrow.circlepath")
+                                            .font(.system(size: 18, weight: .medium))
+                                            .foregroundColor(.black.opacity(0.7))
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Past Orders")
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(.primary)
+                                            if !orderManager.orders.isEmpty {
+                                                Text("\(orderManager.orders.count) orders")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.black.opacity(0.3))
+                                    }
+                                    .padding(20)
+                                    .background(Color.white)
+                                    .cornerRadius(16)
+                                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                                }
+                                
                                 // Sign Out Button
                                 Button(action: {
                                     showSignOutConfirmation = true
@@ -401,6 +432,10 @@ struct ProfileView: View {
                 }
             }
         }
+        .sheet(isPresented: $showPastOrders) {
+            PastOrdersView()
+                .environmentObject(orderManager)
+        }
         .onChange(of: userData?.profileImageUrl) { oldValue, newValue in
             // Force image refresh when profile URL changes
             if oldValue != newValue && newValue != nil {
@@ -548,5 +583,6 @@ struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         ProfileView()
             .environmentObject(AuthenticationManager())
+            .environmentObject(OrderManager())
     }
 } 
