@@ -34,9 +34,6 @@ struct MenuCategory: Codable, Identifiable {
 
 // Square credentials structure
 struct SquareCredentials: Codable {
-    let appID: String
-    let accessToken: String
-    let locationId: String
     let oauth_token: String
     let merchantId: String
     let refreshToken: String

@@ -25,8 +25,13 @@ export const processPayment = functions.https.onCall(async (data, context) => {
   functions.logger.info("Data type:", typeof data);
   functions.logger.info("Data keys:", Object.keys(data || {}));
   
-  // The actual payment data is nested under data.data
-  const paymentData = (data as any).data as PaymentData;
+  // Extract payment data from Firebase callable structure  
+  const requestData = data.data as PaymentData;
+  const paymentData: PaymentData = {
+    nonce: requestData.nonce,
+    merchantId: requestData.merchantId, 
+    amount: requestData.amount
+  };
   
   // 1. Log the request for debugging
   functions.logger.info("Payment request received:", {
@@ -36,6 +41,15 @@ export const processPayment = functions.https.onCall(async (data, context) => {
   });
 
   // 2. Validate the request data
+  functions.logger.info("Validation check:", {
+    hasNonce: !!paymentData.nonce,
+    hasAmount: !!paymentData.amount,
+    hasMerchantId: !!paymentData.merchantId,
+    nonceValue: paymentData.nonce,
+    amountValue: paymentData.amount,
+    merchantIdValue: paymentData.merchantId
+  });
+  
   if (!paymentData.nonce || !paymentData.amount || !paymentData.merchantId) {
     functions.logger.error("Request validation failed", paymentData);
     throw new functions.https.HttpsError(
