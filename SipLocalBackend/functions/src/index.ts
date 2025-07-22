@@ -17,6 +17,7 @@ interface PaymentData {
   nonce: string;
   amount: number;
   merchantId: string;
+  oauth_token: string;
 }
 
 export const processPayment = functions.https.onCall(async (data, context) => {
@@ -30,7 +31,8 @@ export const processPayment = functions.https.onCall(async (data, context) => {
   const paymentData: PaymentData = {
     nonce: requestData.nonce,
     merchantId: requestData.merchantId, 
-    amount: requestData.amount
+    amount: requestData.amount,
+    oauth_token: requestData.oauth_token
   };
   
   // 1. Log the request for debugging
@@ -38,6 +40,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     amount: paymentData.amount,
     merchantId: paymentData.merchantId,
     nonce: "PRESENT",
+    oauth_token: "PRESENT",
   });
 
   // 2. Validate the request data
@@ -45,30 +48,32 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     hasNonce: !!paymentData.nonce,
     hasAmount: !!paymentData.amount,
     hasMerchantId: !!paymentData.merchantId,
+    hasOauthToken: !!paymentData.oauth_token,
     nonceValue: paymentData.nonce,
     amountValue: paymentData.amount,
-    merchantIdValue: paymentData.merchantId
+    merchantIdValue: paymentData.merchantId,
+    oauthTokenValue: paymentData.oauth_token ? paymentData.oauth_token.substring(0, 10) + "..." : "MISSING"
   });
   
-  if (!paymentData.nonce || !paymentData.amount || !paymentData.merchantId) {
+  if (!paymentData.nonce || !paymentData.amount || !paymentData.merchantId || !paymentData.oauth_token) {
     functions.logger.error("Request validation failed", paymentData);
     throw new functions.https.HttpsError(
       "invalid-argument",
-      "The function must be called with 'nonce', 'amount', and 'merchantId' arguments.",
+      "The function must be called with 'nonce', 'amount', 'merchantId', and 'oauth_token' arguments.",
     );
   }
 
-  const {nonce, amount, merchantId} = paymentData;
+  const {nonce, amount, merchantId, oauth_token} = paymentData;
   const idempotencyKey = uuidv4();
 
-  // Initialize Square client with environment variables
-  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
+  // Initialize Square client with coffee shop's oauth token
+  const accessToken = oauth_token;
   const environment = process.env.SQUARE_ENVIRONMENT || "sandbox";
   
   if (!accessToken) {
     throw new functions.https.HttpsError(
       "failed-precondition",
-      "Square access token not configured"
+      "Square access token not provided"
     );
   }
 

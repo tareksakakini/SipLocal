@@ -198,18 +198,21 @@ struct CheckoutView: View {
         }
         
         let merchantId = firstItem.shop.menu.merchantId
+        let oauthToken = firstItem.shop.menu.oauth_token
         
         // Debug: Print the values we're sending
         print("Debug - Sending to Firebase:")
         print("  nonce: \(nonce)")
         print("  amount: \(cartManager.totalPrice)")
         print("  merchantId: \(merchantId)")
+        print("  oauth_token: \(oauthToken.prefix(10))...)")
         
         Task {
             let result = await paymentService.processPayment(
                 nonce: nonce, 
                 amount: cartManager.totalPrice,
-                merchantId: merchantId
+                merchantId: merchantId,
+                oauthToken: oauthToken
             )
             
             // Update the UI on the main thread
