@@ -17,10 +17,16 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         print("Firebase Configured")
         
         // Initialize Square In-App Payments SDK
-        // Note: You'll need to replace this with your actual Square Application ID
-        // For now, using a placeholder - this will be configured in the next step
-        SQIPInAppPaymentsSDK.squareApplicationID = "sandbox-sq0idb-rQ0tQ8bixxpZyp3kiP4SEA"
-        print("Square In-App Payments SDK initialized")
+        // For production, get the appID from the first coffee shop's credentials
+        let coffeeShops = DataService.loadCoffeeShops()
+        if let firstShop = coffeeShops.first {
+            SQIPInAppPaymentsSDK.squareApplicationID = firstShop.menu.appID
+            print("Square In-App Payments SDK initialized with production appID: \(firstShop.menu.appID)")
+        } else {
+            // Fallback to sandbox if no shops are loaded
+            SQIPInAppPaymentsSDK.squareApplicationID = "sandbox-sq0idb-rQ0tQ8bixxpZyp3kiP4SEA"
+            print("Square In-App Payments SDK initialized with fallback sandbox appID")
+        }
         
         return true
     }

@@ -15,7 +15,7 @@ class SquareAPIService {
     // MARK: - Private Functions
     
     private func fetchCatalogObjects(credentials: SquareCredentials) async throws -> [SquareCatalogObject] {
-        let baseURL = "https://connect.squareupsandbox.com/v2/catalog/search"
+        let baseURL = "https://connect.squareup.com/v2/catalog/search"
         
         guard let url = URL(string: baseURL) else {
             throw SquareAPIError.invalidURL
@@ -29,7 +29,7 @@ class SquareAPIService {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         

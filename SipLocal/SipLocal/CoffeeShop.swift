@@ -37,6 +37,9 @@ struct SquareCredentials: Codable {
     let appID: String
     let accessToken: String
     let locationId: String
+    let oauth_token: String
+    let merchantId: String
+    let refreshToken: String
 }
 
 struct CoffeeShop: Codable, Identifiable {

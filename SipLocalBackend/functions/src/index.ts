@@ -16,7 +16,7 @@ admin.initializeApp();
 interface PaymentData {
   nonce: string;
   amount: number;
-  locationId: string;
+  merchantId: string;
 }
 
 export const processPayment = functions.https.onCall(async (data, context) => {
@@ -31,20 +31,20 @@ export const processPayment = functions.https.onCall(async (data, context) => {
   // 1. Log the request for debugging
   functions.logger.info("Payment request received:", {
     amount: paymentData.amount,
-    locationId: paymentData.locationId,
+    merchantId: paymentData.merchantId,
     nonce: "PRESENT",
   });
 
   // 2. Validate the request data
-  if (!paymentData.nonce || !paymentData.amount || !paymentData.locationId) {
+  if (!paymentData.nonce || !paymentData.amount || !paymentData.merchantId) {
     functions.logger.error("Request validation failed", paymentData);
     throw new functions.https.HttpsError(
       "invalid-argument",
-      "The function must be called with 'nonce', 'amount', and 'locationId' arguments.",
+      "The function must be called with 'nonce', 'amount', and 'merchantId' arguments.",
     );
   }
 
-  const {nonce, amount, locationId} = paymentData;
+  const {nonce, amount, merchantId} = paymentData;
   const idempotencyKey = uuidv4();
 
   // Initialize Square client with environment variables
@@ -74,7 +74,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     functions.logger.info("Processing payment with Square API...", {
       nonce: nonce.substring(0, 10) + "...",
       amount: amount,
-      locationId: locationId
+      merchantId: merchantId
     });
     
     const request = {
@@ -84,7 +84,8 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         amount: BigInt(amount), // Amount in cents
         currency: "USD" as Square.Currency,
       },
-      locationId: locationId,
+      // Note: For production, Square uses applicationId instead of locationId
+      // applicationId: merchantId, // Commented out - depends on Square API requirements
       autocomplete: true,
     };
 
@@ -105,7 +106,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         paymentStatus: payment.status,
         amount: payment.amountMoney?.amount?.toString(),
         currency: payment.amountMoney?.currency,
-        locationId: locationId,
+        merchantId: merchantId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         paymentMethod: "card",

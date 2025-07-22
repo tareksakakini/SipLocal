@@ -197,19 +197,19 @@ struct CheckoutView: View {
             return
         }
         
-        let locationId = firstItem.shop.menu.locationId
+        let merchantId = firstItem.shop.menu.merchantId
         
         // Debug: Print the values we're sending
         print("Debug - Sending to Firebase:")
         print("  nonce: \(nonce)")
         print("  amount: \(cartManager.totalPrice)")
-        print("  locationId: \(locationId)")
+        print("  merchantId: \(merchantId)")
         
         Task {
             let result = await paymentService.processPayment(
                 nonce: nonce, 
                 amount: cartManager.totalPrice,
-                locationId: locationId
+                merchantId: merchantId
             )
             
             // Update the UI on the main thread
