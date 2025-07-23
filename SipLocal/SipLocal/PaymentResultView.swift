@@ -269,7 +269,7 @@ struct PaymentResultView_Previews: PreviewProvider {
                             stampName: "sample",
                             merchantId: "SAMPLE_MERCHANT_ID"
                         ),
-                        menuItem: MenuItem(name: "Cappuccino", price: 4.50, customizations: nil, imageURL: nil, modifierLists: nil),
+                        menuItem: MenuItem(name: "Cappuccino", price: 4.50, variations: nil, customizations: nil, imageURL: nil, modifierLists: nil),
                         category: "Coffee",
                         quantity: 2,
                         customizations: "Extra shot, oat milk"
@@ -288,7 +288,7 @@ struct PaymentResultView_Previews: PreviewProvider {
                             stampName: "sample",
                             merchantId: "SAMPLE_MERCHANT_ID"
                         ),
-                        menuItem: MenuItem(name: "Blueberry Muffin", price: 3.25, customizations: nil, imageURL: nil, modifierLists: nil),
+                        menuItem: MenuItem(name: "Blueberry Muffin", price: 3.25, variations: nil, customizations: nil, imageURL: nil, modifierLists: nil),
                         category: "Pastries",
                         quantity: 1,
                         customizations: nil

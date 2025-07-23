@@ -130,13 +130,11 @@ class SquareAPIService {
                 // Mark this item as processed
                 processedItemIds.insert(itemObject.id)
                 
-                // Get the primary variation (usually the first one)
-                let variation = itemData.variations?.first
-                let variationData = variation?.itemVariationData
+                // Process all variations to get size options
+                let variations = processItemVariations(itemData.variations)
                 
-                // Convert price from cents to dollars
-                let priceInCents = variationData?.priceMoney?.amount ?? 0
-                let price = Double(priceInCents) / 100.0
+                // Get base price from first variation for backward compatibility
+                let basePrice = variations.first?.price ?? 0.0
                 
                 // Get modifier lists for this item
                 let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
@@ -149,7 +147,8 @@ class SquareAPIService {
                 
                 return MenuItem(
                     name: itemData.name,
-                    price: price,
+                    price: basePrice,
+                    variations: variations.isEmpty ? nil : variations,
                     customizations: customizations,
                     imageURL: imageURL,
                     modifierLists: modifierLists
@@ -172,13 +171,11 @@ class SquareAPIService {
             // Skip items that were already processed
             guard !processedItemIds.contains(itemObject.id) else { return nil }
             
-            // Get the primary variation (usually the first one)
-            let variation = itemData.variations?.first
-            let variationData = variation?.itemVariationData
+            // Process all variations to get size options
+            let variations = processItemVariations(itemData.variations)
             
-            // Convert price from cents to dollars
-            let priceInCents = variationData?.priceMoney?.amount ?? 0
-            let price = Double(priceInCents) / 100.0
+            // Get base price from first variation for backward compatibility
+            let basePrice = variations.first?.price ?? 0.0
             
             // Get modifier lists for this item
             let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
@@ -191,7 +188,8 @@ class SquareAPIService {
             
             return MenuItem(
                 name: itemData.name,
-                price: price,
+                price: basePrice,
+                variations: variations.isEmpty ? nil : variations,
                 customizations: customizations,
                 imageURL: imageURL,
                 modifierLists: modifierLists
@@ -208,11 +206,11 @@ class SquareAPIService {
             let allItems = items.compactMap { itemObject -> MenuItem? in
                 guard let itemData = itemObject.itemData else { return nil }
                 
-                let variation = itemData.variations?.first
-                let variationData = variation?.itemVariationData
+                // Process all variations to get size options
+                let variations = processItemVariations(itemData.variations)
                 
-                let priceInCents = variationData?.priceMoney?.amount ?? 0
-                let price = Double(priceInCents) / 100.0
+                // Get base price from first variation for backward compatibility
+                let basePrice = variations.first?.price ?? 0.0
                 
                 // Get modifier lists for this item
                 let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
@@ -225,7 +223,8 @@ class SquareAPIService {
                 
                 return MenuItem(
                     name: itemData.name,
-                    price: price,
+                    price: basePrice,
+                    variations: variations.isEmpty ? nil : variations,
                     customizations: customizations,
                     imageURL: imageURL,
                     modifierLists: modifierLists
@@ -308,6 +307,28 @@ class SquareAPIService {
         }
         
         return modifierLists
+    }
+    
+    private func processItemVariations(_ squareVariations: [SquareItemVariation]?) -> [MenuItemVariation] {
+        guard let squareVariations = squareVariations else { return [] }
+        
+        let variations = squareVariations.compactMap { variation -> MenuItemVariation? in
+            guard let variationData = variation.itemVariationData else { return nil }
+            
+            // Convert price from cents to dollars
+            let priceInCents = variationData.priceMoney?.amount ?? 0
+            let price = Double(priceInCents) / 100.0
+            
+            return MenuItemVariation(
+                id: variation.id,
+                name: variationData.name ?? "Size",
+                price: price,
+                ordinal: variationData.ordinal ?? 0
+            )
+        }
+        
+        // Sort by ordinal to maintain consistent ordering
+        return variations.sorted { $0.ordinal < $1.ordinal }
     }
     
     private func extractCustomizationTypes(from modifierLists: [MenuItemModifierList]) -> [String]? {

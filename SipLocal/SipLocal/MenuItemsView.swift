@@ -169,44 +169,93 @@ struct MenuItemsView: View {
     private func initializeModifierSelections(for item: MenuItem) {
         selectedModifiers.removeAll()
         
+        // Handle size variations if present
+        if let variations = item.variations, variations.count > 1 {
+            let sizeModifierList = createSizeModifierList(from: variations)
+            initializeDefaultsForModifierList(sizeModifierList)
+        }
+        
         guard let modifierLists = item.modifierLists else { return }
         
         for modifierList in modifierLists {
-            var defaultSelections: Set<String> = []
-            
-            // Find default modifiers
-            for modifier in modifierList.modifiers {
-                if modifier.isDefault {
-                    defaultSelections.insert(modifier.id)
-                }
-            }
-            
-            // If no defaults found, select first modifier as fallback
-            // For single-selection lists, always select first if no defaults
-            // For multiple-selection lists, only select first if minimum selections required
-            if defaultSelections.isEmpty {
-                if modifierList.selectionType == "SINGLE" || modifierList.maxSelections == 1 {
-                    // Single selection - always select first option
-                    if let firstModifier = modifierList.modifiers.first {
-                        defaultSelections.insert(firstModifier.id)
-                    }
-                } else if modifierList.minSelections > 0 {
-                    // Multiple selection - only preselect if minimum required
-                    if let firstModifier = modifierList.modifiers.first {
-                        defaultSelections.insert(firstModifier.id)
-                    }
-                }
-            }
-            
-            selectedModifiers[modifierList.id] = defaultSelections
+            initializeDefaultsForModifierList(modifierList)
         }
+    }
+    
+    // Helper to initialize defaults for a modifier list
+    private func initializeDefaultsForModifierList(_ modifierList: MenuItemModifierList) {
+        var defaultSelections: Set<String> = []
+        
+        // Find default modifiers
+        for modifier in modifierList.modifiers {
+            if modifier.isDefault {
+                defaultSelections.insert(modifier.id)
+            }
+        }
+        
+        // If no defaults found, select first modifier as fallback
+        // For single-selection lists, always select first if no defaults
+        // For multiple-selection lists, only select first if minimum selections required
+        if defaultSelections.isEmpty {
+            if modifierList.selectionType == "SINGLE" || modifierList.maxSelections == 1 {
+                // Single selection - always select first option
+                if let firstModifier = modifierList.modifiers.first {
+                    defaultSelections.insert(firstModifier.id)
+                }
+            } else if modifierList.minSelections > 0 {
+                // Multiple selection - only preselect if minimum required
+                if let firstModifier = modifierList.modifiers.first {
+                    defaultSelections.insert(firstModifier.id)
+                }
+            }
+        }
+        
+        selectedModifiers[modifierList.id] = defaultSelections
+    }
+    
+    // Helper to create a modifier list from size variations
+    private func createSizeModifierList(from variations: [MenuItemVariation]) -> MenuItemModifierList {
+        let sizeModifiers = variations.map { variation in
+            MenuItemModifier(
+                id: variation.id,
+                name: variation.name,
+                price: variation.price - variations.first!.price, // Price difference from base
+                isDefault: variation.id == variations.first?.id // First variation is default
+            )
+        }
+        
+        return MenuItemModifierList(
+            id: "size_variations",
+            name: "Size",
+            selectionType: "SINGLE",
+            minSelections: 1,
+            maxSelections: 1,
+            modifiers: sizeModifiers
+        )
     }
     
     // Helper to build customization description (always show size, only non-default for others)
     private func customizationDescription(for item: MenuItem) -> String {
-        guard let modifierLists = item.modifierLists else { return "" }
-        
         var desc: [String] = []
+        
+        // Add size variation description
+        if let variations = item.variations, variations.count > 1 {
+            let sizeModifierList = createSizeModifierList(from: variations)
+            if let selectedSizeIds = selectedModifiers[sizeModifierList.id] {
+                for modifier in sizeModifierList.modifiers {
+                    if selectedSizeIds.contains(modifier.id) {
+                        desc.append("Size: \(modifier.name)")
+                        break
+                    }
+                }
+            }
+        }
+        
+        guard let modifierLists = item.modifierLists else { 
+            return desc.joined(separator: " | ")
+        }
+        
+        var modifierDesc: [String] = []
         
         for modifierList in modifierLists {
             if let selectedModifierIds = selectedModifiers[modifierList.id], !selectedModifierIds.isEmpty {
@@ -223,10 +272,13 @@ struct MenuItemsView: View {
                 }
                 
                 if !modifierNames.isEmpty {
-                    desc.append("\(modifierList.name): \(modifierNames.joined(separator: ", "))")
+                    modifierDesc.append("\(modifierList.name): \(modifierNames.joined(separator: ", "))")
                 }
             }
         }
+        
+        // Combine size description with other modifier descriptions
+        desc.append(contentsOf: modifierDesc)
         
         return desc.joined(separator: " | ")
     }
@@ -238,6 +290,23 @@ struct MenuItemCard: View {
     let category: String
     let cartManager: CartManager
     var onAdd: (() -> Void)? = nil
+    
+    private func formatPrice(for item: MenuItem) -> String {
+        // If item has multiple size variations, show price range
+        if let variations = item.variations, variations.count > 1 {
+            let minPrice = variations.map(\.price).min() ?? item.price
+            let maxPrice = variations.map(\.price).max() ?? item.price
+            
+            if minPrice == maxPrice {
+                return String(format: "$%.2f", minPrice)
+            } else {
+                return String(format: "$%.2f - $%.2f", minPrice, maxPrice)
+            }
+        } else {
+            // Single size or no variations - show base price
+            return String(format: "$%.2f", item.price)
+        }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -294,7 +363,7 @@ struct MenuItemCard: View {
                     .foregroundColor(.primary)
                     .frame(height: 35) // Fixed height to prevent layout shifts
                 
-                Text("$\(item.price, specifier: "%.2f")")
+                Text(formatPrice(for: item))
                     .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(.black)
@@ -348,9 +417,43 @@ struct DrinkCustomizationSheet: View {
     var onAdd: (Double) -> Void
     var onCancel: () -> Void
     
-    var totalPrice: Double {
-        var total = item.price
+    // Helper to create a modifier list from size variations
+    private func createSizeModifierList(from variations: [MenuItemVariation]) -> MenuItemModifierList {
+        let sizeModifiers = variations.map { variation in
+            MenuItemModifier(
+                id: variation.id,
+                name: variation.name,
+                price: variation.price - variations.first!.price, // Price difference from base
+                isDefault: variation.id == variations.first?.id // First variation is default
+            )
+        }
         
+        return MenuItemModifierList(
+            id: "size_variations",
+            name: "Size",
+            selectionType: "SINGLE",
+            minSelections: 1,
+            maxSelections: 1,
+            modifiers: sizeModifiers
+        )
+    }
+    
+    var totalPrice: Double {
+        var total = item.basePrice
+        
+        // Add size variation pricing
+        if let variations = item.variations, variations.count > 1 {
+            let sizeModifierList = createSizeModifierList(from: variations)
+            if let selectedSizeIds = selectedModifiers[sizeModifierList.id] {
+                for modifier in sizeModifierList.modifiers {
+                    if selectedSizeIds.contains(modifier.id) {
+                        total += modifier.price
+                    }
+                }
+            }
+        }
+        
+        // Add other modifier pricing
         guard let modifierLists = item.modifierLists else { return total }
         
         for modifierList in modifierLists {
@@ -371,6 +474,18 @@ struct DrinkCustomizationSheet: View {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
+                        // Show size variations if present
+                        if let variations = item.variations, variations.count > 1 {
+                            let sizeModifierList = createSizeModifierList(from: variations)
+                            ModifierListSection(
+                                modifierList: sizeModifierList,
+                                selectedModifiers: Binding(
+                                    get: { selectedModifiers[sizeModifierList.id] ?? [] },
+                                    set: { selectedModifiers[sizeModifierList.id] = $0 }
+                                )
+                            )
+                        }
+                        
                         if let modifierLists = item.modifierLists {
                             ForEach(modifierLists) { modifierList in
                                 ModifierListSection(
@@ -381,8 +496,8 @@ struct DrinkCustomizationSheet: View {
                                     )
                                 )
                             }
-                        } else {
-                            // Show message if no modifiers available
+                        } else if item.variations == nil || item.variations!.count <= 1 {
+                            // Show message if no modifiers or variations available
                             Text("No customization options available")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -695,6 +810,7 @@ struct MenuItemsView_Previews: PreviewProvider {
             MenuItem(
                 name: "Americano",
                 price: 3.50,
+                variations: nil,
                 customizations: ["size", "milk", "other"],
                 imageURL: nil,
                 modifierLists: [sizeModifierList, milkModifierList, addonsModifierList]
@@ -703,6 +819,7 @@ struct MenuItemsView_Previews: PreviewProvider {
             MenuItem(
                 name: "Espresso",
                 price: 2.25,
+                variations: nil,
                 customizations: ["size"],
                 imageURL: nil,
                 modifierLists: [sizeModifierList]
@@ -711,6 +828,7 @@ struct MenuItemsView_Previews: PreviewProvider {
             MenuItem(
                 name: "Latte",
                 price: 4.25,
+                variations: nil,
                 customizations: ["size", "milk"],
                 imageURL: nil,
                 modifierLists: [sizeModifierList, milkModifierList]
@@ -719,6 +837,7 @@ struct MenuItemsView_Previews: PreviewProvider {
             MenuItem(
                 name: "Drip Coffee",
                 price: 2.75,
+                variations: nil,
                 customizations: nil,
                 imageURL: nil,
                 modifierLists: nil

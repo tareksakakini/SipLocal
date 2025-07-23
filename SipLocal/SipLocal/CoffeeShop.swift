@@ -8,6 +8,13 @@ struct MenuItemModifier: Codable, Identifiable {
     let isDefault: Bool
 }
 
+struct MenuItemVariation: Codable, Identifiable {
+    let id: String
+    let name: String
+    let price: Double
+    let ordinal: Int
+}
+
 struct MenuItemModifierList: Codable, Identifiable {
     let id: String
     let name: String
@@ -20,10 +27,21 @@ struct MenuItemModifierList: Codable, Identifiable {
 struct MenuItem: Codable, Identifiable {
     var id: String { name }
     let name: String
-    let price: Double
+    let price: Double // Base price (from first variation for backward compatibility)
+    let variations: [MenuItemVariation]?
     let customizations: [String]? // Keep for backward compatibility
     let imageURL: String?
     let modifierLists: [MenuItemModifierList]?
+    
+    // Helper to get the default variation price
+    var basePrice: Double {
+        return variations?.first?.price ?? price
+    }
+    
+    // Helper to check if item has size variations
+    var hasSizeVariations: Bool {
+        return variations != nil && variations!.count > 1
+    }
 }
 
 struct MenuCategory: Codable, Identifiable {
