@@ -113,9 +113,8 @@ struct MenuItemsView: View {
                 DrinkCustomizationSheet(
                     item: item,
                     selectedModifiers: $selectedModifiers,
-                    onAdd: { totalPriceWithModifiers in
-                        // Add to cart with customizations as a string description
-                        let customizationDesc = customizationDescription(for: item)
+                    onAdd: { totalPriceWithModifiers, customizationDesc in
+                        // Add to cart with customizations and pricing from the customization sheet
                         let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc, itemPriceWithModifiers: totalPriceWithModifiers)
                         
                         if success {
@@ -169,11 +168,7 @@ struct MenuItemsView: View {
     private func initializeModifierSelections(for item: MenuItem) {
         selectedModifiers.removeAll()
         
-        // Handle size variations if present
-        if let variations = item.variations, variations.count > 1 {
-            let sizeModifierList = createSizeModifierList(from: variations)
-            initializeDefaultsForModifierList(sizeModifierList)
-        }
+        // Size variations are now handled separately, no need to add to selectedModifiers
         
         guard let modifierLists = item.modifierLists else { return }
         
@@ -238,18 +233,8 @@ struct MenuItemsView: View {
     private func customizationDescription(for item: MenuItem) -> String {
         var desc: [String] = []
         
-        // Add size variation description
-        if let variations = item.variations, variations.count > 1 {
-            let sizeModifierList = createSizeModifierList(from: variations)
-            if let selectedSizeIds = selectedModifiers[sizeModifierList.id] {
-                for modifier in sizeModifierList.modifiers {
-                    if selectedSizeIds.contains(modifier.id) {
-                        desc.append("Size: \(modifier.name)")
-                        break
-                    }
-                }
-            }
-        }
+        // Add size variation description - we need to access the selectedSizeId from the customization sheet
+        // For now, we'll handle this differently and pass the size info when adding to cart
         
         guard let modifierLists = item.modifierLists else { 
             return desc.joined(separator: " | ")
@@ -410,12 +395,81 @@ struct RoundedCorner: Shape {
     }
 }
 
+// Size Selection Component - shows full prices prominently
+struct SizeSelectionView: View {
+    let variations: [MenuItemVariation]
+    @Binding var selectedSizeId: String?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Size")
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                ForEach(variations) { variation in
+                    SizeOptionCard(
+                        variation: variation,
+                        isSelected: selectedSizeId == variation.id,
+                        onTap: {
+                            selectedSizeId = variation.id
+                        }
+                    )
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 16)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
+
+// Individual size option card
+struct SizeOptionCard: View {
+    let variation: MenuItemVariation
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                Text(variation.name)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                Text(String(format: "$%.2f", variation.price))
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(isSelected ? .white : .secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(isSelected ? Color.accentColor : Color(.systemBackground))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color(.systemGray4), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 // Customization Sheet
 struct DrinkCustomizationSheet: View {
     let item: MenuItem
     @Binding var selectedModifiers: [String: Set<String>]
-    var onAdd: (Double) -> Void
+    var onAdd: (Double, String) -> Void
     var onCancel: () -> Void
+    
+    @State private var selectedSizeId: String?
     
     // Helper to create a modifier list from size variations
     private func createSizeModifierList(from variations: [MenuItemVariation]) -> MenuItemModifierList {
@@ -439,21 +493,23 @@ struct DrinkCustomizationSheet: View {
     }
     
     var totalPrice: Double {
-        var total = item.basePrice
+        var total: Double = 0.0
         
-        // Add size variation pricing
+        // Get size price (full price, not incremental)
         if let variations = item.variations, variations.count > 1 {
-            let sizeModifierList = createSizeModifierList(from: variations)
-            if let selectedSizeIds = selectedModifiers[sizeModifierList.id] {
-                for modifier in sizeModifierList.modifiers {
-                    if selectedSizeIds.contains(modifier.id) {
-                        total += modifier.price
-                    }
-                }
+            if let selectedSizeId = selectedSizeId,
+               let selectedVariation = variations.first(where: { $0.id == selectedSizeId }) {
+                total = selectedVariation.price
+            } else {
+                // Default to first variation if nothing selected
+                total = variations.first?.price ?? item.basePrice
             }
+        } else {
+            // No size variations, use base price
+            total = item.basePrice
         }
         
-        // Add other modifier pricing
+        // Add other modifier pricing (incremental)
         guard let modifierLists = item.modifierLists else { return total }
         
         for modifierList in modifierLists {
@@ -469,20 +525,50 @@ struct DrinkCustomizationSheet: View {
         return total
     }
     
+    // Build complete customization description including size
+    private func buildCustomizationDescription() -> String {
+        var desc: [String] = []
+        
+        // Add size if multiple variations exist
+        if let variations = item.variations, variations.count > 1,
+           let selectedSizeId = selectedSizeId,
+           let selectedVariation = variations.first(where: { $0.id == selectedSizeId }) {
+            desc.append("Size: \(selectedVariation.name)")
+        }
+        
+        // Add other modifiers (only non-default ones)
+        guard let modifierLists = item.modifierLists else {
+            return desc.joined(separator: " | ")
+        }
+        
+        for modifierList in modifierLists {
+            if let selectedModifierIds = selectedModifiers[modifierList.id], !selectedModifierIds.isEmpty {
+                let modifierNames = modifierList.modifiers.compactMap { modifier in
+                    if selectedModifierIds.contains(modifier.id) && !modifier.isDefault {
+                        return modifier.name
+                    }
+                    return nil
+                }
+                
+                if !modifierNames.isEmpty {
+                    desc.append("\(modifierList.name): \(modifierNames.joined(separator: ", "))")
+                }
+            }
+        }
+        
+        return desc.joined(separator: " | ")
+    }
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        // Show size variations if present
+                        // Show size variations with special UI
                         if let variations = item.variations, variations.count > 1 {
-                            let sizeModifierList = createSizeModifierList(from: variations)
-                            ModifierListSection(
-                                modifierList: sizeModifierList,
-                                selectedModifiers: Binding(
-                                    get: { selectedModifiers[sizeModifierList.id] ?? [] },
-                                    set: { selectedModifiers[sizeModifierList.id] = $0 }
-                                )
+                            SizeSelectionView(
+                                variations: variations,
+                                selectedSizeId: $selectedSizeId
                             )
                         }
                         
@@ -520,7 +606,7 @@ struct DrinkCustomizationSheet: View {
                     }
                     .padding(.horizontal)
                     
-                    Button(action: { onAdd(totalPrice) }) {
+                    Button(action: { onAdd(totalPrice, buildCustomizationDescription()) }) {
                         Text("Add to Cart")
                             .font(.headline)
                             .fontWeight(.semibold)
@@ -542,6 +628,15 @@ struct DrinkCustomizationSheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
                 }
+            }
+        }
+        .onAppear {
+            // Initialize selected size to first variation if not already set
+            if selectedSizeId == nil,
+               let variations = item.variations,
+               variations.count > 1,
+               let firstVariation = variations.first {
+                selectedSizeId = firstVariation.id
             }
         }
     }
