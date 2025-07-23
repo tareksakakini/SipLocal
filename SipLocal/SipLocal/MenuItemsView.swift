@@ -238,16 +238,16 @@ struct MenuItemCard: View {
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                            .frame(height: 100)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 100, height: 100)
                             .clipped()
                             .cornerRadius(12, corners: [.topLeft, .topRight])
                     case .failure(_):
                         // Show fallback image on error
                         Image("sample_menu_pic")
                             .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                            .frame(height: 100)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 100, height: 100)
                             .clipped()
                             .cornerRadius(12, corners: [.topLeft, .topRight])
                     case .empty:
@@ -268,8 +268,8 @@ struct MenuItemCard: View {
             } else {
                 Image("sample_menu_pic")
                     .resizable()
-                    .aspectRatio(1, contentMode: .fill)
-                    .frame(height: 100)
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 100, height: 100)
                     .clipped()
                     .cornerRadius(12, corners: [.topLeft, .topRight])
             }
