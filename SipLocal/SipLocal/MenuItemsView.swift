@@ -277,16 +277,10 @@ struct MenuItemCard: View {
     var onAdd: (() -> Void)? = nil
     
     private func formatPrice(for item: MenuItem) -> String {
-        // If item has multiple size variations, show price range
+        // Always show the smallest size price (starting price)
         if let variations = item.variations, variations.count > 1 {
             let minPrice = variations.map(\.price).min() ?? item.price
-            let maxPrice = variations.map(\.price).max() ?? item.price
-            
-            if minPrice == maxPrice {
-                return String(format: "$%.2f", minPrice)
-            } else {
-                return String(format: "$%.2f - $%.2f", minPrice, maxPrice)
-            }
+            return String(format: "$%.2f", minPrice)
         } else {
             // Single size or no variations - show base price
             return String(format: "$%.2f", item.price)
