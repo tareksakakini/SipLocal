@@ -21,6 +21,7 @@ struct CheckoutView: View {
     
     // Add an instance of our payment service
     private let paymentService = PaymentService()
+    private let tokenService = TokenService()
     
     var body: some View {
         NavigationStack {
@@ -189,7 +190,7 @@ struct CheckoutView: View {
         isProcessingPayment = true
         paymentResult = "Processing payment..."
         
-        // Get the location ID from the first item in the cart
+        // Get the merchant ID from the first item in the cart
         // In a real app, you might want to validate that all items are from the same shop
         guard let firstItem = cartManager.items.first else {
             paymentResult = "No items in cart"
@@ -197,56 +198,71 @@ struct CheckoutView: View {
             return
         }
         
-        let merchantId = firstItem.shop.menu.merchantId
-        let oauthToken = firstItem.shop.menu.oauth_token
-        
-        // Debug: Print the values we're sending
-        print("Debug - Sending to Firebase:")
-        print("  nonce: \(nonce)")
-        print("  amount: \(cartManager.totalPrice)")
-        print("  merchantId: \(merchantId)")
-        print("  oauth_token: \(oauthToken.prefix(10))...)")
+        let merchantId = firstItem.shop.merchantId
         
         Task {
-            let result = await paymentService.processPayment(
-                nonce: nonce, 
-                amount: cartManager.totalPrice,
-                merchantId: merchantId,
-                oauthToken: oauthToken
-            )
-            
-            // Update the UI on the main thread
-            await MainActor.run {
-                switch result {
-                case .success(let transaction):
-                    paymentResult = transaction.message
-                    paymentSuccess = true
-                    transactionId = transaction.transactionId
-                    // Store order details before clearing the cart
-                    completedOrderItems = cartManager.items
-                    completedOrderTotal = cartManager.totalPrice
-                    completedOrderShop = cartManager.items.first?.shop
-                    
-                    // Save the order to order history
-                    if let shop = cartManager.items.first?.shop {
-                        orderManager.addOrder(
-                            coffeeShop: shop,
-                            items: cartManager.items,
-                            totalAmount: cartManager.totalPrice,
-                            transactionId: transaction.transactionId
-                        )
+            do {
+                // First, fetch the tokens from the backend
+                let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+                
+                // Debug: Print the values we're sending
+                print("Debug - Sending to Firebase:")
+                print("  nonce: \(nonce)")
+                print("  amount: \(cartManager.totalPrice)")
+                print("  merchantId: \(merchantId)")
+                print("  oauth_token: \(credentials.oauth_token.prefix(10))...)")
+                
+                // Now process the payment with the fetched tokens
+                let result = await paymentService.processPayment(
+                    nonce: nonce, 
+                    amount: cartManager.totalPrice,
+                    merchantId: merchantId,
+                    oauthToken: credentials.oauth_token
+                )
+                
+                // Update the UI on the main thread
+                await MainActor.run {
+                    switch result {
+                    case .success(let transaction):
+                        paymentResult = transaction.message
+                        paymentSuccess = true
+                        transactionId = transaction.transactionId
+                        // Store order details before clearing the cart
+                        completedOrderItems = cartManager.items
+                        completedOrderTotal = cartManager.totalPrice
+                        completedOrderShop = cartManager.items.first?.shop
+                        
+                        // Save the order to order history
+                        if let shop = cartManager.items.first?.shop {
+                            orderManager.addOrder(
+                                coffeeShop: shop,
+                                items: cartManager.items,
+                                totalAmount: cartManager.totalPrice,
+                                transactionId: transaction.transactionId
+                            )
+                        }
+                        
+                        // Clear the cart on successful payment
+                        cartManager.clearCart()
+                    case .failure(let error):
+                        paymentResult = error.localizedDescription
+                        paymentSuccess = false
+                        transactionId = nil
                     }
-                    
-                    // Clear the cart on successful payment
-                    cartManager.clearCart()
-                case .failure(let error):
-                    paymentResult = error.localizedDescription
+                    isProcessingPayment = false
+                    self.showingCardEntry = false
+                    self.showingPaymentResult = true
+                }
+            } catch {
+                // Handle token fetching errors
+                await MainActor.run {
+                    paymentResult = "Failed to retrieve payment credentials: \(error.localizedDescription)"
                     paymentSuccess = false
                     transactionId = nil
+                    isProcessingPayment = false
+                    self.showingCardEntry = false
+                    self.showingPaymentResult = true
                 }
-                isProcessingPayment = false
-                self.showingCardEntry = false
-                self.showingPaymentResult = true
             }
         }
     }

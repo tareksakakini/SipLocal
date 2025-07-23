@@ -2,14 +2,34 @@ import Foundation
 
 class SquareAPIService {
     static let shared = SquareAPIService()
+    private let tokenService = TokenService()
     
     private init() {}
     
     // MARK: - Main Function to Fetch Menu Data
     
     func fetchMenuData(for shop: CoffeeShop) async throws -> [MenuCategory] {
-        let catalogObjects = try await fetchCatalogObjects(credentials: shop.menu)
-        return processCatalogObjects(catalogObjects)
+        print("🔍 SquareAPIService: Starting menu fetch for shop: \(shop.name) (merchantId: \(shop.merchantId))")
+        
+        do {
+            // First, fetch the merchant tokens from the backend
+            print("🔍 SquareAPIService: Fetching tokens from backend...")
+            let credentials = try await tokenService.getMerchantTokens(merchantId: shop.merchantId)
+            print("🔍 SquareAPIService: Successfully got credentials, fetching catalog...")
+            
+            let catalogObjects = try await fetchCatalogObjects(credentials: credentials)
+            print("🔍 SquareAPIService: Successfully fetched \(catalogObjects.count) catalog objects")
+            
+            let categories = processCatalogObjects(catalogObjects)
+            print("🔍 SquareAPIService: Successfully processed into \(categories.count) menu categories")
+            
+            return categories
+        } catch {
+            print("❌ SquareAPIService: Error fetching menu data for \(shop.name): \(error)")
+            print("❌ SquareAPIService: Error type: \(type(of: error))")
+            print("❌ SquareAPIService: Error description: \(error.localizedDescription)")
+            throw error
+        }
     }
     
     // MARK: - Private Functions

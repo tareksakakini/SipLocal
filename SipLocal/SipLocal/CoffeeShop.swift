@@ -50,7 +50,7 @@ struct CoffeeShop: Codable, Identifiable {
     let description: String
     let imageName: String
     let stampName: String
-    let menu: SquareCredentials
+    let merchantId: String
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)

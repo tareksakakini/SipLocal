@@ -20,6 +20,55 @@ interface PaymentData {
   oauth_token: string;
 }
 
+
+// Function to get merchant tokens from Firestore (HTTP trigger)
+export const getMerchantTokens = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  functions.logger.info("getMerchantTokens called with body:", req.body);
+  functions.logger.info("getMerchantTokens called with query:", req.query);
+  
+  const merchantId = req.body?.merchantId || req.query?.merchantId;
+  
+  if (!merchantId) {
+    functions.logger.error("merchantId is missing from request");
+    res.status(400).json({ error: "merchantId is required" });
+    return;
+  }
+  
+  functions.logger.info("Looking up tokens for merchantId:", merchantId);
+
+  try {
+    const doc = await admin.firestore()
+      .collection("merchant_tokens")
+      .doc(merchantId)
+      .get();
+    
+    if (!doc.exists) {
+      functions.logger.error("Document not found for merchantId:", merchantId);
+      res.status(404).json({ error: "Merchant tokens not found" });
+      return;
+    }
+    
+    const tokenData = doc.data();
+    functions.logger.info("Successfully retrieved tokens for merchantId:", merchantId);
+    functions.logger.info("Token data keys:", Object.keys(tokenData || {}));
+    
+    res.status(200).json({ tokens: tokenData });
+  } catch (error: any) {
+    functions.logger.error("Failed to get merchant tokens:", error);
+    res.status(500).json({ error: "Failed to retrieve merchant tokens" });
+  }
+});
+
 export const processPayment = functions.https.onCall(async (data, context) => {
   // Log the raw data first
   functions.logger.info("Raw data received:", data);
@@ -205,3 +254,6 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     );
   }
 });
+
+// Export migration function
+export { migrateTokens } from './migrate';

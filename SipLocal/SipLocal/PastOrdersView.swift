@@ -242,7 +242,7 @@ struct PastOrdersView_Previews: PreviewProvider {
                         description: "Sample description",
                         imageName: "sample",
                         stampName: "sample",
-                        menu: SquareCredentials(oauth_token: "", merchantId: "", refreshToken: "")
+                        merchantId: "SAMPLE_MERCHANT_ID"
                     ),
                     items: [
                         CartItem(
@@ -257,7 +257,7 @@ struct PastOrdersView_Previews: PreviewProvider {
                                 description: "Sample description",
                                 imageName: "sample",
                                 stampName: "sample",
-                                menu: SquareCredentials(oauth_token: "", merchantId: "", refreshToken: "")
+                                merchantId: "SAMPLE_MERCHANT_ID"
                             ),
                             menuItem: MenuItem(name: "Cappuccino", price: 4.50, customizations: nil, imageURL: nil, modifierLists: nil),
                             category: "Coffee",

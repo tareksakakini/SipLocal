@@ -1,0 +1,22 @@
+{
+  "merchant_tokens": {
+    "MLST6XP96ZD5Q": {
+      "oauth_token": "EAAAl5TL7NLTWTbHDXEGnJhw2ghjE_McWbS9nvWSLPpD9TsBUQ9VhffJC9YF2cBC",
+      "merchantId": "MLST6XP96ZD5Q",
+      "refreshToken": "EQAAl0Jk8F3xrGBWCz0OnBCNC5cENngOHDCUwGuyAx3lnTMKokq-rogPxjStUGlt",
+      "shopId": "4",
+      "shopName": "Estelle Bakery and Patiserrie",
+      "createdAt": "2025-07-23T01:41:11.753Z",
+      "updatedAt": "2025-07-23T01:41:11.753Z"
+    },
+    "BX68JJS39WN4Y": {
+      "oauth_token": "EAAAlxL6R_kaQKyrSPSggx5Z8KmoOlYiaBe8cCEg8vth5vXqV8_dC33f-z1c9gPN",
+      "merchantId": "BX68JJS39WN4Y",
+      "refreshToken": "EQAAl7u3vqMAppFPoO2c95KqccivqN0sSVO3H7DLR6RzrAaKWfihJJlp7v1P3XWw",
+      "shopId": "5",
+      "shopName": "The Mill",
+      "createdAt": "2025-07-23T01:41:11.753Z",
+      "updatedAt": "2025-07-23T01:41:11.753Z"
+    }
+  }
+}
