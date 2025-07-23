@@ -181,10 +181,20 @@ struct MenuItemsView: View {
                 }
             }
             
-            // If no defaults and minimum selection required, select first modifier
-            if defaultSelections.isEmpty && modifierList.minSelections > 0 {
-                if let firstModifier = modifierList.modifiers.first {
-                    defaultSelections.insert(firstModifier.id)
+            // If no defaults found, select first modifier as fallback
+            // For single-selection lists, always select first if no defaults
+            // For multiple-selection lists, only select first if minimum selections required
+            if defaultSelections.isEmpty {
+                if modifierList.selectionType == "SINGLE" || modifierList.maxSelections == 1 {
+                    // Single selection - always select first option
+                    if let firstModifier = modifierList.modifiers.first {
+                        defaultSelections.insert(firstModifier.id)
+                    }
+                } else if modifierList.minSelections > 0 {
+                    // Multiple selection - only preselect if minimum required
+                    if let firstModifier = modifierList.modifiers.first {
+                        defaultSelections.insert(firstModifier.id)
+                    }
                 }
             }
             
