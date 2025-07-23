@@ -7,18 +7,20 @@ struct CartItem: Identifiable, Codable {
     let category: String
     var quantity: Int
     var customizations: String?
+    let itemPriceWithModifiers: Double
     
-    init(shop: CoffeeShop, menuItem: MenuItem, category: String, quantity: Int, customizations: String? = nil) {
+    init(shop: CoffeeShop, menuItem: MenuItem, category: String, quantity: Int, customizations: String? = nil, itemPriceWithModifiers: Double? = nil) {
         self.id = UUID()
         self.shop = shop
         self.menuItem = menuItem
         self.category = category
         self.quantity = quantity
         self.customizations = customizations
+        self.itemPriceWithModifiers = itemPriceWithModifiers ?? menuItem.price
     }
     
     var totalPrice: Double {
-        return menuItem.price * Double(quantity)
+        return itemPriceWithModifiers * Double(quantity)
     }
 }
 
@@ -33,18 +35,20 @@ class CartManager: ObservableObject {
         return items.reduce(0) { $0 + $1.quantity }
     }
     
-    func addItem(shop: CoffeeShop, menuItem: MenuItem, category: String, customizations: String? = nil) -> Bool {
+    func addItem(shop: CoffeeShop, menuItem: MenuItem, category: String, customizations: String? = nil, itemPriceWithModifiers: Double? = nil) -> Bool {
         // Check if cart has items from a different coffee shop
         if !items.isEmpty && items.first?.shop.id != shop.id {
             return false // Cannot add item from different shop
         }
         
+        let priceWithModifiers = itemPriceWithModifiers ?? menuItem.price
+        
         if let existingIndex = items.firstIndex(where: { 
-            $0.shop.id == shop.id && $0.menuItem.name == menuItem.name && $0.customizations == customizations
+            $0.shop.id == shop.id && $0.menuItem.name == menuItem.name && $0.customizations == customizations && $0.itemPriceWithModifiers == priceWithModifiers
         }) {
             items[existingIndex].quantity += 1
         } else {
-            let newItem = CartItem(shop: shop, menuItem: menuItem, category: category, quantity: 1, customizations: customizations)
+            let newItem = CartItem(shop: shop, menuItem: menuItem, category: category, quantity: 1, customizations: customizations, itemPriceWithModifiers: priceWithModifiers)
             items.append(newItem)
         }
         return true

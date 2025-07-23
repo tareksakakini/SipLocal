@@ -9,7 +9,7 @@ struct MenuItemsView: View {
     @State private var showingCart = false
     @State private var customizingItem: MenuItem? = nil
     @State private var showingDifferentShopAlert = false
-    @State private var pendingItem: (item: MenuItem, customizations: String?)?
+    @State private var pendingItem: (item: MenuItem, customizations: String?, price: Double)?
     // Store customization selections - maps modifier list ID to selected modifier IDs
     @State private var selectedModifiers: [String: Set<String>] = [:]
     
@@ -113,16 +113,16 @@ struct MenuItemsView: View {
                 DrinkCustomizationSheet(
                     item: item,
                     selectedModifiers: $selectedModifiers,
-                    onAdd: {
+                    onAdd: { totalPriceWithModifiers in
                         // Add to cart with customizations as a string description
                         let customizationDesc = customizationDescription(for: item)
-                        let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc)
+                        let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc, itemPriceWithModifiers: totalPriceWithModifiers)
                         
                         if success {
                             customizingItem = nil
                         } else {
                             // Store the pending item and show alert
-                            pendingItem = (item: item, customizations: customizationDesc)
+                            pendingItem = (item: item, customizations: customizationDesc, price: totalPriceWithModifiers)
                             showingDifferentShopAlert = true
                             customizingItem = nil
                         }
@@ -136,7 +136,7 @@ struct MenuItemsView: View {
                 Button("Clear Cart & Add Item", role: .destructive) {
                     cartManager.clearCart()
                     if let pending = pendingItem {
-                        let _ = cartManager.addItem(shop: shop, menuItem: pending.item, category: category.name, customizations: pending.customizations)
+                        let _ = cartManager.addItem(shop: shop, menuItem: pending.item, category: category.name, customizations: pending.customizations, itemPriceWithModifiers: pending.price)
                     }
                     pendingItem = nil
                 }
@@ -335,7 +335,7 @@ struct RoundedCorner: Shape {
 struct DrinkCustomizationSheet: View {
     let item: MenuItem
     @Binding var selectedModifiers: [String: Set<String>]
-    var onAdd: () -> Void
+    var onAdd: (Double) -> Void
     var onCancel: () -> Void
     
     var totalPrice: Double {
@@ -395,7 +395,7 @@ struct DrinkCustomizationSheet: View {
                     }
                     .padding(.horizontal)
                     
-                    Button(action: onAdd) {
+                    Button(action: { onAdd(totalPrice) }) {
                         Text("Add to Cart")
                             .font(.headline)
                             .fontWeight(.semibold)
