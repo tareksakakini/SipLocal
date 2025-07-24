@@ -297,9 +297,8 @@ struct MenuItemCard: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: 100, height: 100)
+                            .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
                             .clipped()
-                            .cornerRadius(12, corners: [.topLeft, .topRight])
                     case .failure(_):
                         // Show fallback placeholder
                         VStack {
@@ -312,15 +311,13 @@ struct MenuItemCard: View {
                                 .font(.caption2)
                                 .foregroundColor(.gray)
                         }
-                        .frame(width: 100, height: 100)
+                        .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
                         .background(Color(.systemGray5))
-                        .cornerRadius(12, corners: [.topLeft, .topRight])
                     case .empty:
                         // Show loading state
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
-                            .frame(height: 100)
-                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                            .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
                             .overlay(
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle())
@@ -342,9 +339,8 @@ struct MenuItemCard: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }
-                .frame(width: 100, height: 100)
+                .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
                 .background(Color(.systemGray5))
-                .cornerRadius(12, corners: [.topLeft, .topRight])
             }
             
             // Content Section
