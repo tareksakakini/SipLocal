@@ -897,6 +897,7 @@ struct MenuItemsView_Previews: PreviewProvider {
         let sampleCategory = MenuCategory(name: "Hot Coffee", items: [
             // Item with all three types of modifiers
             MenuItem(
+                id: "item_americano",
                 name: "Americano",
                 price: 3.50,
                 variations: nil,
@@ -906,6 +907,7 @@ struct MenuItemsView_Previews: PreviewProvider {
             ),
             // Item with just size (segmented picker)
             MenuItem(
+                id: "item_espresso",
                 name: "Espresso",
                 price: 2.25,
                 variations: nil,
@@ -915,6 +917,7 @@ struct MenuItemsView_Previews: PreviewProvider {
             ),
             // Item with size and milk (segmented + wheel)
             MenuItem(
+                id: "item_latte",
                 name: "Latte",
                 price: 4.25,
                 variations: nil,
@@ -924,6 +927,7 @@ struct MenuItemsView_Previews: PreviewProvider {
             ),
             // Item with no modifiers
             MenuItem(
+                id: "item_drip_coffee",
                 name: "Drip Coffee",
                 price: 2.75,
                 variations: nil,

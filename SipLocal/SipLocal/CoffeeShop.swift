@@ -25,7 +25,7 @@ struct MenuItemModifierList: Codable, Identifiable {
 }
 
 struct MenuItem: Codable, Identifiable {
-    var id: String { name }
+    let id: String // Unique Square item id
     let name: String
     let price: Double // Base price (from first variation for backward compatibility)
     let variations: [MenuItemVariation]?

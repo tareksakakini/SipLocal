@@ -146,6 +146,7 @@ class SquareAPIService {
                 let customizations = extractCustomizationTypes(from: modifierLists)
                 
                 return MenuItem(
+                    id: itemObject.id, // <-- Pass unique Square id
                     name: itemData.name,
                     price: basePrice,
                     variations: variations.isEmpty ? nil : variations,
@@ -187,6 +188,7 @@ class SquareAPIService {
             let customizations = extractCustomizationTypes(from: modifierLists)
             
             return MenuItem(
+                id: itemObject.id, // <-- Pass unique Square id
                 name: itemData.name,
                 price: basePrice,
                 variations: variations.isEmpty ? nil : variations,
@@ -222,6 +224,7 @@ class SquareAPIService {
                 let customizations = extractCustomizationTypes(from: modifierLists)
                 
                 return MenuItem(
+                    id: itemObject.id, // <-- Pass unique Square id
                     name: itemData.name,
                     price: basePrice,
                     variations: variations.isEmpty ? nil : variations,
