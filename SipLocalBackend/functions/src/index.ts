@@ -18,6 +18,7 @@ interface PaymentData {
   amount: number;
   merchantId: string;
   oauth_token: string;
+  items?: Array<{ name: string; quantity: number; price: number; customizations?: string }>;
 }
 
 
@@ -81,7 +82,8 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     nonce: requestData.nonce,
     merchantId: requestData.merchantId, 
     amount: requestData.amount,
-    oauth_token: requestData.oauth_token
+    oauth_token: requestData.oauth_token,
+    items: requestData.items || []
   };
   
   // 1. Log the request for debugging
@@ -112,7 +114,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const {nonce, amount, merchantId, oauth_token} = paymentData;
+  const {nonce, amount, merchantId, oauth_token, items} = paymentData;
   const idempotencyKey = uuidv4();
 
   // Initialize Square client with coffee shop's oauth token
@@ -132,10 +134,39 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       SquareEnvironment.Production : SquareEnvironment.Sandbox,
   });
 
-  functions.logger.info("Square client initialized", {
-    environment: environment,
-    tokenPrefix: accessToken.substring(0, 10) + "..."
-  });
+  // Fetch locationId from Firestore or Square API
+  let locationId = "";
+  try {
+    const doc = await admin.firestore()
+      .collection("merchant_tokens")
+      .doc(merchantId)
+      .get();
+    if (!doc.exists) {
+      throw new functions.https.HttpsError("not-found", "Merchant tokens not found");
+    }
+    const tokenData = doc.data();
+    locationId = tokenData?.locationId || "";
+    if (!locationId) {
+      // Fetch locations from Square API
+      const locationsResponse = await squareClient.locations.list();
+      if (!locationsResponse.locations || locationsResponse.locations.length === 0) {
+        throw new functions.https.HttpsError("not-found", "No locations found for merchant");
+      }
+      // Use the first location (or add logic to select the right one)
+      locationId = locationsResponse.locations[0].id || "";
+      // Cache it in Firestore for next time
+      await admin.firestore()
+        .collection("merchant_tokens")
+        .doc(merchantId)
+        .update({ locationId });
+    }
+    if (!locationId) {
+      throw new functions.https.HttpsError("internal", "locationId could not be determined");
+    }
+  } catch (locError) {
+    functions.logger.error("Failed to fetch locationId:", locError);
+    throw new functions.https.HttpsError("internal", "Failed to fetch locationId");
+  }
 
   try {
     // 3. Process payment with Square API
@@ -145,6 +176,46 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       merchantId: merchantId
     });
     
+    let orderId: string | undefined = undefined;
+    if (items && items.length > 0) {
+      // Build line items for Square order
+      const lineItems = items.map(item => ({
+        name: item.name,
+        quantity: item.quantity.toString(),
+        basePriceMoney: {
+          amount: BigInt(item.price), // price in cents
+          currency: "USD" as any,
+        },
+        note: item.customizations || undefined,
+      }));
+      // Create the order
+      const orderRequest = {
+        order: {
+          locationId: locationId,
+          lineItems,
+        },
+        idempotencyKey: uuidv4(),
+      };
+      try {
+        const orderResponse = await squareClient.orders.create(orderRequest);
+        orderId = orderResponse.order?.id;
+        functions.logger.info('Square order created', { orderId });
+      } catch (orderError: any) {
+        functions.logger.error('Failed to create Square order:', orderError);
+        // Surface the error to the client for debugging
+        if (orderError.errors && Array.isArray(orderError.errors)) {
+          throw new functions.https.HttpsError(
+            "internal",
+            "Failed to create Square order: " + orderError.errors.map((e: any) => e.detail || e.message).join("; ")
+          );
+        }
+        throw new functions.https.HttpsError(
+          "internal",
+          "Failed to create Square order: " + (orderError.message || JSON.stringify(orderError))
+        );
+      }
+    }
+
     const request = {
       sourceId: nonce,
       idempotencyKey: idempotencyKey,
@@ -152,8 +223,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         amount: BigInt(amount), // Amount in cents
         currency: "USD" as Square.Currency,
       },
-      // Note: For production, Square uses applicationId instead of locationId
-      // applicationId: merchantId, // Commented out - depends on Square API requirements
+      orderId: orderId,
       autocomplete: true,
     };
 

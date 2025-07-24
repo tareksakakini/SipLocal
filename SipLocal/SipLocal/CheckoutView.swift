@@ -217,7 +217,8 @@ struct CheckoutView: View {
                     nonce: nonce, 
                     amount: cartManager.totalPrice,
                     merchantId: merchantId,
-                    oauthToken: credentials.oauth_token
+                    oauthToken: credentials.oauth_token,
+                    cartItems: cartManager.items
                 )
                 
                 // Update the UI on the main thread
