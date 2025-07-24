@@ -19,6 +19,8 @@ interface PaymentData {
   merchantId: string;
   oauth_token: string;
   items?: Array<{ name: string; quantity: number; price: number; customizations?: string }>;
+  customerName?: string;
+  customerEmail?: string;
 }
 
 
@@ -83,7 +85,9 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     merchantId: requestData.merchantId, 
     amount: requestData.amount,
     oauth_token: requestData.oauth_token,
-    items: requestData.items || []
+    items: requestData.items || [],
+    customerName: requestData.customerName,
+    customerEmail: requestData.customerEmail,
   };
   
   // 1. Log the request for debugging
@@ -168,6 +172,37 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("internal", "Failed to fetch locationId");
   }
 
+  let customerId: string | undefined = undefined;
+  if (paymentData.customerEmail && paymentData.customerName) {
+    try {
+      const customersApi = squareClient.customers;
+      const searchResp = await customersApi.search({
+        query: {
+          filter: {
+            emailAddress: {
+              exact: paymentData.customerEmail
+            }
+          }
+        }
+      });
+      if (searchResp.customers && searchResp.customers.length > 0) {
+        customerId = searchResp.customers[0].id;
+        functions.logger.info('Found existing Square customer', { customerId });
+      } else {
+        // Create new customer
+        const createResp = await customersApi.create({
+          givenName: paymentData.customerName,
+          emailAddress: paymentData.customerEmail
+        });
+        customerId = createResp.customer?.id;
+        functions.logger.info('Created new Square customer', { customerId });
+      }
+    } catch (customerError) {
+      functions.logger.error('Failed to look up or create Square customer:', customerError);
+      // Continue without customerId
+    }
+  }
+
   try {
     // 3. Process payment with Square API
     functions.logger.info("Processing payment with Square API...", {
@@ -189,13 +224,16 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         note: item.customizations || undefined,
       }));
       // Create the order
-      const orderRequest = {
+      const orderRequest: any = {
         order: {
           locationId: locationId,
           lineItems,
         },
         idempotencyKey: uuidv4(),
       };
+      if (customerId) {
+        orderRequest.order.customerId = customerId;
+      }
       try {
         const orderResponse = await squareClient.orders.create(orderRequest);
         orderId = orderResponse.order?.id;
@@ -216,7 +254,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       }
     }
 
-    const request = {
+    const request: any = {
       sourceId: nonce,
       idempotencyKey: idempotencyKey,
       amountMoney: {
@@ -226,6 +264,9 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       orderId: orderId,
       autocomplete: true,
     };
+    if (customerId) {
+      request.customerId = customerId;
+    }
 
     const response = await squareClient.payments.create(request);
     

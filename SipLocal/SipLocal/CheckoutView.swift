@@ -5,6 +5,7 @@ import Combine
 struct CheckoutView: View {
     @EnvironmentObject var cartManager: CartManager
     @EnvironmentObject var orderManager: OrderManager
+    @EnvironmentObject var authManager: AuthenticationManager // <-- Inject authManager
     @Environment(\.presentationMode) var presentationMode
     @State private var isProcessingPayment = false
     @State private var paymentResult: String = ""
@@ -15,6 +16,7 @@ struct CheckoutView: View {
     @State private var completedOrderItems: [CartItem] = []
     @State private var completedOrderTotal: Double = 0.0
     @State private var completedOrderShop: CoffeeShop?
+    @State private var userData: UserData? = nil // <-- Store user data
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
@@ -189,80 +191,80 @@ struct CheckoutView: View {
     private func processPayment(nonce: String) {
         isProcessingPayment = true
         paymentResult = "Processing payment..."
-        
-        // Get the merchant ID from the first item in the cart
-        // In a real app, you might want to validate that all items are from the same shop
         guard let firstItem = cartManager.items.first else {
             paymentResult = "No items in cart"
             isProcessingPayment = false
             return
         }
-        
         let merchantId = firstItem.shop.merchantId
-        
-        Task {
-            do {
-                // First, fetch the tokens from the backend
-                let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
-                
-                // Debug: Print the values we're sending
-                print("Debug - Sending to Firebase:")
-                print("  nonce: \(nonce)")
-                print("  amount: \(cartManager.totalPrice)")
-                print("  merchantId: \(merchantId)")
-                print("  oauth_token: \(credentials.oauth_token.prefix(10))...)")
-                
-                // Now process the payment with the fetched tokens
-                let result = await paymentService.processPayment(
-                    nonce: nonce, 
-                    amount: cartManager.totalPrice,
-                    merchantId: merchantId,
-                    oauthToken: credentials.oauth_token,
-                    cartItems: cartManager.items
-                )
-                
-                // Update the UI on the main thread
-                await MainActor.run {
-                    switch result {
-                    case .success(let transaction):
-                        paymentResult = transaction.message
-                        paymentSuccess = true
-                        transactionId = transaction.transactionId
-                        // Store order details before clearing the cart
-                        completedOrderItems = cartManager.items
-                        completedOrderTotal = cartManager.totalPrice
-                        completedOrderShop = cartManager.items.first?.shop
-                        
-                        // Save the order to order history
-                        if let shop = cartManager.items.first?.shop {
-                            orderManager.addOrder(
-                                coffeeShop: shop,
-                                items: cartManager.items,
-                                totalAmount: cartManager.totalPrice,
-                                transactionId: transaction.transactionId
-                            )
+        // Fetch user data before payment
+        guard let userId = authManager.currentUser?.uid else {
+            paymentResult = "User not logged in."
+            isProcessingPayment = false
+            return
+        }
+        authManager.getUserData(userId: userId) { userData, error in
+            guard let userData = userData else {
+                DispatchQueue.main.async {
+                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
+                    self.isProcessingPayment = false
+                }
+                return
+            }
+            Task {
+                do {
+                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+                    print("Debug - Sending to Firebase:")
+                    print("  nonce: \(nonce)")
+                    print("  amount: \(cartManager.totalPrice)")
+                    print("  merchantId: \(merchantId)")
+                    print("  oauth_token: \(credentials.oauth_token.prefix(10)))...")
+                    // Now process the payment with the fetched tokens and user info
+                    let result = await paymentService.processPayment(
+                        nonce: nonce,
+                        amount: cartManager.totalPrice,
+                        merchantId: merchantId,
+                        oauthToken: credentials.oauth_token,
+                        cartItems: cartManager.items,
+                        customerName: userData.fullName,
+                        customerEmail: userData.email
+                    )
+                    await MainActor.run {
+                        switch result {
+                        case .success(let transaction):
+                            paymentResult = transaction.message
+                            paymentSuccess = true
+                            transactionId = transaction.transactionId
+                            completedOrderItems = cartManager.items
+                            completedOrderTotal = cartManager.totalPrice
+                            completedOrderShop = cartManager.items.first?.shop
+                            if let shop = cartManager.items.first?.shop {
+                                orderManager.addOrder(
+                                    coffeeShop: shop,
+                                    items: cartManager.items,
+                                    totalAmount: cartManager.totalPrice,
+                                    transactionId: transaction.transactionId
+                                )
+                            }
+                            cartManager.clearCart()
+                        case .failure(let error):
+                            paymentResult = error.localizedDescription
+                            paymentSuccess = false
+                            transactionId = nil
                         }
-                        
-                        // Clear the cart on successful payment
-                        cartManager.clearCart()
-                    case .failure(let error):
-                        paymentResult = error.localizedDescription
+                        isProcessingPayment = false
+                        self.showingCardEntry = false
+                        self.showingPaymentResult = true
+                    }
+                } catch {
+                    await MainActor.run {
+                        paymentResult = "Failed to retrieve payment credentials: \(error.localizedDescription)"
                         paymentSuccess = false
                         transactionId = nil
+                        isProcessingPayment = false
+                        self.showingCardEntry = false
+                        self.showingPaymentResult = true
                     }
-                    isProcessingPayment = false
-                    self.showingCardEntry = false
-                    self.showingPaymentResult = true
-                }
-            } catch {
-                // Handle token fetching errors
-                await MainActor.run {
-                    paymentResult = "Failed to retrieve payment credentials: \(error.localizedDescription)"
-                    paymentSuccess = false
-                    transactionId = nil
-                    isProcessingPayment = false
-                    self.showingCardEntry = false
-                    self.showingPaymentResult = true
                 }
             }
         }
