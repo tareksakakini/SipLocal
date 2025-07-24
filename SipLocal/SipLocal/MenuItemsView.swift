@@ -65,6 +65,9 @@ struct MenuItemsView: View {
                                                     showItemAddedPopup = false
                                                 }
                                             }
+                                        } else {
+                                            pendingItem = (item: item, customizations: nil, price: item.price)
+                                            showingDifferentShopAlert = true
                                         }
                                     } else {
                                         customizingItem = item

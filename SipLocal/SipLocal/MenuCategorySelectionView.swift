@@ -1,4 +1,5 @@
 import SwiftUI
+import struct SipLocal.MenuItemCard
 
 struct MenuCategorySelectionView: View {
     let shop: CoffeeShop
@@ -6,6 +7,12 @@ struct MenuCategorySelectionView: View {
     @EnvironmentObject var cartManager: CartManager
     @StateObject private var menuDataManager = MenuDataManager.shared
     @State private var showingCart = false
+    @State private var searchText: String = ""
+    @State private var showItemAddedPopup = false
+    @State private var customizingItem: MenuItem? = nil
+    @State private var selectedModifiers: [String: Set<String>] = [:]
+    @State private var showingDifferentShopAlert = false
+    @State private var pendingItem: (item: MenuItem, customizations: String?, price: Double)?
     
     var body: some View {
         NavigationStack {
@@ -23,7 +30,71 @@ struct MenuCategorySelectionView: View {
                     }
                     .padding(.horizontal)
                     .padding(.top)
-                    
+
+                    // --- Search Bar ---
+                    HStack {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.gray)
+                        TextField("Search menu items...", text: $searchText)
+                            .textFieldStyle(PlainTextFieldStyle())
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                    }
+                    .padding(12)
+                    .background(Color(.systemGray5))
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+
+                    // --- Search Results ---
+                    if !searchText.isEmpty {
+                        let allItems = menuDataManager.getMenuCategories(for: shop).flatMap { $0.items }
+                        let filtered = allItems.filter { $0.name.localizedCaseInsensitiveContains(searchText) }
+                        let topResults = Array(filtered.prefix(3))
+                        if !topResults.isEmpty {
+                            LazyVGrid(columns: [
+                                GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12),
+                                GridItem(.flexible(), spacing: 12)
+                            ], spacing: 12) {
+                                ForEach(topResults, id: \.id) { item in
+                                    MenuItemCard(
+                                        item: item,
+                                        shop: shop,
+                                        category: "",
+                                        cartManager: cartManager,
+                                        onAdd: {
+                                            let hasCustomizations = (item.modifierLists != nil && !(item.modifierLists?.isEmpty ?? true)) || (item.variations != nil && item.variations!.count > 1)
+                                            if !hasCustomizations {
+                                                let success = cartManager.addItem(shop: shop, menuItem: item, category: "")
+                                                if success {
+                                                    showItemAddedPopup = true
+                                                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                                        withAnimation {
+                                                            showItemAddedPopup = false
+                                                        }
+                                                    }
+                                                } else {
+                                                    pendingItem = (item: item, customizations: nil, price: item.price)
+                                                    showingDifferentShopAlert = true
+                                                }
+                                            } else {
+                                                customizingItem = item
+                                                selectedModifiers.removeAll()
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                            .padding(.horizontal)
+                        } else {
+                            Text("No results found.")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal)
+                        }
+                    }
+                    // --- End Search Results ---
+
                     // Content based on loading state
                     if menuDataManager.isLoading(for: shop) {
                         LoadingView()
@@ -84,6 +155,33 @@ struct MenuCategorySelectionView: View {
                 CartView()
                     .environmentObject(cartManager)
             }
+            .sheet(item: $customizingItem) { item in
+                // You may want to use the DrinkCustomizationSheet here, similar to MenuItemsView
+            }
+            .overlay(
+                Group {
+                    if showItemAddedPopup {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Text("Item added")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                    .background(Color.black.opacity(0.85))
+                                    .cornerRadius(16)
+                                    .shadow(radius: 8)
+                                Spacer()
+                            }
+                            .padding(.bottom, 40)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.easeInOut(duration: 0.3), value: showItemAddedPopup)
+                    }
+                }
+            )
             .task {
                 // Load menu data when view appears
                 if menuDataManager.getMenuCategories(for: shop).isEmpty {
