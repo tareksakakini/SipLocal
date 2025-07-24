@@ -8,6 +8,7 @@ struct Order: Codable, Identifiable {
     let totalAmount: Double
     let transactionId: String
     let status: OrderStatus
+    let receiptUrl: String? // Square receipt URL for this order
     
     enum OrderStatus: String, Codable, CaseIterable {
         case completed = "completed"
@@ -42,7 +43,8 @@ class OrderManager: ObservableObject {
         coffeeShop: CoffeeShop,
         items: [CartItem],
         totalAmount: Double,
-        transactionId: String
+        transactionId: String,
+        receiptUrl: String? = nil // New parameter, default nil for backward compatibility
     ) {
         let order = Order(
             id: UUID().uuidString,
@@ -51,7 +53,8 @@ class OrderManager: ObservableObject {
             items: items,
             totalAmount: totalAmount,
             transactionId: transactionId,
-            status: .completed
+            status: .completed,
+            receiptUrl: receiptUrl // Pass to struct
         )
         
         orders.insert(order, at: 0) // Add to beginning for chronological order

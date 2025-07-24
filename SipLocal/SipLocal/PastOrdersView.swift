@@ -212,6 +212,20 @@ struct OrderRow: View {
                             .fontDesign(.monospaced)
                             .foregroundColor(.primary)
                     }
+                    // Show View Receipt button if receiptUrl is present
+                    if let receiptUrl = order.receiptUrl, let url = URL(string: receiptUrl) {
+                        Button(action: {
+                            UIApplication.shared.open(url)
+                        }) {
+                            HStack {
+                                Image(systemName: "doc.text.magnifyingglass")
+                                Text("View Receipt")
+                            }
+                            .font(.subheadline)
+                            .foregroundColor(.blue)
+                            .padding(.top, 4)
+                        }
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom)

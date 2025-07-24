@@ -243,7 +243,8 @@ struct CheckoutView: View {
                                     coffeeShop: shop,
                                     items: cartManager.items,
                                     totalAmount: cartManager.totalPrice,
-                                    transactionId: transaction.transactionId
+                                    transactionId: transaction.transactionId,
+                                    receiptUrl: transaction.receiptUrl // Pass receiptUrl to order
                                 )
                             }
                             cartManager.clearCart()

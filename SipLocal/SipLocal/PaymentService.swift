@@ -5,6 +5,7 @@ import FirebaseFunctions
 struct TransactionResult {
     let transactionId: String
     let message: String
+    let receiptUrl: String? // Add receiptUrl to transaction result
 }
 
 // A simple enum for our payment errors
@@ -65,12 +66,13 @@ class PaymentService {
                let success = data["success"] as? Bool,
                success == true,
                let transactionId = data["transactionId"] as? String {
-                
+                let receiptUrl = data["receiptUrl"] as? String // Parse receiptUrl if present
                 let transactionResult = TransactionResult(
                     transactionId: transactionId,
-                    message: "Payment successful!"
+                    message: "Payment successful!",
+                    receiptUrl: receiptUrl
                 )
-                print("Firebase function returned success: \(transactionId)")
+                print("Firebase function returned success: \(transactionId), receiptUrl: \(receiptUrl ?? "nil")")
                 return .success(transactionResult)
             } else {
                 print("Firebase function returned unexpected response: \(result.data)")
