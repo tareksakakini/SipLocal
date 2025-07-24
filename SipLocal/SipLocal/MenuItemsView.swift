@@ -301,13 +301,20 @@ struct MenuItemCard: View {
                             .clipped()
                             .cornerRadius(12, corners: [.topLeft, .topRight])
                     case .failure(_):
-                        // Show fallback image on error
-                        Image("sample_menu_pic")
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 100, height: 100)
-                            .clipped()
-                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                        // Show fallback placeholder
+                        VStack {
+                            Image(systemName: "photo.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 40, height: 40)
+                                .foregroundColor(.gray)
+                            Text("Image Not Available")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                        .frame(width: 100, height: 100)
+                        .background(Color(.systemGray5))
+                        .cornerRadius(12, corners: [.topLeft, .topRight])
                     case .empty:
                         // Show loading state
                         Rectangle()
@@ -324,12 +331,20 @@ struct MenuItemCard: View {
                     }
                 }
             } else {
-                Image("sample_menu_pic")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 100, height: 100)
-                    .clipped()
-                    .cornerRadius(12, corners: [.topLeft, .topRight])
+                // Show fallback placeholder
+                VStack {
+                    Image(systemName: "photo.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .foregroundColor(.gray)
+                    Text("Image Not Available")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                .frame(width: 100, height: 100)
+                .background(Color(.systemGray5))
+                .cornerRadius(12, corners: [.topLeft, .topRight])
             }
             
             // Content Section
