@@ -156,7 +156,29 @@ struct MenuCategorySelectionView: View {
                     .environmentObject(cartManager)
             }
             .sheet(item: $customizingItem) { item in
-                // You may want to use the DrinkCustomizationSheet here, similar to MenuItemsView
+                DrinkCustomizationSheet(
+                    item: item,
+                    selectedModifiers: $selectedModifiers,
+                    onAdd: { totalPriceWithModifiers, customizationDesc in
+                        let success = cartManager.addItem(shop: shop, menuItem: item, category: "", customizations: customizationDesc, itemPriceWithModifiers: totalPriceWithModifiers)
+                        if success {
+                            customizingItem = nil
+                            showItemAddedPopup = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                withAnimation {
+                                    showItemAddedPopup = false
+                                }
+                            }
+                        } else {
+                            pendingItem = (item: item, customizations: customizationDesc, price: totalPriceWithModifiers)
+                            showingDifferentShopAlert = true
+                            customizingItem = nil
+                        }
+                    },
+                    onCancel: {
+                        customizingItem = nil
+                    }
+                )
             }
             .overlay(
                 Group {
