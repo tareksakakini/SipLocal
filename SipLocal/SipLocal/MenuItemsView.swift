@@ -159,6 +159,12 @@ struct MenuItemsView: View {
                     cartManager.clearCart()
                     if let pending = pendingItem {
                         let _ = cartManager.addItem(shop: shop, menuItem: pending.item, category: category.name, customizations: pending.customizations, itemPriceWithModifiers: pending.price)
+                        showItemAddedPopup = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            withAnimation {
+                                showItemAddedPopup = false
+                            }
+                        }
                     }
                     pendingItem = nil
                 }
