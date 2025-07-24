@@ -12,6 +12,7 @@ struct MenuItemsView: View {
     @State private var pendingItem: (item: MenuItem, customizations: String?, price: Double)?
     // Store customization selections - maps modifier list ID to selected modifier IDs
     @State private var selectedModifiers: [String: Set<String>] = [:]
+    @State private var showItemAddedPopup = false
     
     var body: some View {
         NavigationStack {
@@ -56,8 +57,15 @@ struct MenuItemsView: View {
                                     // If the item has no modifier lists and no size variations, add directly to cart
                                     let hasCustomizations = (item.modifierLists != nil && !(item.modifierLists?.isEmpty ?? true)) || (item.variations != nil && item.variations!.count > 1)
                                     if !hasCustomizations {
-                                        // Add directly to cart
-                                        let _ = cartManager.addItem(shop: shop, menuItem: item, category: category.name)
+                                        let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name)
+                                        if success {
+                                            showItemAddedPopup = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                                withAnimation {
+                                                    showItemAddedPopup = false
+                                                }
+                                            }
+                                        }
                                     } else {
                                         customizingItem = item
                                         // Initialize selections with defaults
@@ -123,9 +131,14 @@ struct MenuItemsView: View {
                     onAdd: { totalPriceWithModifiers, customizationDesc in
                         // Add to cart with customizations and pricing from the customization sheet
                         let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc, itemPriceWithModifiers: totalPriceWithModifiers)
-                        
                         if success {
                             customizingItem = nil
+                            showItemAddedPopup = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                withAnimation {
+                                    showItemAddedPopup = false
+                                }
+                            }
                         } else {
                             // Store the pending item and show alert
                             pendingItem = (item: item, customizations: customizationDesc, price: totalPriceWithModifiers)
@@ -155,6 +168,30 @@ struct MenuItemsView: View {
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToExploreTab"))) { _ in
                 showingCart = false
             }
+            .overlay(
+                Group {
+                    if showItemAddedPopup {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Text("Item added")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                    .background(Color.black.opacity(0.85))
+                                    .cornerRadius(16)
+                                    .shadow(radius: 8)
+                                Spacer()
+                            }
+                            .padding(.bottom, 40)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.easeInOut(duration: 0.3), value: showItemAddedPopup)
+                    }
+                }
+            )
         }
     }
     
