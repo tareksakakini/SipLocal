@@ -53,9 +53,16 @@ struct MenuItemsView: View {
                                 category: category.name,
                                 cartManager: cartManager,
                                 onAdd: {
-                                    customizingItem = item
-                                    // Initialize selections with defaults
-                                    initializeModifierSelections(for: item)
+                                    // If the item has no modifier lists and no size variations, add directly to cart
+                                    let hasCustomizations = (item.modifierLists != nil && !(item.modifierLists?.isEmpty ?? true)) || (item.variations != nil && item.variations!.count > 1)
+                                    if !hasCustomizations {
+                                        // Add directly to cart
+                                        let _ = cartManager.addItem(shop: shop, menuItem: item, category: category.name)
+                                    } else {
+                                        customizingItem = item
+                                        // Initialize selections with defaults
+                                        initializeModifierSelections(for: item)
+                                    }
                                 }
                             )
                         }
@@ -297,7 +304,7 @@ struct MenuItemCard: View {
                         image
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
+                            .frame(width: 115, height: 105)
                             .clipped()
                     case .failure(_):
                         // Show fallback placeholder
@@ -311,13 +318,13 @@ struct MenuItemCard: View {
                                 .font(.caption2)
                                 .foregroundColor(.gray)
                         }
-                        .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
+                        .frame(width: 115, height: 105)
                         .background(Color(.systemGray5))
                     case .empty:
                         // Show loading state
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
-                            .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
+                            .frame(width: 115, height: 105)
                             .overlay(
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle())
@@ -339,7 +346,7 @@ struct MenuItemCard: View {
                         .font(.caption2)
                         .foregroundColor(.gray)
                 }
-                .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 100)
+                .frame(width: 115, height: 105)
                 .background(Color(.systemGray5))
             }
             
