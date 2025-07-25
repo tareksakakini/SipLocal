@@ -190,6 +190,7 @@ struct CheckoutView: View {
                 coffeeShop: paymentSuccess ? completedOrderShop : nil,
                 orderItems: paymentSuccess ? completedOrderItems : nil,
                 totalAmount: paymentSuccess ? completedOrderTotal : nil,
+                pickupTime: paymentSuccess ? selectedPickupTime : nil,
                 onDismiss: {
                     showingPaymentResult = false
                     if paymentSuccess {

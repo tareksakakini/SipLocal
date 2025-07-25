@@ -7,6 +7,7 @@ struct PaymentResultView: View {
     let coffeeShop: CoffeeShop?
     let orderItems: [CartItem]?
     let totalAmount: Double?
+    let pickupTime: Date?
     let onDismiss: () -> Void
     let onTryAgain: (() -> Void)?
     
@@ -73,6 +74,21 @@ struct PaymentResultView: View {
                             .font(.body)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.leading)
+                        
+                        if let pickupTime = pickupTime {
+                            Divider()
+                                .padding(.vertical, 4)
+                            
+                            HStack {
+                                Image(systemName: "clock")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                                
+                                Text("Pickup Time: \(formatPickupTime(pickupTime))")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                            }
+                        }
                     }
                 }
                 .padding()
@@ -231,6 +247,12 @@ struct PaymentResultView: View {
             }
         }
     }
+    
+    private func formatPickupTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
 }
 
 // Preview
@@ -295,6 +317,7 @@ struct PaymentResultView_Previews: PreviewProvider {
                     )
                 ],
                 totalAmount: 12.25,
+                pickupTime: Date().addingTimeInterval(10 * 60), // 10 minutes from now
                 onDismiss: {
                     print("Dismissed")
                 },
@@ -309,6 +332,7 @@ struct PaymentResultView_Previews: PreviewProvider {
                 coffeeShop: nil,
                 orderItems: nil,
                 totalAmount: nil,
+                pickupTime: nil,
                 onDismiss: {
                     print("Dismissed")
                 },
