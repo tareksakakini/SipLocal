@@ -168,4 +168,78 @@ struct SquareModifierData: Codable {
         case modifierListId = "modifier_list_id"
         case onByDefault = "on_by_default"
     }
+}
+
+// MARK: - Square Order API Response Models
+
+struct SquareOrderResponse: Codable {
+    let order: SquareOrder?
+    let errors: [SquareError]?
+}
+
+struct SquareOrder: Codable {
+    let id: String
+    let locationId: String
+    let state: String
+    let lineItems: [SquareOrderLineItem]?
+    let fulfillments: [SquareOrderFulfillment]?
+    let createdAt: String?
+    let updatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case locationId = "location_id"
+        case state
+        case lineItems = "line_items"
+        case fulfillments
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct SquareOrderLineItem: Codable {
+    let uid: String?
+    let name: String
+    let quantity: String
+    let basePriceMoney: SquareMoney?
+    let totalMoney: SquareMoney?
+    let note: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case uid, name, quantity, note
+        case basePriceMoney = "base_price_money"
+        case totalMoney = "total_money"
+    }
+}
+
+struct SquareOrderFulfillment: Codable {
+    let uid: String?
+    let type: String
+    let state: String
+    let pickupDetails: SquarePickupDetails?
+    
+    enum CodingKeys: String, CodingKey {
+        case uid, type, state
+        case pickupDetails = "pickup_details"
+    }
+}
+
+struct SquarePickupDetails: Codable {
+    let recipient: SquareRecipient?
+    let pickupAt: String?
+    let note: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case recipient
+        case pickupAt = "pickup_at"
+        case note
+    }
+}
+
+struct SquareRecipient: Codable {
+    let displayName: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
+    }
 } 

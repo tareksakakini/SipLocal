@@ -4,6 +4,7 @@ struct PastOrdersView: View {
     @EnvironmentObject var orderManager: OrderManager
     @Environment(\.presentationMode) var presentationMode
     @State private var showClearAllConfirmation = false
+    @State private var isRefreshing = false
     
     var body: some View {
         NavigationStack {
@@ -33,10 +34,27 @@ struct PastOrdersView: View {
                 
                 if !orderManager.orders.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Clear All") {
-                            showClearAllConfirmation = true
+                        HStack {
+                            Button(action: {
+                                Task {
+                                    isRefreshing = true
+                                    await orderManager.syncOrderStatusesWithSquare()
+                                    isRefreshing = false
+                                }
+                            }) {
+                                Image(systemName: isRefreshing ? "arrow.clockwise.circle.fill" : "arrow.clockwise")
+                                    .font(.system(size: 16, weight: .medium))
+                                    .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                                    .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
+                            }
+                            .foregroundColor(.blue)
+                            .disabled(isRefreshing)
+                            
+                            Button("Clear All") {
+                                showClearAllConfirmation = true
+                            }
+                            .foregroundColor(.red)
                         }
-                        .foregroundColor(.red)
                     }
                 }
             }
@@ -105,9 +123,16 @@ struct OrderRow: View {
             // Main order info
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(order.coffeeShop.name)
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                    HStack {
+                        Text(order.coffeeShop.name)
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        
+                        Spacer()
+                        
+                        // Status indicator
+                        statusBadge
+                    }
                     
                     Text(order.coffeeShop.address)
                         .font(.caption)
@@ -234,6 +259,85 @@ struct OrderRow: View {
         }
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+    }
+    
+    private var statusBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: statusIcon)
+                .font(.caption)
+            
+            Text(statusDisplayText)
+                .font(.caption)
+                .fontWeight(.medium)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(statusColor.opacity(0.1))
+        .foregroundColor(statusColor)
+        .cornerRadius(8)
+    }
+    
+    private var statusDisplayText: String {
+        switch order.status {
+        case .submitted:
+            return "Submitted"
+        case .inProgress:
+            return "In Progress"
+        case .ready:
+            return "Ready"
+        case .completed:
+            return "Completed"
+        case .cancelled:
+            return "Cancelled"
+        case .draft:
+            return "Draft"
+        case .pending:
+            return "Pending"
+        case .active:
+            return "Active"
+        }
+    }
+    
+    private var statusIcon: String {
+        switch order.status {
+        case .submitted:
+            return "doc.text"
+        case .inProgress:
+            return "clock.fill"
+        case .ready:
+            return "checkmark.circle.fill"
+        case .completed:
+            return "folder.fill"
+        case .cancelled:
+            return "xmark.circle.fill"
+        case .draft:
+            return "doc.text"
+        case .pending:
+            return "hourglass"
+        case .active:
+            return "clock.fill" // Legacy support
+        }
+    }
+    
+    private var statusColor: Color {
+        switch order.status {
+        case .submitted:
+            return .orange
+        case .inProgress:
+            return .blue
+        case .ready:
+            return .green
+        case .completed:
+            return .gray
+        case .cancelled:
+            return .red
+        case .draft:
+            return .gray
+        case .pending:
+            return .orange
+        case .active:
+            return .blue // Legacy support
+        }
     }
 }
 

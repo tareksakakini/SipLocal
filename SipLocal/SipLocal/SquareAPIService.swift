@@ -32,6 +32,26 @@ class SquareAPIService {
         }
     }
     
+    // MARK: - Order Status Fetching
+    
+    func fetchOrderStatus(orderId: String, merchantId: String) async throws -> OrderStatus {
+        do {
+            // First, fetch the merchant tokens from the backend
+            let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+            
+            let squareOrder = try await fetchSquareOrder(orderId: orderId, credentials: credentials)
+            
+            // Convert Square order state to our OrderStatus
+            let orderStatus = convertSquareOrderToOrderStatus(squareOrder)
+            
+            return orderStatus
+            
+        } catch {
+            print("❌ SquareAPIService: Error fetching order status: \(error)")
+            throw error
+        }
+    }
+    
     // MARK: - Private Functions
     
     private func fetchCatalogObjects(credentials: SquareCredentials) async throws -> [SquareCatalogObject] {
@@ -102,17 +122,45 @@ class SquareAPIService {
         let images = objects.filter { $0.type == "IMAGE" }
         let modifierLists = objects.filter { $0.type == "MODIFIER_LIST" }
         
-        print("DEBUG: Found \(categories.count) categories, \(items.count) items, \(images.count) images, and \(modifierLists.count) modifier lists")
+        // Create image mapping for quick lookup
+        let imageMapping: [String: String] = Dictionary(uniqueKeysWithValues: images.compactMap { imageObject in
+            guard let imageData = imageObject.imageData, let url = imageData.url else { return nil }
+            return (imageObject.id, url)
+        })
         
-        // Create image mapping (image ID -> image URL)
-        let imageMapping = createImageMapping(from: images)
+        // Create modifier list mapping for quick lookup
+        let modifierListMapping: [String: MenuItemModifierList] = Dictionary(uniqueKeysWithValues: modifierLists.compactMap { modifierListObject in
+            guard let modifierListData = modifierListObject.modifierListData else { return nil }
+            
+            // Convert SquareModifierListData to MenuItemModifierList
+            let modifiers = modifierListData.modifiers?.compactMap { squareModifier -> MenuItemModifier? in
+                guard let modifierData = squareModifier.modifierData else { return nil }
+                
+                // Convert price from cents to dollars
+                let priceInCents = modifierData.priceMoney?.amount ?? 0
+                let price = Double(priceInCents) / 100.0
+                
+                return MenuItemModifier(
+                    id: squareModifier.id,
+                    name: modifierData.name,
+                    price: price,
+                    isDefault: modifierData.onByDefault ?? false
+                )
+            } ?? []
+            
+            return (modifierListObject.id, MenuItemModifierList(
+                id: modifierListObject.id,
+                name: modifierListData.name,
+                selectionType: modifierListData.selectionType ?? "SINGLE",
+                minSelections: 0, // Will be updated by getModifierLists
+                maxSelections: 1, // Will be updated by getModifierLists
+                modifiers: modifiers
+            ))
+        })
         
-        // Create modifier list mapping (modifier list ID -> modifier list data)
-        let modifierListMapping = createModifierListMapping(from: modifierLists)
-        
-        // Create menu categories
+        // Process categories and their items
+        var processedItemIds = Set<String>()
         var menuCategories: [MenuCategory] = []
-        var processedItemIds: Set<String> = []
         
         for categoryObject in categories {
             guard let categoryData = categoryObject.categoryData else { continue }
@@ -157,19 +205,15 @@ class SquareAPIService {
             }
             
             if !categoryItems.isEmpty {
-                let menuCategory = MenuCategory(
-                    name: categoryData.name,
-                    items: categoryItems
-                )
-                menuCategories.append(menuCategory)
+                menuCategories.append(MenuCategory(name: categoryData.name, items: categoryItems))
             }
         }
         
-        // Handle uncategorized items (items without a category or items that didn't match any category)
-        let uncategorizedItems = items.compactMap { itemObject -> MenuItem? in
+        // Add any remaining items that weren't assigned to categories
+        let remainingItems = items.compactMap { itemObject -> MenuItem? in
             guard let itemData = itemObject.itemData else { return nil }
             
-            // Skip items that were already processed
+            // Skip if already processed
             guard !processedItemIds.contains(itemObject.id) else { return nil }
             
             // Process all variations to get size options
@@ -188,7 +232,7 @@ class SquareAPIService {
             let customizations = extractCustomizationTypes(from: modifierLists)
             
             return MenuItem(
-                id: itemObject.id, // <-- Pass unique Square id
+                id: itemObject.id,
                 name: itemData.name,
                 price: basePrice,
                 variations: variations.isEmpty ? nil : variations,
@@ -198,48 +242,12 @@ class SquareAPIService {
             )
         }
         
-        // If there are uncategorized items, add them to an "Other" category
-        if !uncategorizedItems.isEmpty {
-            menuCategories.append(MenuCategory(name: "Other", items: uncategorizedItems))
+        if !remainingItems.isEmpty {
+            menuCategories.append(MenuCategory(name: "Other", items: remainingItems))
         }
         
-        // If no categories found at all, create a default "Menu" category with all items
-        if menuCategories.isEmpty && !items.isEmpty {
-            let allItems = items.compactMap { itemObject -> MenuItem? in
-                guard let itemData = itemObject.itemData else { return nil }
-                
-                // Process all variations to get size options
-                let variations = processItemVariations(itemData.variations)
-                
-                // Get base price from first variation for backward compatibility
-                let basePrice = variations.first?.price ?? 0.0
-                
-                // Get modifier lists for this item
-                let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
-                
-                // Get image URL for this item
-                let imageURL = getImageURL(for: itemData, from: imageMapping)
-                
-                // Keep legacy customizations for backward compatibility
-                let customizations = extractCustomizationTypes(from: modifierLists)
-                
-                return MenuItem(
-                    id: itemObject.id, // <-- Pass unique Square id
-                    name: itemData.name,
-                    price: basePrice,
-                    variations: variations.isEmpty ? nil : variations,
-                    customizations: customizations,
-                    imageURL: imageURL,
-                    modifierLists: modifierLists
-                )
-            }
-            
-            if !allItems.isEmpty {
-                menuCategories.append(MenuCategory(name: "Menu", items: allItems))
-            }
-        }
-        
-        return menuCategories
+        // Sort by ordinal to maintain consistent ordering
+        return menuCategories.sorted { $0.name < $1.name }
     }
     
     private func createModifierListMapping(from modifierLists: [SquareCatalogObject]) -> [String: MenuItemModifierList] {
@@ -384,6 +392,101 @@ class SquareAPIService {
         let imageURL = imageMapping[firstImageId]
         print("DEBUG: Item '\(itemData.name)' -> imageId: \(firstImageId) -> URL: \(imageURL ?? "nil")")
         return imageURL
+    }
+    
+    private func fetchSquareOrder(orderId: String, credentials: SquareCredentials) async throws -> SquareOrder {
+        let baseURL = "https://connect.squareup.com/v2/orders/\(orderId)"
+        
+        guard let url = URL(string: baseURL) else {
+            throw SquareAPIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw SquareAPIError.invalidResponse
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                // Try to decode error response
+                if let errorResponse = try? JSONDecoder().decode(SquareErrorResponse.self, from: data) {
+                    throw SquareAPIError.apiError(errorResponse.errors?.first?.detail ?? "Unknown error")
+                }
+                throw SquareAPIError.httpError(httpResponse.statusCode)
+            }
+            
+            let orderResponse = try JSONDecoder().decode(SquareOrderResponse.self, from: data)
+            
+            guard let order = orderResponse.order else {
+                throw SquareAPIError.apiError("Order not found")
+            }
+            
+            return order
+            
+        } catch {
+            if error is SquareAPIError {
+                throw error
+            }
+            throw SquareAPIError.networkError(error)
+        }
+    }
+    
+    private func convertSquareOrderStateToOrderStatus(_ squareState: String) -> OrderStatus {
+        switch squareState.uppercased() {
+        case "OPEN":
+            // For Square, OPEN means the order is active and being processed
+            // We'll check fulfillment states to determine the exact status
+            return .inProgress
+        case "COMPLETED":
+            return .completed
+        case "CANCELED":
+            return .cancelled
+        case "DRAFT":
+            return .draft
+        case "PENDING":
+            return .pending
+        default:
+            // Default to submitted for unknown states
+            return .submitted
+        }
+    }
+    
+    private func convertSquareOrderToOrderStatus(_ squareOrder: SquareOrder) -> OrderStatus {
+        // First check the main order state
+        let baseStatus = convertSquareOrderStateToOrderStatus(squareOrder.state)
+        
+        // If the order is OPEN, check fulfillment states for more specific status
+        if baseStatus == .inProgress {
+            // Check fulfillment states to determine if it's ready for pickup
+            if let fulfillments = squareOrder.fulfillments {
+                for fulfillment in fulfillments {
+                    if fulfillment.type == "PICKUP" {
+                        switch fulfillment.state.uppercased() {
+                        case "PROPOSED":
+                            return .submitted // Order submitted, waiting for merchant
+                        case "RESERVED":
+                            return .inProgress // Merchant has accepted and is preparing
+                        case "PREPARED":
+                            return .ready // Order is ready for pickup
+                        case "FULFILLED":
+                            return .completed // Order has been picked up
+                        case "CANCELED":
+                            return .cancelled
+                        default:
+                            return .inProgress
+                        }
+                    }
+                }
+            }
+        }
+        
+        return baseStatus
     }
 }
 

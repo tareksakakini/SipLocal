@@ -284,7 +284,8 @@ struct CheckoutView: View {
                                     items: cartManager.items,
                                     totalAmount: cartManager.totalPrice,
                                     transactionId: transaction.transactionId,
-                                    receiptUrl: transaction.receiptUrl // Pass receiptUrl to order
+                                    receiptUrl: transaction.receiptUrl, // Pass receiptUrl to order
+                                    squareOrderId: transaction.orderId // Pass Square order ID
                                 )
                             }
                             cartManager.clearCart()

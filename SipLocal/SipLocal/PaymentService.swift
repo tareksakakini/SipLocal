@@ -6,6 +6,7 @@ struct TransactionResult {
     let transactionId: String
     let message: String
     let receiptUrl: String? // Add receiptUrl to transaction result
+    let orderId: String? // Square order ID for status fetching
 }
 
 // A simple enum for our payment errors
@@ -73,10 +74,12 @@ class PaymentService {
                success == true,
                let transactionId = data["transactionId"] as? String {
                 let receiptUrl = data["receiptUrl"] as? String // Parse receiptUrl if present
+                let orderId = data["orderId"] as? String // Parse orderId if present
                 let transactionResult = TransactionResult(
                     transactionId: transactionId,
                     message: "Payment successful!",
-                    receiptUrl: receiptUrl
+                    receiptUrl: receiptUrl,
+                    orderId: orderId
                 )
                 print("Firebase function returned success: \(transactionId), receiptUrl: \(receiptUrl ?? "nil")")
                 return .success(transactionResult)

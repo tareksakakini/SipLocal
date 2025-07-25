@@ -332,6 +332,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       return {
         success: true,
         transactionId: payment.id,
+        orderId: orderId, // Include Square order ID for status fetching
         status: payment.status,
         amount: payment.amountMoney?.amount?.toString(),
         currency: payment.amountMoney?.currency,
