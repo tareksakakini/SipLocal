@@ -11,6 +11,7 @@ struct Order: Codable, Identifiable {
     let receiptUrl: String? // Square receipt URL for this order
     
     enum OrderStatus: String, Codable, CaseIterable {
+        case active = "active"
         case completed = "completed"
         case pending = "pending"
         case cancelled = "cancelled"
@@ -53,7 +54,7 @@ class OrderManager: ObservableObject {
             items: items,
             totalAmount: totalAmount,
             transactionId: transactionId,
-            status: .completed,
+            status: .active,
             receiptUrl: receiptUrl // Pass to struct
         )
         

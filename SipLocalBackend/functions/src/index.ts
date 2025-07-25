@@ -228,6 +228,20 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         order: {
           locationId: locationId,
           lineItems,
+          state: "OPEN", // Explicitly set order to OPEN (active) state
+          fulfillments: [
+            {
+              type: "PICKUP",
+              state: "PROPOSED",
+              pickupDetails: {
+                recipient: {
+                  displayName: paymentData.customerName || "Customer"
+                },
+                pickupAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
+                note: "Order placed via mobile app - awaiting preparation"
+              }
+            }
+          ]
         },
         idempotencyKey: uuidv4(),
       };
