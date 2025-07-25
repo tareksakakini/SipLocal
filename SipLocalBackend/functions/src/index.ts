@@ -21,6 +21,7 @@ interface PaymentData {
   items?: Array<{ name: string; quantity: number; price: number; customizations?: string }>;
   customerName?: string;
   customerEmail?: string;
+  pickupTime?: string; // ISO string for pickup time
 }
 
 
@@ -88,6 +89,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     items: requestData.items || [],
     customerName: requestData.customerName,
     customerEmail: requestData.customerEmail,
+    pickupTime: requestData.pickupTime,
   };
   
   // 1. Log the request for debugging
@@ -237,7 +239,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
                 recipient: {
                   displayName: paymentData.customerName || "Customer"
                 },
-                pickupAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes from now
+                pickupAt: paymentData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(), // Use provided time or default to 5 minutes from now
                 note: "Order placed via mobile app - awaiting preparation"
               }
             }

@@ -17,6 +17,8 @@ struct CheckoutView: View {
     @State private var completedOrderTotal: Double = 0.0
     @State private var completedOrderShop: CoffeeShop?
     @State private var userData: UserData? = nil // <-- Store user data
+    @State private var selectedPickupTime = Date().addingTimeInterval(5 * 60) // Default to 5 minutes from now
+    @State private var showingTimePicker = false
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
@@ -72,7 +74,38 @@ struct CheckoutView: View {
                         }
                         .padding(.horizontal)
                         
-                        Spacer().frame(height: 20)
+                        // Pickup Time Section
+                        VStack(spacing: 12) {
+                            HStack {
+                                Text("Pickup Time")
+                                    .font(.headline)
+                                    .fontWeight(.medium)
+                                Spacer()
+                            }
+                            
+                            Button(action: {
+                                showingTimePicker = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "clock")
+                                        .foregroundColor(.secondary)
+                                    
+                                    Text(formatPickupTime(selectedPickupTime))
+                                        .foregroundColor(.primary)
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "chevron.right")
+                                        .foregroundColor(.secondary)
+                                        .font(.caption)
+                                }
+                                .padding()
+                                .background(Color.white)
+                                .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 20)
                     }
                 }
                 
@@ -143,6 +176,11 @@ struct CheckoutView: View {
         }
         .sheet(isPresented: $showingCardEntry) {
             CardEntryView(delegate: self.cardEntryDelegate)
+        }
+        .sheet(isPresented: $showingTimePicker) {
+            PickupTimeSelectionView(selectedTime: $selectedPickupTime, isPresented: $showingTimePicker)
+                .presentationDetents([.fraction(0.4)])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingPaymentResult) {
             PaymentResultView(
@@ -227,7 +265,8 @@ struct CheckoutView: View {
                         oauthToken: credentials.oauth_token,
                         cartItems: cartManager.items,
                         customerName: userData.fullName,
-                        customerEmail: userData.email
+                        customerEmail: userData.email,
+                        pickupTime: selectedPickupTime
                     )
                     await MainActor.run {
                         switch result {
@@ -269,6 +308,12 @@ struct CheckoutView: View {
                 }
             }
         }
+    }
+    
+    private func formatPickupTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
     }
 }
 
@@ -327,6 +372,65 @@ struct CheckoutItemRow: View {
         .padding()
         .background(Color.white)
         .cornerRadius(12)
+    }
+}
+
+struct PickupTimeSelectionView: View {
+    @Binding var selectedTime: Date
+    @Binding var isPresented: Bool
+    @State private var tempTime: Date
+    
+    init(selectedTime: Binding<Date>, isPresented: Binding<Bool>) {
+        self._selectedTime = selectedTime
+        self._isPresented = isPresented
+        self._tempTime = State(initialValue: selectedTime.wrappedValue)
+    }
+    
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                DatePicker(
+                    "",
+                    selection: $tempTime,
+                    in: Date()...,
+                    displayedComponents: [.hourAndMinute]
+                )
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .padding()
+            }
+            .navigationTitle("Pickup Time")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        isPresented = false
+                    }
+                }
+                
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Done") {
+                        // Ensure the selected time is on today's date
+                        let calendar = Calendar.current
+                        let timeComponents = calendar.dateComponents([.hour, .minute], from: tempTime)
+                        let todayWithSelectedTime = calendar.dateBySettingTime(of: Date(), hour: timeComponents.hour ?? 0, minute: timeComponents.minute ?? 0)
+                        selectedTime = todayWithSelectedTime ?? tempTime
+                        isPresented = false
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+}
+
+extension Calendar {
+    func dateBySettingTime(of date: Date, hour: Int, minute: Int) -> Date? {
+        var components = self.dateComponents([.year, .month, .day], from: date)
+        components.hour = hour
+        components.minute = minute
+        components.second = 0
+        return self.date(from: components)
     }
 }
 

@@ -27,7 +27,7 @@ class PaymentService {
     private let functions = Functions.functions()
     
     // This function calls our Firebase Cloud Function to process the payment
-    func processPayment(nonce: String, amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String) async -> Result<TransactionResult, PaymentError> {
+    func processPayment(nonce: String, amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, pickupTime: Date? = nil) async -> Result<TransactionResult, PaymentError> {
         // Convert dollars to cents for Square API (multiply by 100)
         let amountInCents = Int(amount * 100)
         
@@ -46,7 +46,7 @@ class PaymentService {
             ]
         }
         
-        let callData: [String: Any] = [
+        var callData: [String: Any] = [
             "nonce": nonce,
             "amount": amountInCents,
             "merchantId": merchantId,
@@ -55,6 +55,12 @@ class PaymentService {
             "customerName": customerName,
             "customerEmail": customerEmail
         ]
+        
+        // Add pickup time if provided
+        if let pickupTime = pickupTime {
+            let formatter = ISO8601DateFormatter()
+            callData["pickupTime"] = formatter.string(from: pickupTime)
+        }
         print("Calling Firebase function with data: \(callData)")
         
         do {
