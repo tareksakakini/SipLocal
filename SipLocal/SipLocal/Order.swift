@@ -42,15 +42,17 @@ class OrderManager: ObservableObject {
     @Published var orders: [Order] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
+    @Published var isRealtimeActive = false
     
     private let firestore = Firestore.firestore()
     private let auth = Auth.auth()
+    private var listenerRegistration: ListenerRegistration?
     
     init() {
         // Load orders when user is authenticated
         if auth.currentUser != nil {
             Task {
-                await fetchOrders()
+                await setupRealtimeListener()
             }
         }
         
@@ -58,84 +60,136 @@ class OrderManager: ObservableObject {
         auth.addStateDidChangeListener { [weak self] _, user in
             if user != nil {
                 Task {
-                    await self?.fetchOrders()
+                    await self?.setupRealtimeListener()
                 }
             } else {
                 DispatchQueue.main.async {
                     self?.orders = []
+                    self?.removeListener()
                 }
             }
         }
+    }
+    
+    deinit {
+        removeListener()
+    }
+    
+    // MARK: - Real-time Listener Setup
+    
+    @MainActor
+    private func setupRealtimeListener() async {
+        guard let userId = auth.currentUser?.uid else {
+            print("OrderManager: No user ID available")
+            return
+        }
+        
+        print("OrderManager: Setting up real-time listener for user ID: \(userId)")
+        
+        // Remove any existing listener
+        removeListener()
+        
+        isLoading = true
+        errorMessage = nil
+        
+        // Set up real-time listener for user's orders with more explicit configuration
+        listenerRegistration = firestore
+            .collection("orders")
+            .whereField("userId", isEqualTo: userId)
+            .addSnapshotListener(includeMetadataChanges: true) { [weak self] snapshot, error in
+                Task { @MainActor in
+                    guard let self = self else { return }
+                    
+                    if let error = error {
+                        print("OrderManager: Real-time listener error: \(error)")
+                        self.errorMessage = "Failed to load orders: \(error.localizedDescription)"
+                        self.isLoading = false
+                        return
+                    }
+                    
+                    guard let snapshot = snapshot else {
+                        print("OrderManager: No snapshot received")
+                        self.isLoading = false
+                        return
+                    }
+                    
+                    print("OrderManager: 🔄 REAL-TIME UPDATE TRIGGERED - \(snapshot.documents.count) documents")
+                    print("OrderManager: Snapshot metadata - hasPendingWrites: \(snapshot.metadata.hasPendingWrites), fromCache: \(snapshot.metadata.isFromCache)")
+                    
+                    // Only process if this is not from cache or if it's the initial load
+                    if snapshot.metadata.isFromCache && self.orders.count > 0 {
+                        print("OrderManager: Skipping cache-only update")
+                        return
+                    }
+                    
+                    var fetchedOrders: [Order] = []
+                    
+                    for document in snapshot.documents {
+                        print("OrderManager: Processing document: \(document.documentID)")
+                        
+                        if let order = try? document.data(as: FirestoreOrder.self) {
+                            print("OrderManager: Successfully decoded FirestoreOrder: \(order.transactionId) with status: \(order.status ?? "nil")")
+                            // Convert FirestoreOrder to Order
+                            if let convertedOrder = order.toOrder() {
+                                fetchedOrders.append(convertedOrder)
+                                print("OrderManager: Successfully converted to Order: \(convertedOrder.id) with status: \(convertedOrder.status)")
+                            } else {
+                                print("OrderManager: Failed to convert FirestoreOrder to Order")
+                            }
+                        } else {
+                            print("OrderManager: Failed to decode document as FirestoreOrder")
+                            print("OrderManager: Document data: \(document.data())")
+                            
+                            // Try to decode with more detailed error
+                            do {
+                                let _ = try document.data(as: FirestoreOrder.self)
+                            } catch {
+                                print("OrderManager: Decoding error details: \(error)")
+                            }
+                        }
+                    }
+                    
+                    // Sort orders by creation date (newest first)
+                    let oldOrders = self.orders
+                    self.orders = fetchedOrders.sorted { $0.date > $1.date }
+                    print("OrderManager: Real-time update - \(fetchedOrders.count) orders processed")
+                    
+                    // Check if any order statuses changed
+                    for (index, newOrder) in self.orders.enumerated() {
+                        if index < oldOrders.count {
+                            let oldOrder = oldOrders[index]
+                            if oldOrder.status != newOrder.status {
+                                print("OrderManager: 🎉 STATUS CHANGE DETECTED! Order \(newOrder.id) changed from \(oldOrder.status) to \(newOrder.status)")
+                            }
+                        }
+                    }
+                    
+                    self.isLoading = false
+                    self.isRealtimeActive = true
+                }
+            }
+        
+        print("OrderManager: Real-time listener setup complete")
+    }
+    
+    private func removeListener() {
+        listenerRegistration?.remove()
+        listenerRegistration = nil
+        print("OrderManager: Removed real-time listener")
     }
     
     // MARK: - Firestore Operations
     
     @MainActor
     func fetchOrders() async {
-        guard let userId = auth.currentUser?.uid else {
-            print("OrderManager: No user ID available")
-            return
-        }
-        
-        print("OrderManager: Fetching orders for user ID: \(userId)")
-        
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            let snapshot = try await firestore
-                .collection("orders")
-                .whereField("userId", isEqualTo: userId)
-                .getDocuments()
-            
-            print("OrderManager: Raw Firestore response - \(snapshot.documents.count) documents found")
-            
-            // Debug: Log all documents to see what's in Firestore
-            for (index, document) in snapshot.documents.enumerated() {
-                print("OrderManager: Document \(index): \(document.data())")
-            }
-            
-            var fetchedOrders: [Order] = []
-            
-            for document in snapshot.documents {
-                print("OrderManager: Attempting to decode document: \(document.documentID)")
-                
-                if let order = try? document.data(as: FirestoreOrder.self) {
-                    print("OrderManager: Successfully decoded FirestoreOrder: \(order.transactionId)")
-                    // Convert FirestoreOrder to Order
-                    if let convertedOrder = order.toOrder() {
-                        fetchedOrders.append(convertedOrder)
-                        print("OrderManager: Successfully converted to Order: \(convertedOrder.id)")
-                    } else {
-                        print("OrderManager: Failed to convert FirestoreOrder to Order")
-                    }
-                } else {
-                    print("OrderManager: Failed to decode document as FirestoreOrder")
-                    print("OrderManager: Document data: \(document.data())")
-                    
-                    // Try to decode with more detailed error
-                    do {
-                        let _ = try document.data(as: FirestoreOrder.self)
-                    } catch {
-                        print("OrderManager: Decoding error details: \(error)")
-                    }
-                }
-            }
-            
-            // Sort orders by creation date (newest first)
-            self.orders = fetchedOrders.sorted { $0.date > $1.date }
-            print("OrderManager: Fetched \(fetchedOrders.count) orders from Firestore")
-            
-        } catch {
-            print("OrderManager: Error fetching orders: \(error)")
-            errorMessage = "Failed to load orders: \(error.localizedDescription)"
-        }
-        
-        isLoading = false
+        // This method now just sets up the real-time listener
+        await setupRealtimeListener()
     }
     
     func refreshOrders() async {
-        await fetchOrders()
+        // Force a refresh by temporarily removing and re-adding the listener
+        removeListener()
+        await setupRealtimeListener()
     }
     
     // MARK: - Order Status Updates
@@ -157,8 +211,8 @@ class OrderManager: ObservableObject {
                     "updatedAt": FieldValue.serverTimestamp()
                 ])
             
-            // Refresh orders after update
-            await fetchOrders()
+            // No need to manually refresh - the real-time listener will handle updates automatically
+            print("OrderManager: Updated order status to \(newStatus.rawValue) for order \(orderId)")
             
         } catch {
             print("OrderManager: Error updating order status: \(error)")
