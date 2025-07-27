@@ -22,6 +22,19 @@ interface PaymentData {
   customerName?: string;
   customerEmail?: string;
   pickupTime?: string; // ISO string for pickup time
+  userId?: string; // Add user ID for user-specific orders
+  coffeeShopData?: { // Add coffee shop data for order display
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    phone: string;
+    website: string;
+    description: string;
+    imageName: string;
+    stampName: string;
+  };
 }
 
 
@@ -90,6 +103,8 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     customerName: requestData.customerName,
     customerEmail: requestData.customerEmail,
     pickupTime: requestData.pickupTime,
+    userId: requestData.userId, // Add userId to paymentData
+    coffeeShopData: requestData.coffeeShopData, // Add coffeeShopData to paymentData
   };
   
   // 1. Log the request for debugging
@@ -307,6 +322,14 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         paymentMethod: "card",
         receiptNumber: payment.receiptNumber || null,
         receiptUrl: payment.receiptUrl || null,
+        userId: paymentData.userId, // Add userId to orderData
+        coffeeShopData: paymentData.coffeeShopData, // Add coffeeShopData to orderData
+        items: paymentData.items || [], // Store order items
+        customerName: paymentData.customerName,
+        customerEmail: paymentData.customerEmail,
+        pickupTime: paymentData.pickupTime,
+        orderId: orderId, // Store Square order ID for status tracking
+        status: "SUBMITTED", // Initial order status
       };
 
       try {

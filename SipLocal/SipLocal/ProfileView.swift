@@ -221,6 +221,10 @@ struct ProfileView: View {
                                                 Text("\(orderManager.orders.count) orders")
                                                     .font(.system(size: 12, weight: .medium))
                                                     .foregroundColor(.secondary)
+                                            } else if orderManager.isLoading {
+                                                Text("Loading...")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.secondary)
                                             }
                                         }
                                         Spacer()

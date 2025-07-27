@@ -73,6 +73,23 @@ struct CoffeeShop: Codable, Identifiable {
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
     }
+    
+    // Helper method to convert to dictionary for backend
+    func toDictionary() -> [String: Any] {
+        return [
+            "id": id,
+            "name": name,
+            "address": address,
+            "latitude": latitude,
+            "longitude": longitude,
+            "phone": phone,
+            "website": website,
+            "description": description,
+            "imageName": imageName,
+            "stampName": stampName,
+            "merchantId": merchantId
+        ]
+    }
 }
 
 class DataService {

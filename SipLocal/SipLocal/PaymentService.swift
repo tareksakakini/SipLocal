@@ -28,7 +28,7 @@ class PaymentService {
     private let functions = Functions.functions()
     
     // This function calls our Firebase Cloud Function to process the payment
-    func processPayment(nonce: String, amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, pickupTime: Date? = nil) async -> Result<TransactionResult, PaymentError> {
+    func processPayment(nonce: String, amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<TransactionResult, PaymentError> {
         // Convert dollars to cents for Square API (multiply by 100)
         let amountInCents = Int(amount * 100)
         
@@ -54,7 +54,9 @@ class PaymentService {
             "oauth_token": oauthToken,
             "items": itemsForBackend,
             "customerName": customerName,
-            "customerEmail": customerEmail
+            "customerEmail": customerEmail,
+            "userId": userId,
+            "coffeeShopData": coffeeShop.toDictionary()
         ]
         
         // Add pickup time if provided

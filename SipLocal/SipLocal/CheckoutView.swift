@@ -267,6 +267,8 @@ struct CheckoutView: View {
                         cartItems: cartManager.items,
                         customerName: userData.fullName,
                         customerEmail: userData.email,
+                        userId: userId,
+                        coffeeShop: cartManager.items.first!.shop,
                         pickupTime: selectedPickupTime
                     )
                     await MainActor.run {
@@ -278,15 +280,10 @@ struct CheckoutView: View {
                             completedOrderItems = cartManager.items
                             completedOrderTotal = cartManager.totalPrice
                             completedOrderShop = cartManager.items.first?.shop
-                            if let shop = cartManager.items.first?.shop {
-                                orderManager.addOrder(
-                                    coffeeShop: shop,
-                                    items: cartManager.items,
-                                    totalAmount: cartManager.totalPrice,
-                                    transactionId: transaction.transactionId,
-                                    receiptUrl: transaction.receiptUrl, // Pass receiptUrl to order
-                                    squareOrderId: transaction.orderId // Pass Square order ID
-                                )
+                            // Orders are now stored in Firestore by the backend
+                            // Refresh orders to show the new order
+                            Task {
+                                await orderManager.refreshOrders()
                             }
                             cartManager.clearCart()
                         case .failure(let error):

@@ -9,7 +9,11 @@ struct PastOrdersView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if orderManager.orders.isEmpty {
+                if orderManager.isLoading {
+                    loadingView
+                } else if let errorMessage = orderManager.errorMessage {
+                    errorView(message: errorMessage)
+                } else if orderManager.orders.isEmpty {
                     emptyStateView
                 } else {
                     ordersList
@@ -48,7 +52,7 @@ struct PastOrdersView: View {
                                     .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
                             }
                             .foregroundColor(.blue)
-                            .disabled(isRefreshing)
+        
                             
                             Button("Clear All") {
                                 showClearAllConfirmation = true
@@ -65,12 +69,76 @@ struct PastOrdersView: View {
             titleVisibility: .visible
         ) {
             Button("Clear All Orders", role: .destructive) {
-                orderManager.clearAllOrders()
+                Task {
+                    await orderManager.clearAllOrders()
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("This action cannot be undone. All of your past orders will be permanently deleted.")
         }
+        .refreshable {
+            await orderManager.refreshOrders()
+        }
+        .onAppear {
+            // Debug: Check if orders are being fetched when view appears
+            print("PastOrdersView: View appeared, checking orders...")
+            Task {
+                await orderManager.fetchOrders()
+            }
+        }
+    }
+    
+    private var loadingView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            ProgressView()
+                .scaleEffect(1.5)
+            
+            Text("Loading orders...")
+                .font(.body)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGray6))
+    }
+    
+    private func errorView(message: String) -> some View {
+        VStack(spacing: 24) {
+            Spacer()
+            
+            VStack(spacing: 16) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(.system(size: 60))
+                    .foregroundColor(.orange)
+                
+                VStack(spacing: 8) {
+                    Text("Error Loading Orders")
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                    
+                    Text(message)
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
+                }
+            }
+            
+            Button("Try Again") {
+                Task {
+                    await orderManager.refreshOrders()
+                }
+            }
+            .buttonStyle(.borderedProminent)
+            
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGray6))
     }
     
     private var emptyStateView: some View {
@@ -345,48 +413,6 @@ struct OrderRow: View {
 struct PastOrdersView_Previews: PreviewProvider {
     static var previews: some View {
         PastOrdersView()
-            .environmentObject({
-                let orderManager = OrderManager()
-                // Add sample orders for preview
-                orderManager.addOrder(
-                    coffeeShop: CoffeeShop(
-                        id: "sample1",
-                        name: "Sample Coffee Shop",
-                        address: "123 Main Street, Downtown, NY 10001",
-                        latitude: 40.7128,
-                        longitude: -74.0060,
-                        phone: "(555) 123-4567",
-                        website: "https://example.com",
-                        description: "Sample description",
-                        imageName: "sample",
-                        stampName: "sample",
-                        merchantId: "SAMPLE_MERCHANT_ID"
-                    ),
-                    items: [
-                        CartItem(
-                            shop: CoffeeShop(
-                                id: "sample1",
-                                name: "Sample Coffee Shop",
-                                address: "123 Main Street, Downtown, NY 10001",
-                                latitude: 40.7128,
-                                longitude: -74.0060,
-                                phone: "(555) 123-4567",
-                                website: "https://example.com",
-                                description: "Sample description",
-                                imageName: "sample",
-                                stampName: "sample",
-                                merchantId: "SAMPLE_MERCHANT_ID"
-                            ),
-                            menuItem: MenuItem(id: "item_cappuccino", name: "Cappuccino", price: 4.50, variations: nil, customizations: nil, imageURL: nil, modifierLists: nil),
-                            category: "Coffee",
-                            quantity: 2,
-                            customizations: "Extra shot, oat milk"
-                        )
-                    ],
-                    totalAmount: 9.00,
-                    transactionId: "sq0idp-1234567890"
-                )
-                return orderManager
-            }())
+            .environmentObject(OrderManager())
     }
 }
