@@ -337,9 +337,18 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         orderRequest.order.customerId = customerId;
       }
       try {
+        functions.logger.info('Creating Square order with request:', {
+          hasLineItems: !!orderRequest.order.lineItems?.length,
+          locationId: orderRequest.order.locationId,
+          customerPresent: !!orderRequest.order.customerId
+        });
         const orderResponse = await squareClient.orders.create(orderRequest);
         orderId = orderResponse.order?.id;
-        functions.logger.info('Square order created', { orderId });
+        functions.logger.info('Square order created successfully', { 
+          orderId,
+          orderExists: !!orderResponse.order,
+          orderState: orderResponse.order?.state
+        });
       } catch (orderError: any) {
         functions.logger.error('Failed to create Square order:', orderError);
         // Surface the error to the client for debugging
@@ -364,7 +373,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         currency: "USD" as Square.Currency,
       },
       orderId: orderId,
-      autocomplete: true,
+      autocomplete: false, // Only authorize, don't complete payment yet
     };
     if (customerId) {
       request.customerId = customerId;
@@ -400,7 +409,8 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         customerEmail: paymentData.customerEmail,
         pickupTime: paymentData.pickupTime,
         orderId: orderId, // Store Square order ID for status tracking
-        status: "SUBMITTED", // Initial order status
+        status: "AUTHORIZED", // Payment authorized, awaiting confirmation
+        oauthToken: paymentData.oauth_token, // Store for completion later
       };
 
       try {
@@ -417,6 +427,50 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         functions.logger.info("Order saved to Firestore", {
           transactionId: payment.id,
         });
+
+        // Schedule order completion after 30 seconds using Cloud Tasks
+        const completionTime = new Date(Date.now() + 30000); // 30 seconds from now
+        
+        // Store the completion task info in Firestore for tracking
+        await admin.firestore()
+          .collection("completion_tasks")
+          .doc(paymentId)
+          .set({
+            paymentId: paymentId,
+            scheduledFor: completionTime,
+            status: "SCHEDULED",
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+
+        // For now, use setTimeout as fallback but add better error handling
+        setTimeout(async () => {
+          try {
+            functions.logger.info("Attempting to complete authorized order:", paymentId);
+            await completeAuthorizedOrder(paymentId);
+            
+            // Mark completion task as completed
+            await admin.firestore()
+              .collection("completion_tasks")
+              .doc(paymentId)
+              .update({
+                status: "COMPLETED",
+                completedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+              
+          } catch (error) {
+            functions.logger.error("Failed to complete authorized order:", error);
+            
+            // Mark completion task as failed
+            await admin.firestore()
+              .collection("completion_tasks")
+              .doc(paymentId)
+              .update({
+                status: "FAILED",
+                error: (error as Error).message,
+                failedAt: admin.firestore.FieldValue.serverTimestamp()
+              });
+          }
+        }, 30000);
       } catch (firestoreError) {
         functions.logger.error("Failed to save order to Firestore:", firestoreError);
         // Don't fail the payment if Firestore save fails
@@ -474,6 +528,301 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       "Payment failed. Please try again.",
       error.message,
     );
+  }
+});
+
+// Function to complete an authorized order
+async function completeAuthorizedOrder(paymentId: string) {
+  functions.logger.info("completeAuthorizedOrder called for:", paymentId);
+  
+  try {
+    const orderDoc = await admin.firestore()
+      .collection("orders")
+      .doc(paymentId)
+      .get();
+
+    if (!orderDoc.exists) {
+      functions.logger.error("Order not found for completion:", paymentId);
+      return;
+    }
+
+    const orderData = orderDoc.data();
+    functions.logger.info("Order data for completion:", {
+      paymentId,
+      status: orderData?.status,
+      hasOauthToken: !!orderData?.oauthToken,
+      hasOrderId: !!orderData?.orderId,
+      merchantId: orderData?.merchantId
+    });
+
+    if (!orderData || orderData.status !== "AUTHORIZED") {
+      functions.logger.info("Order not in AUTHORIZED state, skipping completion:", {
+        paymentId,
+        status: orderData?.status,
+        expectedStatus: "AUTHORIZED"
+      });
+      return;
+    }
+
+    // Initialize Square client
+    const squareClient = new SquareClient({
+      token: orderData.oauthToken,
+      environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+        SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    });
+
+    // Complete the payment
+    functions.logger.info("Attempting to complete Square payment:", paymentId);
+    try {
+      await squareClient.payments.complete({
+        paymentId: paymentId
+      });
+      functions.logger.info("Successfully completed Square payment:", paymentId);
+    } catch (paymentError) {
+      functions.logger.error("Failed to complete Square payment:", {
+        paymentId,
+        error: paymentError,
+        errorMessage: (paymentError as Error).message
+      });
+      throw new Error(`Payment completion failed: ${(paymentError as Error).message}`);
+    }
+
+    // Skip Square order update - just complete the payment and update status
+    functions.logger.info("Skipping Square order update - using simplified completion flow");
+
+    // Update order status
+    functions.logger.info("Updating order status to SUBMITTED:", paymentId);
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(paymentId)
+        .update({
+          status: "SUBMITTED",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          completedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+      functions.logger.info("Successfully updated Firestore order status:", paymentId);
+    } catch (firestoreError) {
+      functions.logger.error("Failed to update Firestore order status:", {
+        paymentId,
+        error: firestoreError,
+        errorMessage: (firestoreError as Error).message
+      });
+      throw new Error(`Firestore update failed: ${(firestoreError as Error).message}`);
+    }
+
+    functions.logger.info("Successfully completed authorized order and updated Firestore:", paymentId);
+  } catch (error) {
+    functions.logger.error("Failed to complete authorized order:", error);
+    
+    // Mark order as failed
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(paymentId)
+        .update({
+          status: "FAILED",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          error: (error as Error).message || "Unknown error during completion"
+        });
+    } catch (updateError) {
+      functions.logger.error("Failed to update order status to FAILED:", updateError);
+    }
+  }
+}
+
+// Function to cancel an order
+export const cancelOrder = functions.https.onCall(async (data, context) => {
+  functions.logger.info("cancelOrder called with data:", data);
+  
+  const { paymentId } = data.data;
+  
+  if (!paymentId) {
+    functions.logger.error("Missing paymentId in request");
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Payment ID is required"
+    );
+  }
+
+  functions.logger.info("Starting cancellation for paymentId:", paymentId);
+
+  try {
+    // Get order from Firestore
+    const orderDoc = await admin.firestore()
+      .collection("orders")
+      .doc(paymentId)
+      .get();
+
+    if (!orderDoc.exists) {
+      functions.logger.error("Order not found in Firestore:", paymentId);
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Order not found"
+      );
+    }
+
+    const orderData = orderDoc.data();
+    functions.logger.info("Order data retrieved:", {
+      paymentId,
+      status: orderData?.status,
+      hasOauthToken: !!orderData?.oauthToken,
+      hasOrderId: !!orderData?.orderId,
+      merchantId: orderData?.merchantId
+    });
+
+    if (!orderData || orderData.status !== "AUTHORIZED") {
+      functions.logger.error("Order cannot be cancelled:", {
+        paymentId,
+        status: orderData?.status,
+        expectedStatus: "AUTHORIZED"
+      });
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Order cannot be cancelled. Current status: ${orderData?.status || 'unknown'}`
+      );
+    }
+
+    if (!orderData.oauthToken) {
+      functions.logger.error("Missing oauthToken in order data:", paymentId);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Missing payment credentials"
+      );
+    }
+
+    // Initialize Square client
+    const squareClient = new SquareClient({
+      token: orderData.oauthToken,
+      environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+        SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    });
+
+    // Cancel the payment authorization
+    functions.logger.info("Cancelling Square payment:", paymentId);
+    try {
+      await squareClient.payments.cancel({
+        paymentId: paymentId
+      });
+      functions.logger.info("Successfully cancelled Square payment:", paymentId);
+    } catch (paymentError) {
+      functions.logger.error("Failed to cancel Square payment:", {
+        paymentId,
+        error: paymentError
+      });
+      // Continue with order cancellation even if payment cancellation fails
+    }
+
+    // Cancel the order if it exists
+    if (orderData.orderId) {
+      functions.logger.info("Cancelling Square order:", orderData.orderId);
+      
+      try {
+        // Get the merchant's location ID
+        const merchantDoc = await admin.firestore()
+          .collection("merchant_tokens")
+          .doc(orderData.merchantId)
+          .get();
+        
+        if (!merchantDoc.exists) {
+          functions.logger.error("Merchant tokens not found:", orderData.merchantId);
+        } else {
+          const merchantData = merchantDoc.data();
+          const locationId = merchantData?.locationId;
+          
+          if (locationId) {
+            await squareClient.orders.update({
+              orderId: orderData.orderId,
+              order: {
+                locationId: locationId,
+                version: 1,
+                state: "CANCELED"
+              },
+              idempotencyKey: uuidv4()
+            });
+            functions.logger.info("Successfully cancelled Square order:", orderData.orderId);
+          } else {
+            functions.logger.error("Missing locationId for merchant:", orderData.merchantId);
+          }
+        }
+      } catch (orderError) {
+        functions.logger.error("Failed to cancel Square order:", {
+          orderId: orderData.orderId,
+          error: orderError
+        });
+        // Continue with Firestore update even if Square order cancellation fails
+      }
+    }
+
+    // Update order status in Firestore
+    functions.logger.info("Updating order status to CANCELLED:", paymentId);
+    await admin.firestore()
+      .collection("orders")
+      .doc(paymentId)
+      .update({
+        status: "CANCELLED",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+    functions.logger.info("Successfully cancelled order:", paymentId);
+    
+    return {
+      success: true,
+      message: "Order cancelled successfully"
+    };
+  } catch (error) {
+    const errorObj = error as Error;
+    functions.logger.error("Failed to cancel order - detailed error:", {
+      paymentId,
+      error: error,
+      errorMessage: errorObj.message,
+      errorStack: errorObj.stack
+    });
+    
+    // Re-throw HttpsError as-is, wrap others
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    
+    throw new functions.https.HttpsError(
+      "internal",
+      `Failed to cancel order: ${errorObj.message || 'Unknown error'}`
+    );
+  }
+});
+
+// HTTP function to manually complete authorized orders (for testing and backup)
+export const completeAuthorizedOrderHttp = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).send('Method not allowed');
+    return;
+  }
+
+  const { paymentId } = req.body;
+  
+  if (!paymentId) {
+    res.status(400).json({ error: 'paymentId is required' });
+    return;
+  }
+
+  try {
+    functions.logger.info("Manual completion requested for:", paymentId);
+    await completeAuthorizedOrder(paymentId);
+    res.status(200).json({ success: true, message: 'Order completed successfully' });
+  } catch (error) {
+    functions.logger.error("Manual completion failed:", error);
+    res.status(500).json({ error: 'Failed to complete order' });
   }
 });
 
@@ -614,12 +963,15 @@ async function handleOrderUpdated(webhookData: any) {
     // Don't override more specific statuses with general ones
     // "SUBMITTED" (from OPEN) should not override "READY", "IN_PROGRESS", etc.
     // Also prevent any status from overriding final statuses ("COMPLETED" or "CANCELLED") to avoid flickering
+    // IMPORTANT: Protect "AUTHORIZED" status from being overridden during the 30-second cancellation window
     if ((newStatus === "SUBMITTED" && currentStatus !== "SUBMITTED") || 
         (currentStatus === "COMPLETED" && newStatus !== "COMPLETED") ||
-        (currentStatus === "CANCELLED" && newStatus !== "CANCELLED")) {
+        (currentStatus === "CANCELLED" && newStatus !== "CANCELLED") ||
+        (currentStatus === "AUTHORIZED" && newStatus !== "AUTHORIZED")) {
       functions.logger.info("Skipping order state update - current status is more specific or final:", {
         currentStatus,
-        newStatus
+        newStatus,
+        reason: currentStatus === "AUTHORIZED" ? "Protecting AUTHORIZED status during cancellation window" : "Status protection"
       });
       return;
     }
@@ -728,13 +1080,16 @@ async function handleOrderFulfillmentUpdated(webhookData: any) {
         const currentStatus = currentOrderData.status;
         
         // Prevent overriding final statuses ("COMPLETED" or "CANCELLED") to avoid flickering
+        // IMPORTANT: Also protect "AUTHORIZED" status from being overridden during the 30-second cancellation window
         if ((currentStatus === "COMPLETED" && newStatus !== "COMPLETED") ||
-            (currentStatus === "CANCELLED" && newStatus !== "CANCELLED")) {
+            (currentStatus === "CANCELLED" && newStatus !== "CANCELLED") ||
+            (currentStatus === "AUTHORIZED" && newStatus !== "AUTHORIZED")) {
           functions.logger.info("Skipping fulfillment update - order already in final state:", {
             documentId: doc.id,
             orderId,
             currentStatus,
-            newStatus
+            newStatus,
+            reason: currentStatus === "AUTHORIZED" ? "Protecting AUTHORIZED status during cancellation window" : "Final status protection"
           });
           return;
         }

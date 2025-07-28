@@ -326,6 +326,8 @@ struct OrderRow: View {
     
     private var statusDisplayText: String {
         switch order.status {
+        case .authorized:
+            return "Authorized"
         case .submitted:
             return "Submitted"
         case .inProgress:
@@ -347,6 +349,8 @@ struct OrderRow: View {
     
     private var statusIcon: String {
         switch order.status {
+        case .authorized:
+            return "clock.badge.checkmark.fill"
         case .submitted:
             return "doc.text"
         case .inProgress:
@@ -368,6 +372,8 @@ struct OrderRow: View {
     
     private var statusColor: Color {
         switch order.status {
+        case .authorized:
+            return .orange
         case .submitted:
             return .orange
         case .inProgress:

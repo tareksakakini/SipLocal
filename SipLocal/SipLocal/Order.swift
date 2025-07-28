@@ -1,8 +1,10 @@
 import Foundation
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseFunctions
 
 enum OrderStatus: String, Codable, CaseIterable {
+    case authorized = "AUTHORIZED"   // Payment authorized, awaiting confirmation
     case submitted = "SUBMITTED"     // Order just placed, waiting for merchant
     case inProgress = "IN_PROGRESS"  // Merchant is preparing the order
     case ready = "READY"             // Order is ready for pickup
@@ -11,6 +13,20 @@ enum OrderStatus: String, Codable, CaseIterable {
     case draft = "DRAFT"             // Order is in draft state (legacy)
     case pending = "PENDING"         // Order is pending (legacy)
     case active = "active"           // Legacy status for backward compatibility
+}
+
+enum OrderError: Error, LocalizedError {
+    case notAuthenticated
+    case cancellationFailed(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated:
+            return "User not authenticated"
+        case .cancellationFailed(let message):
+            return "Failed to cancel order: \(message)"
+        }
+    }
 }
 
 struct Order: Codable, Identifiable {
@@ -219,6 +235,25 @@ class OrderManager: ObservableObject {
         }
     }
     
+    // MARK: - Order Cancellation
+    
+    func cancelOrder(paymentId: String) async throws {
+        guard auth.currentUser != nil else {
+            throw OrderError.notAuthenticated
+        }
+        
+        // Call Firebase Cloud Function to cancel the order
+        let functions = Functions.functions()
+        let data = ["paymentId": paymentId]
+        
+        do {
+            let result = try await functions.httpsCallable("cancelOrder").call(data)
+            print("OrderManager: Successfully cancelled order: \(paymentId)")
+        } catch {
+            print("OrderManager: Error cancelling order: \(error)")
+            throw OrderError.cancellationFailed(error.localizedDescription)
+        }
+    }
     
     // MARK: - Helper Methods
     
@@ -281,6 +316,10 @@ class OrderManager: ObservableObject {
     
     var readyOrders: [Order] {
         orders.filter { $0.status == .ready }
+    }
+    
+    var authorizedOrders: [Order] {
+        orders.filter { $0.status == .authorized }
     }
     
     var recentOrders: [Order] {
@@ -378,7 +417,7 @@ struct FirestoreOrder: Codable {
         let totalAmount = (Double(amount) ?? 0.0) / 100.0
         
         // Parse status
-        let orderStatus = OrderStatus(rawValue: status ?? "SUBMITTED") ?? .submitted
+        let orderStatus = OrderStatus(rawValue: status ?? "AUTHORIZED") ?? .authorized
         
         // Use current date if createdAt is nil
         let orderDate = createdAt ?? Date()

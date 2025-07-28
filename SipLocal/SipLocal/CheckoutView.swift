@@ -210,7 +210,12 @@ struct CheckoutView: View {
                     // For failed payments, show card entry again
                     showingPaymentResult = false
                     showingCardEntry = true
-                }
+                },
+                onCancel: paymentSuccess ? {
+                    // Handle order cancellation
+                    showingPaymentResult = false
+                    presentationMode.wrappedValue.dismiss()
+                } : nil
             )
         }
         .onReceive(cardEntryDelegate.$cardDetails) { cardDetails in
