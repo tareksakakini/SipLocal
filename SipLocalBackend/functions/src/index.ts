@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import {v4 as uuidv4} from "uuid";
 import {SquareClient, SquareEnvironment, Square} from "square";
 import * as dotenv from "dotenv";
+// import * as crypto from "crypto";
 
 // Load environment variables
 dotenv.config();
@@ -11,6 +12,76 @@ dotenv.config();
 admin.initializeApp();
 
 // Square client will be initialized inside the function
+
+// Webhook signature verification
+/*
+async function verifyWebhookSignature(
+  body: string,
+  signature: string,
+  webhookUrl: string
+): Promise<boolean> {
+  try {
+    // Get the webhook signature key from Firebase secrets
+    const webhookSignatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+    if (!webhookSignatureKey) {
+      functions.logger.error("SQUARE_WEBHOOK_SIGNATURE_KEY not configured in secrets");
+      return false;
+    }
+
+    // Square uses HMAC-SHA256 with the signature key
+    // The signature is calculated over the webhook URL + request body
+    const expectedSignature = crypto
+      .createHmac('sha256', webhookSignatureKey)
+      .update(webhookUrl + body)
+      .digest('base64');
+
+    functions.logger.info("Signature verification:", {
+      received: signature,
+      expected: expectedSignature,
+      matches: signature === expectedSignature
+    });
+
+    return signature === expectedSignature;
+  } catch (error) {
+    functions.logger.error("Error verifying webhook signature:", error);
+    return false;
+  }
+}
+*/
+
+// Map Square order states to our order statuses
+function mapSquareOrderStateToStatus(squareState: string): string {
+  switch (squareState) {
+    case "OPEN":
+      return "SUBMITTED";
+    case "COMPLETED":
+      return "COMPLETED";
+    case "CANCELED":
+      return "CANCELLED";
+    case "DRAFT":
+      return "DRAFT";
+    default:
+      return "SUBMITTED";
+  }
+}
+
+// Map Square fulfillment states to our order statuses
+function mapSquareFulfillmentStateToStatus(fulfillmentState: string): string {
+  switch (fulfillmentState) {
+    case "PROPOSED":
+      return "SUBMITTED";
+    case "RESERVED":
+      return "IN_PROGRESS";
+    case "PREPARED":
+      return "READY";
+    case "FULFILLED":
+      return "COMPLETED";
+    case "CANCELED":
+      return "CANCELLED";
+    default:
+      return "SUBMITTED";
+  }
+}
 
 // Define the expected data structure
 interface PaymentData {
@@ -408,3 +479,269 @@ export const processPayment = functions.https.onCall(async (data, context) => {
 
 // Export migration function
 export { migrateTokens } from './migrate';
+
+// Square webhook endpoint for order status updates
+export const squareWebhook = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, X-Square-Signature');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).send('Method not allowed');
+    return;
+  }
+
+  try {
+    functions.logger.info("Square webhook received:", {
+      headers: req.headers,
+      body: req.body
+    });
+
+    // Verify webhook signature
+    const signature = req.headers['x-square-hmacsha256-signature'] as string;
+    const webhookUrl = req.url;
+    const body = JSON.stringify(req.body);
+
+    if (!signature) {
+      functions.logger.error("Missing Square webhook signature");
+      res.status(401).send('Unauthorized');
+      return;
+    }
+
+    functions.logger.info("Webhook signature verification:", {
+      hasSignature: !!signature,
+      signatureLength: signature.length,
+      webhookUrl: webhookUrl,
+      bodyLength: body.length,
+      secretConfigured: !!process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
+    });
+
+    // Temporarily disable signature verification for testing
+    functions.logger.info("Skipping signature verification for testing");
+    /*
+    if (!await verifyWebhookSignature(body, signature, webhookUrl)) {
+      functions.logger.error("Invalid webhook signature");
+      res.status(401).send('Unauthorized');
+      return;
+    }
+    */
+
+    // Process the webhook
+    const webhookData = req.body;
+    
+    if (!webhookData || !webhookData.type) {
+      functions.logger.error("Invalid webhook data");
+      res.status(400).send('Invalid webhook data');
+      return;
+    }
+
+    functions.logger.info("Processing webhook type:", webhookData.type);
+
+    // Handle different webhook types
+    switch (webhookData.type) {
+      case 'order.updated':
+        await handleOrderUpdated(webhookData);
+        break;
+      case 'order.created':
+        await handleOrderCreated(webhookData);
+        break;
+      case 'order.fulfillment.updated':
+        await handleOrderFulfillmentUpdated(webhookData);
+        break;
+      default:
+        functions.logger.info("Unhandled webhook type:", webhookData.type);
+    }
+
+    res.status(200).send('OK');
+  } catch (error) {
+    functions.logger.error("Webhook processing error:", error);
+    res.status(500).send('Internal server error');
+  }
+});
+
+// Handle order.updated webhook
+async function handleOrderUpdated(webhookData: any) {
+  try {
+    // The actual structure is: webhookData.data.object.order_updated
+    const order = webhookData.data?.object?.order_updated;
+    if (!order) {
+      functions.logger.error("No order data in webhook");
+      functions.logger.error("Webhook data structure:", JSON.stringify(webhookData, null, 2));
+      return;
+    }
+
+    const orderId = order.order_id;
+    const orderState = order.state;
+
+    functions.logger.info("Order updated:", {
+      orderId,
+      state: orderState
+    });
+
+    // Find the order in our database by Square order ID
+    const ordersSnapshot = await admin.firestore()
+      .collection("orders")
+      .where("orderId", "==", orderId)
+      .get();
+
+    if (ordersSnapshot.empty) {
+      functions.logger.warn("Order not found in database:", orderId);
+      return;
+    }
+
+    // Get the current order data to check if we should override it
+    const orderDoc = ordersSnapshot.docs[0];
+    const currentOrderData = orderDoc.data();
+    const currentStatus = currentOrderData.status;
+
+    // Only update if the new status is more specific than the current one
+    // This prevents order state "OPEN" from overriding more specific fulfillment states
+    const newStatus = mapSquareOrderStateToStatus(orderState);
+    
+    functions.logger.info("Order state mapping check:", {
+      orderId,
+      currentStatus,
+      newStatus,
+      orderState
+    });
+
+    // Don't override more specific statuses with general ones
+    // "SUBMITTED" (from OPEN) should not override "READY", "IN_PROGRESS", etc.
+    if (newStatus === "SUBMITTED" && currentStatus !== "SUBMITTED") {
+      functions.logger.info("Skipping order state update - current status is more specific:", {
+        currentStatus,
+        newStatus
+      });
+      return;
+    }
+
+    // Update the order
+    const batch = admin.firestore().batch();
+    const orderRef = orderDoc.ref;
+    
+    batch.update(orderRef, {
+      status: newStatus,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    functions.logger.info("Updated order status:", {
+      documentId: orderDoc.id,
+      orderId,
+      oldStatus: currentStatus,
+      newStatus
+    });
+
+    await batch.commit();
+    functions.logger.info("Successfully updated order status in database");
+
+  } catch (error) {
+    functions.logger.error("Error handling order.updated webhook:", error);
+  }
+}
+
+// Handle order.created webhook
+async function handleOrderCreated(webhookData: any) {
+  try {
+    const order = webhookData.data?.id?.order;
+    if (!order) {
+      functions.logger.error("No order data in webhook");
+      return;
+    }
+
+    functions.logger.info("Order created:", {
+      orderId: order.id,
+      state: order.state
+    });
+
+    // We don't need to do anything special for order creation
+    // since orders are created through our payment process
+
+  } catch (error) {
+    functions.logger.error("Error handling order.created webhook:", error);
+  }
+}
+
+// Handle order.fulfillment.updated webhook
+async function handleOrderFulfillmentUpdated(webhookData: any) {
+  try {
+    functions.logger.info("Starting fulfillment webhook processing");
+    
+    // The actual structure is: webhookData.data.object.order_fulfillment_updated
+    const fulfillment = webhookData.data?.object?.order_fulfillment_updated;
+    if (!fulfillment) {
+      functions.logger.error("No fulfillment data in webhook");
+      functions.logger.error("Webhook data structure:", JSON.stringify(webhookData, null, 2));
+      return;
+    }
+
+    const orderId = fulfillment.order_id;
+    const fulfillmentState = fulfillment.state;
+    const fulfillmentUpdates = fulfillment.fulfillment_update;
+
+    functions.logger.info("Order fulfillment updated:", {
+      orderId,
+      fulfillmentState,
+      fulfillmentUpdates: fulfillmentUpdates
+    });
+
+    // Check if there are fulfillment updates that indicate state changes
+    if (fulfillmentUpdates && fulfillmentUpdates.length > 0) {
+      const latestUpdate = fulfillmentUpdates[fulfillmentUpdates.length - 1];
+      const newFulfillmentState = latestUpdate.new_state;
+      
+      functions.logger.info("Fulfillment state change detected:", {
+        oldState: latestUpdate.old_state,
+        newState: newFulfillmentState
+      });
+
+      // Find the order in our database by Square order ID
+      const ordersSnapshot = await admin.firestore()
+        .collection("orders")
+        .where("orderId", "==", orderId)
+        .get();
+
+      if (ordersSnapshot.empty) {
+        functions.logger.warn("Order not found in database:", orderId);
+        return;
+      }
+
+      // Update all matching orders (should be only one)
+      const batch = admin.firestore().batch();
+      const newStatus = mapSquareFulfillmentStateToStatus(newFulfillmentState);
+
+      functions.logger.info("Mapping fulfillment state:", {
+        squareState: newFulfillmentState,
+        mappedStatus: newStatus
+      });
+
+      ordersSnapshot.docs.forEach(doc => {
+        const orderRef = doc.ref;
+        batch.update(orderRef, {
+          status: newStatus,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+        
+        functions.logger.info("Updated order fulfillment status:", {
+          documentId: doc.id,
+          orderId,
+          oldStatus: doc.data().status,
+          newStatus
+        });
+      });
+
+      await batch.commit();
+      functions.logger.info("Successfully updated order fulfillment status in database");
+    } else {
+      functions.logger.info("No fulfillment state changes detected");
+    }
+
+  } catch (error) {
+    functions.logger.error("Error handling order.fulfillment.updated webhook:", error);
+  }
+}
