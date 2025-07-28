@@ -219,37 +219,6 @@ class OrderManager: ObservableObject {
         }
     }
     
-    func syncOrderStatusesWithSquare() async {
-        print("🔄 OrderManager: Starting order status sync with Square...")
-        
-        let squareService = SquareAPIService.shared
-        
-        for order in orders {
-            // Only sync orders that have a Square order ID
-            guard let squareOrderId = order.squareOrderId else {
-                continue
-            }
-            
-            do {
-                let newStatus = try await squareService.fetchOrderStatus(
-                    orderId: squareOrderId,
-                    merchantId: order.coffeeShop.merchantId
-                )
-                
-                // Only update if status has changed
-                if newStatus != order.status {
-                    print("🔄 OrderManager: Updated order status from \(order.status) to \(newStatus) for \(order.coffeeShop.name)")
-                    await updateOrderStatus(orderId: order.transactionId, newStatus: newStatus)
-                }
-                
-            } catch {
-                print("❌ OrderManager: Failed to sync status for order at \(order.coffeeShop.name): \(error)")
-                // Continue with other orders even if one fails
-            }
-        }
-        
-        print("🔄 OrderManager: Order status sync completed")
-    }
     
     // MARK: - Helper Methods
     

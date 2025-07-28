@@ -613,9 +613,10 @@ async function handleOrderUpdated(webhookData: any) {
 
     // Don't override more specific statuses with general ones
     // "SUBMITTED" (from OPEN) should not override "READY", "IN_PROGRESS", etc.
-    // Also prevent any status from overriding "COMPLETED" to avoid flickering
+    // Also prevent any status from overriding final statuses ("COMPLETED" or "CANCELLED") to avoid flickering
     if ((newStatus === "SUBMITTED" && currentStatus !== "SUBMITTED") || 
-        (currentStatus === "COMPLETED" && newStatus !== "COMPLETED")) {
+        (currentStatus === "COMPLETED" && newStatus !== "COMPLETED") ||
+        (currentStatus === "CANCELLED" && newStatus !== "CANCELLED")) {
       functions.logger.info("Skipping order state update - current status is more specific or final:", {
         currentStatus,
         newStatus
@@ -726,9 +727,10 @@ async function handleOrderFulfillmentUpdated(webhookData: any) {
         const currentOrderData = doc.data();
         const currentStatus = currentOrderData.status;
         
-        // Prevent overriding "COMPLETED" status to avoid flickering
-        if (currentStatus === "COMPLETED" && newStatus !== "COMPLETED") {
-          functions.logger.info("Skipping fulfillment update - order already completed:", {
+        // Prevent overriding final statuses ("COMPLETED" or "CANCELLED") to avoid flickering
+        if ((currentStatus === "COMPLETED" && newStatus !== "COMPLETED") ||
+            (currentStatus === "CANCELLED" && newStatus !== "CANCELLED")) {
+          functions.logger.info("Skipping fulfillment update - order already in final state:", {
             documentId: doc.id,
             orderId,
             currentStatus,

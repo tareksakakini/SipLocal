@@ -4,7 +4,6 @@ struct PastOrdersView: View {
     @EnvironmentObject var orderManager: OrderManager
     @Environment(\.presentationMode) var presentationMode
     @State private var showClearAllConfirmation = false
-    @State private var isRefreshing = false
     
     var body: some View {
         NavigationStack {
@@ -38,27 +37,10 @@ struct PastOrdersView: View {
                 
                 if !orderManager.orders.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        HStack {
-                            Button(action: {
-                                Task {
-                                    isRefreshing = true
-                                    await orderManager.syncOrderStatusesWithSquare()
-                                    isRefreshing = false
-                                }
-                            }) {
-                                Image(systemName: isRefreshing ? "arrow.clockwise.circle.fill" : "arrow.clockwise")
-                                    .font(.system(size: 16, weight: .medium))
-                                    .rotationEffect(.degrees(isRefreshing ? 360 : 0))
-                                    .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
-                            }
-                            .foregroundColor(.blue)
-        
-                            
-                            Button("Clear All") {
-                                showClearAllConfirmation = true
-                            }
-                            .foregroundColor(.red)
+                        Button("Clear All") {
+                            showClearAllConfirmation = true
                         }
+                        .foregroundColor(.red)
                     }
                 }
             }
@@ -76,9 +58,6 @@ struct PastOrdersView: View {
             Button("Cancel", role: .cancel) { }
         } message: {
             Text("This action cannot be undone. All of your past orders will be permanently deleted.")
-        }
-        .refreshable {
-            await orderManager.refreshOrders()
         }
         .onAppear {
             // Debug: Check if orders are being fetched when view appears
@@ -130,7 +109,7 @@ struct PastOrdersView: View {
             
             Button("Try Again") {
                 Task {
-                    await orderManager.refreshOrders()
+                    await orderManager.fetchOrders()
                 }
             }
             .buttonStyle(.borderedProminent)
