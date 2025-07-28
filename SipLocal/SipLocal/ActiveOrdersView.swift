@@ -33,7 +33,7 @@ struct ActiveOrdersView: View {
                     emptyStateView
                 }
             }
-            .navigationTitle("Active Orders")
+            .navigationTitle("Active Order")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -66,7 +66,7 @@ struct ActiveOrdersView: View {
             ProgressView()
                 .scaleEffect(1.5)
             
-            Text("Loading active orders...")
+            Text("Loading active order...")
                 .font(.body)
                 .foregroundColor(.secondary)
             
@@ -86,7 +86,7 @@ struct ActiveOrdersView: View {
                     .foregroundColor(.orange)
                 
                 VStack(spacing: 8) {
-                    Text("Error Loading Active Orders")
+                    Text("Error Loading Active Order")
                         .font(.title2)
                         .fontWeight(.semibold)
                     
@@ -121,11 +121,11 @@ struct ActiveOrdersView: View {
                     .foregroundColor(.secondary)
                 
                 VStack(spacing: 8) {
-                    Text("No Active Orders")
+                    Text("No Active Order")
                         .font(.title2)
                         .fontWeight(.semibold)
                     
-                    Text("You don't have any active orders at the moment. Only your most recent order will appear here if it's still active (authorized, submitted, in progress, or ready).")
+                    Text("You don't have an active order at the moment.")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)

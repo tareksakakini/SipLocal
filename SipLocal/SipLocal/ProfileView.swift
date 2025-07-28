@@ -215,25 +215,9 @@ struct ProfileView: View {
                                             .font(.system(size: 18, weight: .medium))
                                             .foregroundColor(.black.opacity(0.7))
                                         VStack(alignment: .leading, spacing: 2) {
-                                            Text("Active Orders")
+                                            Text("Active Order")
                                                 .font(.system(size: 16, weight: .medium))
                                                 .foregroundColor(.primary)
-                                            // Only show active order if it's the latest of ALL orders
-                                            let latestOrder = orderManager.orders.sorted { $0.date > $1.date }.first
-                                            let hasActiveOrder = latestOrder != nil && [.authorized, .submitted, .inProgress, .ready].contains(latestOrder!.status)
-                                            if hasActiveOrder {
-                                                Text("1 active")
-                                                    .font(.system(size: 12, weight: .medium))
-                                                    .foregroundColor(.secondary)
-                                            } else if orderManager.isLoading {
-                                                Text("Loading...")
-                                                    .font(.system(size: 12, weight: .medium))
-                                                    .foregroundColor(.secondary)
-                                            } else {
-                                                Text("No active orders")
-                                                    .font(.system(size: 12, weight: .medium))
-                                                    .foregroundColor(.secondary)
-                                            }
                                         }
                                         Spacer()
                                         Image(systemName: "chevron.right")
