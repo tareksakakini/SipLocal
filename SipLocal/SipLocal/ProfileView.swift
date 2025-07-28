@@ -23,6 +23,7 @@ struct ProfileView: View {
     @State private var showImageCrop = false
     @State private var showFullSizeImage = false
     @State private var showPastOrders = false
+    @State private var showActiveOrders = false
     
     var body: some View {
         NavigationStack {
@@ -205,6 +206,44 @@ struct ProfileView: View {
                             
                             // Action Buttons Section
                             VStack(spacing: 16) {
+                                // Active Orders Button
+                                Button(action: {
+                                    showActiveOrders = true
+                                }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "clock.badge.checkmark.fill")
+                                            .font(.system(size: 18, weight: .medium))
+                                            .foregroundColor(.black.opacity(0.7))
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Active Orders")
+                                                .font(.system(size: 16, weight: .medium))
+                                                .foregroundColor(.primary)
+                                            let activeOrdersCount = orderManager.orders.filter { [.authorized, .submitted, .inProgress, .ready].contains($0.status) }.count
+                                            if activeOrdersCount > 0 {
+                                                Text("\(activeOrdersCount) active")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.secondary)
+                                            } else if orderManager.isLoading {
+                                                Text("Loading...")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.secondary)
+                                            } else {
+                                                Text("No active orders")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.secondary)
+                                            }
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 14, weight: .medium))
+                                            .foregroundColor(.black.opacity(0.3))
+                                    }
+                                    .padding(20)
+                                    .background(Color.white)
+                                    .cornerRadius(16)
+                                    .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 4)
+                                }
+                                
                                 // Past Orders Button
                                 Button(action: {
                                     showPastOrders = true
@@ -217,12 +256,17 @@ struct ProfileView: View {
                                             Text("Past Orders")
                                                 .font(.system(size: 16, weight: .medium))
                                                 .foregroundColor(.primary)
-                                            if !orderManager.orders.isEmpty {
-                                                Text("\(orderManager.orders.count) orders")
+                                            let pastOrdersCount = orderManager.orders.filter { [.completed, .cancelled].contains($0.status) }.count
+                                            if pastOrdersCount > 0 {
+                                                Text("\(pastOrdersCount) orders")
                                                     .font(.system(size: 12, weight: .medium))
                                                     .foregroundColor(.secondary)
                                             } else if orderManager.isLoading {
                                                 Text("Loading...")
+                                                    .font(.system(size: 12, weight: .medium))
+                                                    .foregroundColor(.secondary)
+                                            } else {
+                                                Text("No past orders")
                                                     .font(.system(size: 12, weight: .medium))
                                                     .foregroundColor(.secondary)
                                             }
@@ -435,6 +479,10 @@ struct ProfileView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showActiveOrders) {
+            ActiveOrdersView()
+                .environmentObject(orderManager)
         }
         .sheet(isPresented: $showPastOrders) {
             PastOrdersView()

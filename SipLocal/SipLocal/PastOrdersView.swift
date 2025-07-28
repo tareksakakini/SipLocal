@@ -5,6 +5,11 @@ struct PastOrdersView: View {
     @Environment(\.presentationMode) var presentationMode
     @State private var showClearAllConfirmation = false
     
+    // Filter to get only past orders (completed and cancelled)
+    private var pastOrders: [Order] {
+        orderManager.orders.filter { [.completed, .cancelled].contains($0.status) }
+    }
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
@@ -12,7 +17,7 @@ struct PastOrdersView: View {
                     loadingView
                 } else if let errorMessage = orderManager.errorMessage {
                     errorView(message: errorMessage)
-                } else if orderManager.orders.isEmpty {
+                } else if pastOrders.isEmpty {
                     emptyStateView
                 } else {
                     ordersList
@@ -35,7 +40,7 @@ struct PastOrdersView: View {
                     }
                 }
                 
-                if !orderManager.orders.isEmpty {
+                if !pastOrders.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("Clear All") {
                             showClearAllConfirmation = true
@@ -151,7 +156,7 @@ struct PastOrdersView: View {
     private var ordersList: some View {
         ScrollView {
             LazyVStack(spacing: 16) {
-                ForEach(orderManager.orders) { order in
+                ForEach(pastOrders) { order in
                     OrderRow(order: order)
                 }
             }
