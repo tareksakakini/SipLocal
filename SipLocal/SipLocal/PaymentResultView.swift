@@ -13,10 +13,6 @@ struct PaymentResultView: View {
     let onCancel: (() -> Void)?
     
     @EnvironmentObject var orderManager: OrderManager
-    @State private var showingCancellationAlert = false
-    @State private var isCancelling = false
-    @State private var timeRemaining = 30
-    @State private var cancellationTimer: Timer?
     
     var body: some View {
         NavigationStack {
@@ -36,49 +32,6 @@ struct PaymentResultView: View {
             .navigationBarHidden(true)
             .background(Color(.systemGray6))
         }
-        .alert("Cancel Order?", isPresented: $showingCancellationAlert) {
-            Button("Cancel Order", role: .destructive) {
-                cancelOrder()
-            }
-            Button("Keep Order", role: .cancel) {}
-        } message: {
-            Text("Are you sure you want to cancel this order? Your payment authorization will be cancelled.")
-        }
-    }
-    
-    private func startCountdownTimer() {
-        cancellationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if timeRemaining > 0 {
-                timeRemaining -= 1
-            } else {
-                cancellationTimer?.invalidate()
-                // Order has been automatically placed
-                onDismiss()
-            }
-        }
-    }
-    
-    private func cancelOrder() {
-        guard let paymentId = transactionId else { return }
-        
-        isCancelling = true
-        cancellationTimer?.invalidate()
-        
-        Task {
-            do {
-                try await orderManager.cancelOrder(paymentId: paymentId)
-                await MainActor.run {
-                    isCancelling = false
-                    onCancel?()
-                }
-            } catch {
-                await MainActor.run {
-                    isCancelling = false
-                    // Handle error - could show another alert
-                    print("Failed to cancel order: \(error)")
-                }
-            }
-        }
     }
     
     private var successContent: some View {
@@ -87,52 +40,18 @@ struct PaymentResultView: View {
             
             // Success Icon and Title
             VStack(spacing: 16) {
-                Image(systemName: "clock.badge.checkmark.fill")
+                Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 80))
-                    .foregroundColor(.orange)
+                    .foregroundColor(.green)
                 
                 VStack(spacing: 8) {
-                    Text("Payment Authorized!")
+                    Text("Order Placed!")
                         .font(.title)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
-                    
-                    Text("Your order will be placed in \(timeRemaining) seconds")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .onAppear {
-                            startCountdownTimer()
-                        }
-                        .onDisappear {
-                            cancellationTimer?.invalidate()
-                        }
                 }
             }
             
-            // Cancellation Warning Card
-            VStack(spacing: 12) {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.orange)
-                    Text("Order Confirmation")
-                        .font(.headline)
-                        .fontWeight(.semibold)
-                    Spacer()
-                }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Your payment has been authorized. The order will be automatically placed in \(timeRemaining) seconds.")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                    
-                    Text("You can cancel now if you change your mind.")
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                }
-            }
-            .padding()
-            .background(Color.orange.opacity(0.1))
-            .cornerRadius(12)
             
             // Pickup Information Card (moved to show first)
             if let coffeeShop = coffeeShop {
@@ -263,41 +182,15 @@ struct PaymentResultView: View {
             
             Spacer().frame(height: 20)
             
-            // Action Buttons
-            VStack(spacing: 12) {
-                // Cancel Order Button
-                Button(action: {
-                    showingCancellationAlert = true
-                }) {
-                    HStack {
-                        if isCancelling {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(0.8)
-                            Text("Cancelling...")
-                        } else {
-                            Text("Cancel Order")
-                                .fontWeight(.semibold)
-                        }
-                    }
+            // Action Button
+            Button(action: onDismiss) {
+                Text("Continue")
+                    .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.red)
+                    .background(Color.black)
                     .foregroundColor(.white)
                     .cornerRadius(12)
-                }
-                .disabled(isCancelling)
-                
-                // Continue Button
-                Button(action: onDismiss) {
-                    Text("Continue")
-                        .fontWeight(.medium)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .foregroundColor(.primary)
-                        .cornerRadius(12)
-                }
             }
         }
     }
