@@ -218,9 +218,11 @@ struct ProfileView: View {
                                             Text("Active Orders")
                                                 .font(.system(size: 16, weight: .medium))
                                                 .foregroundColor(.primary)
-                                            let activeOrdersCount = orderManager.orders.filter { [.authorized, .submitted, .inProgress, .ready].contains($0.status) }.count
-                                            if activeOrdersCount > 0 {
-                                                Text("\(activeOrdersCount) active")
+                                            // Only show active order if it's the latest of ALL orders
+                                            let latestOrder = orderManager.orders.sorted { $0.date > $1.date }.first
+                                            let hasActiveOrder = latestOrder != nil && [.authorized, .submitted, .inProgress, .ready].contains(latestOrder!.status)
+                                            if hasActiveOrder {
+                                                Text("1 active")
                                                     .font(.system(size: 12, weight: .medium))
                                                     .foregroundColor(.secondary)
                                             } else if orderManager.isLoading {

@@ -4,14 +4,20 @@ struct ActiveOrdersView: View {
     @EnvironmentObject var orderManager: OrderManager
     @Environment(\.presentationMode) var presentationMode
     
-    // Filter to get only active orders (authorized, submitted, inProgress, ready)
-    private var activeOrders: [Order] {
-        orderManager.orders.filter { [.authorized, .submitted, .inProgress, .ready].contains($0.status) }
+    // Get the most recent order of ALL orders (active or past)
+    private var latestOrder: Order? {
+        orderManager.orders.sorted { $0.date > $1.date }.first
     }
     
-    // Get the most recent active order
+    // Get the most recent active order, but only if it's also the latest of ALL orders
     private var latestActiveOrder: Order? {
-        activeOrders.sorted { $0.date > $1.date }.first
+        guard let latest = latestOrder,
+              [.authorized, .submitted, .inProgress, .ready].contains(latest.status) else {
+            print("ActiveOrdersView: No active order - latest order status: \(latestOrder?.status.rawValue ?? "none")")
+            return nil
+        }
+        print("ActiveOrdersView: Found active order: \(latest.id) with status: \(latest.status.rawValue)")
+        return latest
     }
     
     var body: some View {
@@ -119,7 +125,7 @@ struct ActiveOrdersView: View {
                         .font(.title2)
                         .fontWeight(.semibold)
                     
-                    Text("You don't have any active orders at the moment. Your current orders will appear here.")
+                    Text("You don't have any active orders at the moment. Only your most recent order will appear here if it's still active (authorized, submitted, in progress, or ready).")
                         .font(.body)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)

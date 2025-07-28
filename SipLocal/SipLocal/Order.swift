@@ -170,13 +170,24 @@ class OrderManager: ObservableObject {
                     self.orders = fetchedOrders.sorted { $0.date > $1.date }
                     print("OrderManager: Real-time update - \(fetchedOrders.count) orders processed")
                     
-                    // Check if any order statuses changed
-                    for (index, newOrder) in self.orders.enumerated() {
-                        if index < oldOrders.count {
-                            let oldOrder = oldOrders[index]
+                    // Check if any order statuses changed by comparing by transaction ID
+                    for newOrder in self.orders {
+                        if let oldOrder = oldOrders.first(where: { $0.transactionId == newOrder.transactionId }) {
                             if oldOrder.status != newOrder.status {
                                 print("OrderManager: 🎉 STATUS CHANGE DETECTED! Order \(newOrder.id) changed from \(oldOrder.status) to \(newOrder.status)")
+                                
+                                // Log transition to help with debugging
+                                let activeStatuses: [OrderStatus] = [.authorized, .submitted, .inProgress, .ready]
+                                let pastStatuses: [OrderStatus] = [.completed, .cancelled]
+                                
+                                if activeStatuses.contains(oldOrder.status) && pastStatuses.contains(newOrder.status) {
+                                    print("OrderManager: ✅ Order moved from ACTIVE to PAST status")
+                                } else if pastStatuses.contains(oldOrder.status) && activeStatuses.contains(newOrder.status) {
+                                    print("OrderManager: ⚠️ Order moved from PAST to ACTIVE status (unusual)")
+                                }
                             }
+                        } else {
+                            print("OrderManager: ➕ NEW ORDER DETECTED: \(newOrder.id) with status \(newOrder.status)")
                         }
                     }
                     
