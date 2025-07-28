@@ -613,8 +613,10 @@ async function handleOrderUpdated(webhookData: any) {
 
     // Don't override more specific statuses with general ones
     // "SUBMITTED" (from OPEN) should not override "READY", "IN_PROGRESS", etc.
-    if (newStatus === "SUBMITTED" && currentStatus !== "SUBMITTED") {
-      functions.logger.info("Skipping order state update - current status is more specific:", {
+    // Also prevent any status from overriding "COMPLETED" to avoid flickering
+    if ((newStatus === "SUBMITTED" && currentStatus !== "SUBMITTED") || 
+        (currentStatus === "COMPLETED" && newStatus !== "COMPLETED")) {
+      functions.logger.info("Skipping order state update - current status is more specific or final:", {
         currentStatus,
         newStatus
       });
@@ -721,6 +723,20 @@ async function handleOrderFulfillmentUpdated(webhookData: any) {
       });
 
       ordersSnapshot.docs.forEach(doc => {
+        const currentOrderData = doc.data();
+        const currentStatus = currentOrderData.status;
+        
+        // Prevent overriding "COMPLETED" status to avoid flickering
+        if (currentStatus === "COMPLETED" && newStatus !== "COMPLETED") {
+          functions.logger.info("Skipping fulfillment update - order already completed:", {
+            documentId: doc.id,
+            orderId,
+            currentStatus,
+            newStatus
+          });
+          return;
+        }
+        
         const orderRef = doc.ref;
         batch.update(orderRef, {
           status: newStatus,
@@ -730,7 +746,7 @@ async function handleOrderFulfillmentUpdated(webhookData: any) {
         functions.logger.info("Updated order fulfillment status:", {
           documentId: doc.id,
           orderId,
-          oldStatus: doc.data().status,
+          oldStatus: currentStatus,
           newStatus
         });
       });
