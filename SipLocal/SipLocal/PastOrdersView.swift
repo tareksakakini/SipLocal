@@ -164,6 +164,9 @@ struct PastOrdersView: View {
 struct OrderRow: View {
     let order: Order
     @State private var isExpanded = false
+    @State private var showingCancelAlert = false
+    @State private var isCancelling = false
+    @EnvironmentObject var orderManager: OrderManager
     
     var body: some View {
         VStack(spacing: 0) {
@@ -298,6 +301,37 @@ struct OrderRow: View {
                             .padding(.top, 4)
                         }
                     }
+                    
+                    // Show Cancel button for authorized orders
+                    if order.status == .authorized {
+                        Divider()
+                            .padding(.top, 8)
+                        
+                        Button(action: {
+                            showingCancelAlert = true
+                        }) {
+                            HStack {
+                                if isCancelling {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("Cancelling...")
+                                } else {
+                                    Image(systemName: "xmark.circle")
+                                    Text("Cancel Order")
+                                }
+                            }
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.red)
+                            .cornerRadius(8)
+                        }
+                        .disabled(isCancelling)
+                        .padding(.top, 8)
+                    }
                 }
                 .padding(.horizontal)
                 .padding(.bottom)
@@ -306,6 +340,14 @@ struct OrderRow: View {
         }
         .cornerRadius(12)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .alert("Cancel Order?", isPresented: $showingCancelAlert) {
+            Button("Cancel Order", role: .destructive) {
+                cancelOrder()
+            }
+            Button("Keep Order", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to cancel this order? Your payment authorization will be cancelled and you won't be charged.")
+        }
     }
     
     private var statusBadge: some View {
@@ -390,6 +432,26 @@ struct OrderRow: View {
             return .orange
         case .active:
             return .blue // Legacy support
+        }
+    }
+    
+    private func cancelOrder() {
+        isCancelling = true
+        
+        Task {
+            do {
+                try await orderManager.cancelOrder(paymentId: order.transactionId)
+                await MainActor.run {
+                    isCancelling = false
+                    // Order status will be updated automatically via real-time listener
+                }
+            } catch {
+                await MainActor.run {
+                    isCancelling = false
+                    // Could show an error alert here if needed
+                    print("Failed to cancel order: \(error)")
+                }
+            }
         }
     }
 }
