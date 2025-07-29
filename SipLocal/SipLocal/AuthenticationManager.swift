@@ -21,26 +21,35 @@ class AuthenticationManager: ObservableObject {
     private let auth = Auth.auth()
     private let firestore = Firestore.firestore()
     private let storage = Storage.storage()
+    private let deviceManager = DeviceManager()
+    private var lastKnownUserId: String?
     
     init() {
         // Check if user is already authenticated
         self.currentUser = auth.currentUser
         self.isAuthenticated = currentUser != nil
         self.isEmailVerified = currentUser?.isEmailVerified ?? false
+        self.lastKnownUserId = currentUser?.uid
         
         // Listen for authentication state changes
         auth.addStateDidChangeListener { [weak self] _, user in
             DispatchQueue.main.async {
+                // Store the previous user ID before updating
+                let previousUserId = self?.lastKnownUserId
+                
                 self?.currentUser = user
                 self?.isAuthenticated = user != nil
                 self?.isEmailVerified = user?.isEmailVerified ?? false
+                self?.lastKnownUserId = user?.uid
                 
-                if user != nil {
+                if let user = user {
                     self?.fetchFavorites()
                     self?.fetchStampedShops()
+                    self?.registerCurrentDevice()
                 } else {
                     self?.favoriteShops = []
                     self?.stampedShops = []
+                    // Device unregistration is now handled in signOut() method
                 }
             }
         }
@@ -118,10 +127,31 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Sign Out Function
     func signOut() {
-        do {
-            try auth.signOut()
-        } catch {
-            print("Error signing out: \(error.localizedDescription)")
+        // First unregister the device while user is still authenticated
+        if let userId = currentUser?.uid {
+            deviceManager.unregisterDeviceForUser(userId: userId) { [weak self] success, error in
+                if success {
+                    print("Device unregistered successfully before sign out")
+                } else {
+                    print("Failed to unregister device before sign out: \(error ?? "Unknown error")")
+                }
+                
+                // Now sign out regardless of device unregistration result
+                DispatchQueue.main.async {
+                    do {
+                        try self?.auth.signOut()  
+                    } catch {
+                        print("Error signing out: \(error.localizedDescription)")
+                    }
+                }
+            }
+        } else {
+            // No user to unregister, just sign out
+            do {
+                try auth.signOut()
+            } catch {
+                print("Error signing out: \(error.localizedDescription)")
+            }
         }
     }
     
@@ -462,6 +492,76 @@ class AuthenticationManager: ObservableObject {
                 DispatchQueue.main.async {
                     self.favoriteShops = Set(favorites)
                 }
+            }
+        }
+    }
+    
+    // MARK: - Device Management
+    
+    private func registerCurrentDevice() {
+        guard let userId = currentUser?.uid else { return }
+        
+        deviceManager.registerDeviceForUser(userId: userId) { success, error in
+            if success {
+                print("Device registered successfully for user: \(userId)")
+            } else {
+                print("Failed to register device: \(error ?? "Unknown error")")
+            }
+        }
+    }
+    
+    
+    func updateDeviceActivity() {
+        guard let userId = currentUser?.uid else { return }
+        
+        deviceManager.updateDeviceActivity(userId: userId) { success, error in
+            if !success {
+                print("Failed to update device activity: \(error ?? "Unknown error")")
+            }
+        }
+    }
+    
+    func getUserDevices(completion: @escaping ([DeviceManager.UserDevice]) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion([])
+            return
+        }
+        
+        deviceManager.getUserDevices(userId: userId, completion: completion)
+    }
+    
+    func getActiveDeviceIds(completion: @escaping ([String]) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion([])
+            return
+        }
+        
+        deviceManager.getActiveDeviceIds(userId: userId, completion: completion)
+    }
+    
+    func removeInactiveDevices(daysCutoff: Int = 90, completion: @escaping (Int, String?) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(0, "No user signed in")
+            return
+        }
+        
+        deviceManager.removeInactiveDevices(userId: userId, daysCutoff: daysCutoff, completion: completion)
+    }
+    
+    func unregisterSpecificDevice(deviceId: String, completion: @escaping (Bool, String?) -> Void) {
+        guard let userId = currentUser?.uid else {
+            completion(false, "No user signed in")
+            return
+        }
+        
+        let userDocRef = firestore.collection("users").document(userId)
+        userDocRef.updateData([
+            "devices.\(deviceId)": FieldValue.delete()
+        ]) { error in
+            if let error = error {
+                completion(false, error.localizedDescription)
+            } else {
+                completion(true, nil)
             }
         }
     }

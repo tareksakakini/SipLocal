@@ -30,8 +30,25 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         OneSignal.Notifications.requestPermission({ accepted in
             print("User accepted notifications: \(accepted)")
         }, fallbackToSettings: true)
+        
+        // ✅ Set up OneSignal external user ID when device is ready
+        setupOneSignalDeviceId()
 
         return true
+    }
+    
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        NotificationCenter.default.post(name: NSNotification.Name("AppDidBecomeActive"), object: nil)
+    }
+    
+    private func setupOneSignalDeviceId() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            if let deviceId = OneSignal.User.pushSubscription.id {
+                print("OneSignal Device ID: \(deviceId)")
+            } else {
+                print("OneSignal Device ID not yet available")
+            }
+        }
     }
 }
 
@@ -49,6 +66,9 @@ struct SipLocalApp: App {
                 .environmentObject(authManager)
                 .environmentObject(cartManager)
                 .environmentObject(orderManager)
+                .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AppDidBecomeActive"))) { _ in
+                    authManager.updateDeviceActivity()
+                }
         }
     }
 }
