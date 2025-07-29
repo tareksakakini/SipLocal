@@ -3,6 +3,7 @@ import * as admin from "firebase-admin";
 import {v4 as uuidv4} from "uuid";
 import {SquareClient, SquareEnvironment, Square} from "square";
 import * as dotenv from "dotenv";
+import * as OneSignal from "onesignal-node";
 // import * as crypto from "crypto";
 
 // Load environment variables
@@ -1022,6 +1023,102 @@ async function handleOrderCreated(webhookData: any) {
   }
 }
 
+// Function to send OneSignal notification
+async function sendOrderReadyNotification(userId: string, orderData: any) {
+  try {
+    // Get OneSignal App ID from environment variables
+    const oneSignalAppId = process.env.ONESIGNAL_APP_ID;
+    const oneSignalApiKey = process.env.ONESIGNAL_API_KEY;
+    
+    functions.logger.info("OneSignal configuration check:", {
+      hasAppId: !!oneSignalAppId,
+      hasApiKey: !!oneSignalApiKey,
+      appIdLength: oneSignalAppId?.length || 0,
+      apiKeyLength: oneSignalApiKey?.length || 0
+    });
+    
+    if (!oneSignalAppId || !oneSignalApiKey) {
+      functions.logger.error("OneSignal configuration missing");
+      return;
+    }
+
+    // Initialize OneSignal client
+    const oneSignalClient = new OneSignal.Client(oneSignalAppId, oneSignalApiKey);
+
+    // Get user data to find device IDs
+    const userDoc = await admin.firestore()
+      .collection("users")
+      .doc(userId)
+      .get();
+
+    if (!userDoc.exists) {
+      functions.logger.warn("User not found for notification:", userId);
+      return;
+    }
+
+    const userData = userDoc.data();
+    
+    // Extract device IDs from the devices object
+    // The devices are stored as an object where keys are device IDs
+    const devices = userData?.devices || {};
+    const deviceIds = Object.keys(devices);
+
+    if (deviceIds.length === 0) {
+      functions.logger.warn("No device IDs found for user:", userId);
+      return;
+    }
+
+    // Prepare notification content
+    const coffeeShopName = orderData.coffeeShopData?.name || "Coffee Shop";
+
+    // Use include_player_ids instead of include_external_user_ids
+    // The device IDs from your database should be OneSignal player IDs
+    const notification = {
+      include_player_ids: deviceIds,
+      headings: { en: "Order Ready for Pickup! ☕" },
+      contents: { en: `Your order from ${coffeeShopName} is ready for pickup!` },
+      data: {
+        orderId: orderData.transactionId,
+        status: "READY",
+        coffeeShopName: coffeeShopName
+      }
+    };
+
+    // Send notification
+    functions.logger.info("Sending OneSignal notification:", {
+      userId,
+      deviceIds,
+      notification: notification
+    });
+    
+    try {
+      const response = await oneSignalClient.createNotification(notification);
+      
+      functions.logger.info("OneSignal API response:", {
+        statusCode: response.statusCode,
+        body: response.body,
+        headers: response.headers
+      });
+      
+      functions.logger.info("Notification sent successfully:", {
+        userId,
+        deviceCount: deviceIds.length,
+        notificationId: response.body?.id || "No ID returned"
+      });
+    } catch (error) {
+      functions.logger.error("OneSignal API error:", {
+        error: error,
+        errorMessage: (error as Error).message,
+        errorStack: (error as Error).stack
+      });
+      throw error;
+    }
+
+  } catch (error) {
+    functions.logger.error("Failed to send notification:", error);
+  }
+}
+
 // Handle order.fulfillment.updated webhook
 async function handleOrderFulfillmentUpdated(webhookData: any) {
   try {
@@ -1106,6 +1203,15 @@ async function handleOrderFulfillmentUpdated(webhookData: any) {
           oldStatus: currentStatus,
           newStatus
         });
+
+        // Send notification if status changed to READY
+        if (newStatus === "READY" && currentStatus !== "READY" && currentOrderData.userId) {
+          functions.logger.info("Order is ready for pickup, sending notification");
+          // Send notification asynchronously (don't wait for it)
+          sendOrderReadyNotification(currentOrderData.userId, currentOrderData).catch(error => {
+            functions.logger.error("Failed to send ready notification:", error);
+          });
+        }
       });
 
       await batch.commit();
