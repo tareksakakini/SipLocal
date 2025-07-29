@@ -52,6 +52,46 @@ class SquareAPIService {
         }
     }
     
+    // MARK: - Business Hours Fetching
+    
+    func fetchBusinessHours(for shop: CoffeeShop) async throws -> BusinessHoursInfo? {
+        print("🔍 SquareAPIService: Starting business hours fetch for shop: \(shop.name) (merchantId: \(shop.merchantId))")
+        
+        do {
+            // First, fetch the merchant tokens from the backend
+            let credentials = try await tokenService.getMerchantTokens(merchantId: shop.merchantId)
+            
+            // First, get the list of locations for this merchant
+            let locations = try await fetchLocations(credentials: credentials)
+            print("🔍 SquareAPIService: Found \(locations.count) locations for \(shop.name)")
+            
+            // Use the first location (most merchants have only one location)
+            guard let firstLocation = locations.first else {
+                print("❌ SquareAPIService: No locations found for \(shop.name)")
+                return nil
+            }
+            
+            print("🔍 SquareAPIService: Using location: \(firstLocation.id) - \(firstLocation.name ?? "Unnamed")")
+            
+            // Fetch location details which include business hours
+            let location = try await fetchLocationDetails(locationId: firstLocation.id, credentials: credentials)
+            
+            guard let businessHours = location.businessHours else {
+                print("🔍 SquareAPIService: No business hours found for \(shop.name)")
+                return nil
+            }
+            
+            let businessHoursInfo = processBusinessHours(businessHours)
+            print("🔍 SquareAPIService: Successfully processed business hours for \(shop.name)")
+            
+            return businessHoursInfo
+            
+        } catch {
+            print("❌ SquareAPIService: Error fetching business hours for \(shop.name): \(error)")
+            throw error
+        }
+    }
+    
     // MARK: - Private Functions
     
     private func fetchCatalogObjects(credentials: SquareCredentials) async throws -> [SquareCatalogObject] {
@@ -487,6 +527,198 @@ class SquareAPIService {
         }
         
         return baseStatus
+    }
+    
+    private func fetchLocationDetails(locationId: String, credentials: SquareCredentials) async throws -> SquareLocation {
+        let baseURL = "https://connect.squareup.com/v2/locations/\(locationId)"
+        
+        guard let url = URL(string: baseURL) else {
+            throw SquareAPIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw SquareAPIError.invalidResponse
+            }
+            
+            print("🔍 SquareAPIService: Location details API response status: \(httpResponse.statusCode)")
+            
+            guard httpResponse.statusCode == 200 else {
+                // Try to decode error response
+                if let errorResponse = try? JSONDecoder().decode(SquareErrorResponse.self, from: data) {
+                    let errorDetail = errorResponse.errors?.first?.detail ?? "Unknown error"
+                    print("❌ SquareAPIService: Location details API error: \(errorDetail)")
+                    throw SquareAPIError.apiError(errorDetail)
+                }
+                print("❌ SquareAPIService: Location details API HTTP error: \(httpResponse.statusCode)")
+                throw SquareAPIError.httpError(httpResponse.statusCode)
+            }
+            
+            let locationResponse = try JSONDecoder().decode(SquareLocationResponse.self, from: data)
+            
+            guard let location = locationResponse.location else {
+                throw SquareAPIError.apiError("Location not found")
+            }
+            
+            print("🔍 SquareAPIService: Location details - ID: \(location.id), Name: \(location.name ?? "Unnamed")")
+            if let businessHours = location.businessHours {
+                print("🔍 SquareAPIService: Business hours found - Periods: \(businessHours.periods?.count ?? 0)")
+                if let periods = businessHours.periods {
+                    for period in periods {
+                        print("🔍 SquareAPIService: Period - Day: \(period.dayOfWeek), Start: \(period.startLocalTime ?? "N/A"), End: \(period.endLocalTime ?? "N/A")")
+                    }
+                }
+            } else {
+                print("🔍 SquareAPIService: No business hours found for this location")
+            }
+            
+            return location
+            
+        } catch {
+            if error is SquareAPIError {
+                throw error
+            }
+            throw SquareAPIError.networkError(error)
+        }
+    }
+    
+    private func fetchLocations(credentials: SquareCredentials) async throws -> [SquareLocation] {
+        let baseURL = "https://connect.squareup.com/v2/locations"
+        
+        guard let url = URL(string: baseURL) else {
+            throw SquareAPIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw SquareAPIError.invalidResponse
+            }
+            
+            print("🔍 SquareAPIService: Locations API response status: \(httpResponse.statusCode)")
+            
+            guard httpResponse.statusCode == 200 else {
+                // Try to decode error response
+                if let errorResponse = try? JSONDecoder().decode(SquareErrorResponse.self, from: data) {
+                    let errorDetail = errorResponse.errors?.first?.detail ?? "Unknown error"
+                    print("❌ SquareAPIService: Locations API error: \(errorDetail)")
+                    throw SquareAPIError.apiError(errorDetail)
+                }
+                print("❌ SquareAPIService: Locations API HTTP error: \(httpResponse.statusCode)")
+                throw SquareAPIError.httpError(httpResponse.statusCode)
+            }
+            
+            let locationsResponse = try JSONDecoder().decode(SquareLocationsResponse.self, from: data)
+            
+            let locations = locationsResponse.locations ?? []
+            print("🔍 SquareAPIService: Found \(locations.count) locations")
+            
+            for location in locations {
+                print("🔍 SquareAPIService: Location - ID: \(location.id), Name: \(location.name ?? "Unnamed"), Has Business Hours: \(location.businessHours != nil)")
+            }
+            
+            return locations
+            
+        } catch {
+            if error is SquareAPIError {
+                throw error
+            }
+            throw SquareAPIError.networkError(error)
+        }
+    }
+    
+    private func processBusinessHours(_ businessHours: SquareBusinessHours) -> BusinessHoursInfo {
+        var weeklyHours: [String: [BusinessHoursPeriod]] = [:]
+        
+        // Process regular weekly periods
+        if let periods = businessHours.periods {
+            for period in periods {
+                let dayOfWeek = period.dayOfWeek
+                let periodInfo = BusinessHoursPeriod(
+                    startTime: period.startLocalTime ?? "",
+                    endTime: period.endLocalTime ?? ""
+                )
+                
+                if weeklyHours[dayOfWeek] == nil {
+                    weeklyHours[dayOfWeek] = []
+                }
+                weeklyHours[dayOfWeek]?.append(periodInfo)
+            }
+        }
+        
+        // Determine if currently open
+        let isCurrentlyOpen = checkIfCurrentlyOpen(weeklyHours: weeklyHours)
+        
+        return BusinessHoursInfo(
+            weeklyHours: weeklyHours,
+            isCurrentlyOpen: isCurrentlyOpen
+        )
+    }
+    
+    private func checkIfCurrentlyOpen(weeklyHours: [String: [BusinessHoursPeriod]]) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        // Get current day of week (1 = Sunday, 2 = Monday, etc.)
+        let weekday = calendar.component(.weekday, from: now)
+        
+        // Convert to Square's day format
+        let dayOfWeek = convertWeekdayToSquareFormat(weekday)
+        
+        guard let todayPeriods = weeklyHours[dayOfWeek] else {
+            return false
+        }
+        
+        // Get current time in HH:mm format
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm"
+        let currentTime = timeFormatter.string(from: now)
+        
+        // Check if current time falls within any of today's periods
+        for period in todayPeriods {
+            if isTimeInRange(currentTime: currentTime, startTime: period.startTime, endTime: period.endTime) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    private func convertWeekdayToSquareFormat(_ weekday: Int) -> String {
+        switch weekday {
+        case 1: return "SUN"
+        case 2: return "MON"
+        case 3: return "TUE"
+        case 4: return "WED"
+        case 5: return "THU"
+        case 6: return "FRI"
+        case 7: return "SAT"
+        default: return "MON"
+        }
+    }
+    
+    private func isTimeInRange(currentTime: String, startTime: String, endTime: String) -> Bool {
+        // Handle cases where business hours span midnight
+        if startTime > endTime {
+            // Business hours span midnight (e.g., 22:00 to 02:00)
+            return currentTime >= startTime || currentTime <= endTime
+        } else {
+            // Normal business hours (e.g., 09:00 to 17:00)
+            return currentTime >= startTime && currentTime <= endTime
+        }
     }
 }
 

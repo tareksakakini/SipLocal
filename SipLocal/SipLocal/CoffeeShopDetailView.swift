@@ -6,6 +6,9 @@ struct CoffeeShopDetailView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var isFavorite: Bool
     @State private var showMenu = false
+    @State private var businessHoursInfo: BusinessHoursInfo?
+    @State private var isLoadingBusinessHours = false
+    @State private var businessHoursError: String?
     
     init(shop: CoffeeShop, authManager: AuthenticationManager) {
         self.shop = shop
@@ -55,6 +58,23 @@ struct CoffeeShopDetailView: View {
                                 }
                             }
                             .font(.subheadline)
+                            
+                            Divider()
+                            
+                            // Business Hours Section
+                            if isLoadingBusinessHours {
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                    Text("Loading business hours...")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+                                }
+                            } else if let businessHoursInfo = businessHoursInfo {
+                                BusinessHoursView(businessHoursInfo: businessHoursInfo)
+                            } else if businessHoursError != nil {
+                                BusinessHoursUnavailableView()
+                            }
                             
                             Divider()
                             
@@ -121,6 +141,9 @@ struct CoffeeShopDetailView: View {
         .sheet(isPresented: $showMenu) {
             MenuCategorySelectionView(shop: shop)
         }
+        .onAppear {
+            fetchBusinessHours()
+        }
     }
     
     private func toggleFavorite() {
@@ -137,6 +160,34 @@ struct CoffeeShopDetailView: View {
             authManager.addFavorite(shopId: shop.id) { success in
                 if !success {
                     self.isFavorite = originalState
+                }
+            }
+        }
+    }
+    
+    private func fetchBusinessHours() {
+        isLoadingBusinessHours = true
+        businessHoursError = nil
+        
+        Task {
+            do {
+                print("🔍 CoffeeShopDetailView: Fetching business hours for \(shop.name)")
+                let hoursInfo = try await SquareAPIService.shared.fetchBusinessHours(for: shop)
+                await MainActor.run {
+                    if let hoursInfo = hoursInfo {
+                        print("✅ CoffeeShopDetailView: Successfully got business hours for \(shop.name)")
+                        self.businessHoursInfo = hoursInfo
+                    } else {
+                        print("⚠️ CoffeeShopDetailView: No business hours returned for \(shop.name)")
+                        self.businessHoursError = "No business hours available"
+                    }
+                    self.isLoadingBusinessHours = false
+                }
+            } catch {
+                await MainActor.run {
+                    print("❌ CoffeeShopDetailView: Error fetching business hours for \(shop.name): \(error)")
+                    self.businessHoursError = error.localizedDescription
+                    self.isLoadingBusinessHours = false
                 }
             }
         }
