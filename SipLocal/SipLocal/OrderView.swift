@@ -73,14 +73,16 @@ struct OrderView: View {
                                                     .scaleEffect(0.6)
                                             } else if let isOpen = cartManager.isShopOpen(shop: shop) {
                                                 HStack(spacing: 4) {
-                                                    Circle()
-                                                        .fill(isOpen ? Color.green : Color.red)
-                                                        .frame(width: 6, height: 6)
-                                                    
                                                     Text(isOpen ? "Open" : "Closed")
                                                         .font(.caption2)
-                                                        .fontWeight(.medium)
-                                                        .foregroundColor(isOpen ? .green : .red)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundColor(.white)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 4)
+                                                        .background(
+                                                            Capsule()
+                                                                .fill(isOpen ? Color.green : Color.red)
+                                                        )
                                                 }
                                             }
                                         }
