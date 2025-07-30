@@ -107,7 +107,7 @@ struct DayHoursRow: View {
                 .font(.subheadline)
                 .fontWeight(isToday ? .semibold : .medium)
                 .foregroundColor(isToday ? .primary : .secondary)
-                .frame(width: 80, alignment: .leading)
+                .frame(width: 90, alignment: .leading)
             
             if isToday {
                 Text("Today")
