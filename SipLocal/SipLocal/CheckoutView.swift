@@ -201,9 +201,13 @@ struct CheckoutView: View {
             CardEntryView(delegate: self.cardEntryDelegate)
         }
         .sheet(isPresented: $showingTimePicker) {
-            PickupTimeSelectionView(selectedTime: $selectedPickupTime, isPresented: $showingTimePicker)
-                .presentationDetents([.fraction(0.4)])
-                .presentationDragIndicator(.visible)
+            PickupTimeSelectionView(
+                selectedTime: $selectedPickupTime, 
+                isPresented: $showingTimePicker,
+                businessHoursInfo: cartManager.items.first.flatMap { cartManager.shopBusinessHours[$0.shop.id] }
+            )
+            .presentationDetents([.fraction(0.4)])
+            .presentationDragIndicator(.visible)
         }
         .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
             Button("OK", role: .cancel) { }
@@ -419,11 +423,139 @@ struct PickupTimeSelectionView: View {
     @Binding var selectedTime: Date
     @Binding var isPresented: Bool
     @State private var tempTime: Date
+    let businessHoursInfo: BusinessHoursInfo?
     
-    init(selectedTime: Binding<Date>, isPresented: Binding<Bool>) {
+    init(selectedTime: Binding<Date>, isPresented: Binding<Bool>, businessHoursInfo: BusinessHoursInfo? = nil) {
         self._selectedTime = selectedTime
         self._isPresented = isPresented
         self._tempTime = State(initialValue: selectedTime.wrappedValue)
+        self.businessHoursInfo = businessHoursInfo
+    }
+    
+    private var timeRange: ClosedRange<Date> {
+        let now = Date()
+        let calendar = Calendar.current
+        
+        // Get today's closing time
+        let today = calendar.component(.weekday, from: now)
+        let dayOfWeek = convertWeekdayToSquareFormat(today)
+        
+        if let businessHoursInfo = businessHoursInfo,
+           let todayPeriods = businessHoursInfo.weeklyHours[dayOfWeek],
+           !todayPeriods.isEmpty {
+            
+            // Find the latest closing time for today
+            var latestClosingTime: (hour: Int, minute: Int) = (0, 0)
+            var latestClosingTimeString = ""
+            
+            for period in todayPeriods {
+                let closingTime = parseTimeString(period.endTime)
+                let currentLatest = latestClosingTime.hour * 60 + latestClosingTime.minute
+                let periodClosing = closingTime.hour * 60 + closingTime.minute
+                
+                print("Debug - Period: \(period.startTime) to \(period.endTime)")
+                print("Debug - Parsed closing: \(closingTime.hour):\(closingTime.minute) (\(periodClosing) minutes)")
+                print("Debug - Current latest: \(latestClosingTime.hour):\(latestClosingTime.minute) (\(currentLatest) minutes)")
+                
+                if periodClosing > currentLatest {
+                    latestClosingTime = closingTime
+                    latestClosingTimeString = period.endTime
+                    print("Debug - New latest: \(latestClosingTime.hour):\(latestClosingTime.minute)")
+                }
+            }
+            
+            print("Debug - Final latest closing time: \(latestClosingTime.hour):\(latestClosingTime.minute)")
+            
+            // Create closing date for today
+            var closingComponents = calendar.dateComponents([.year, .month, .day], from: now)
+            closingComponents.hour = latestClosingTime.hour
+            closingComponents.minute = latestClosingTime.minute
+            closingComponents.second = 0
+            
+            if let todayClosing = calendar.date(from: closingComponents) {
+                // Ensure closing time is after current time
+                if todayClosing > now {
+                    return now...todayClosing
+                }
+            }
+        }
+        
+        // Fallback: allow up to 24 hours from now
+        let maxTime = now.addingTimeInterval(24 * 60 * 60)
+        return now...maxTime
+    }
+    
+    private func parseTimeString(_ timeString: String) -> (hour: Int, minute: Int) {
+        // Handle empty or invalid time strings
+        guard !timeString.isEmpty else { return (0, 0) }
+        
+        let components = timeString.split(separator: ":")
+        guard components.count >= 2 else { return (0, 0) }
+        
+        let hour = Int(components[0]) ?? 0
+        let minute = Int(components[1]) ?? 0
+        
+        // Validate hour and minute ranges
+        let validHour = max(0, min(23, hour))
+        let validMinute = max(0, min(59, minute))
+        
+        return (validHour, validMinute)
+    }
+    
+    private func convertWeekdayToSquareFormat(_ weekday: Int) -> String {
+        switch weekday {
+        case 1: return "SUN"
+        case 2: return "MON"
+        case 3: return "TUE"
+        case 4: return "WED"
+        case 5: return "THU"
+        case 6: return "FRI"
+        case 7: return "SAT"
+        default: return "MON"
+        }
+    }
+    
+    private func getClosingTimeString() -> String? {
+        guard let businessHoursInfo = businessHoursInfo else { return nil }
+        
+        let today = Calendar.current.component(.weekday, from: Date())
+        let dayOfWeek = convertWeekdayToSquareFormat(today)
+        
+        guard let todayPeriods = businessHoursInfo.weeklyHours[dayOfWeek],
+              !todayPeriods.isEmpty else { return nil }
+        
+        // Find the latest closing time
+        var latestClosingTime: (hour: Int, minute: Int) = (0, 0)
+        var latestClosingTimeString = ""
+        
+        for period in todayPeriods {
+            let closingTime = parseTimeString(period.endTime)
+            let currentLatest = latestClosingTime.hour * 60 + latestClosingTime.minute
+            let periodClosing = closingTime.hour * 60 + closingTime.minute
+            
+            if periodClosing > currentLatest {
+                latestClosingTime = closingTime
+                latestClosingTimeString = period.endTime
+            }
+        }
+        
+        // For debugging, let's also show the original time string
+        print("Debug - Original closing time string: \(latestClosingTimeString)")
+        print("Debug - Parsed closing time: \(latestClosingTime.hour):\(latestClosingTime.minute)")
+        
+        // Format the time for display
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        
+        var components = DateComponents()
+        components.hour = latestClosingTime.hour
+        components.minute = latestClosingTime.minute
+        
+        if let timeDate = Calendar.current.date(from: components) {
+            return formatter.string(from: timeDate)
+        }
+        
+        return "\(latestClosingTime.hour):\(String(format: "%02d", latestClosingTime.minute))"
     }
     
     var body: some View {
@@ -432,12 +564,20 @@ struct PickupTimeSelectionView: View {
                 DatePicker(
                     "",
                     selection: $tempTime,
-                    in: Date()...,
+                    in: timeRange,
                     displayedComponents: [.hourAndMinute]
                 )
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .padding()
+                
+                // Show closing time info if available
+                if let closingTimeString = getClosingTimeString() {
+                    Text("Shop closes at \(closingTimeString)")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.bottom)
+                }
             }
             .navigationTitle("Pickup Time")
             .navigationBarTitleDisplayMode(.inline)
