@@ -9,6 +9,7 @@ struct MenuItemsView: View {
     @State private var showingCart = false
     @State private var customizingItem: MenuItem? = nil
     @State private var showingDifferentShopAlert = false
+    @State private var showingClosedShopAlert = false
     @State private var pendingItem: (item: MenuItem, customizations: String?, price: Double)?
     // Store customization selections - maps modifier list ID to selected modifier IDs
     @State private var selectedModifiers: [String: Set<String>] = [:]
@@ -54,6 +55,12 @@ struct MenuItemsView: View {
                                 category: category.name,
                                 cartManager: cartManager,
                                 onAdd: {
+                                    // Check if shop is closed
+                                    if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                                        showingClosedShopAlert = true
+                                        return
+                                    }
+                                    
                                     // If the item has no modifier lists and no size variations, add directly to cart
                                     let hasCustomizations = (item.modifierLists != nil && !(item.modifierLists?.isEmpty ?? true)) || (item.variations != nil && item.variations!.count > 1)
                                     if !hasCustomizations {
@@ -132,6 +139,13 @@ struct MenuItemsView: View {
                     item: item,
                     selectedModifiers: $selectedModifiers,
                     onAdd: { totalPriceWithModifiers, customizationDesc in
+                        // Check if shop is closed
+                        if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                            showingClosedShopAlert = true
+                            customizingItem = nil
+                            return
+                        }
+                        
                         // Add to cart with customizations and pricing from the customization sheet
                         let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc, itemPriceWithModifiers: totalPriceWithModifiers)
                         if success {
@@ -174,8 +188,19 @@ struct MenuItemsView: View {
             } message: {
                 Text("Your cart contains items from a different coffee shop. To add this item, you need to clear your current cart first.")
             }
+            .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This coffee shop is currently closed. Please try again during business hours.")
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToExploreTab"))) { _ in
                 showingCart = false
+            }
+            .onAppear {
+                // Fetch business hours when view appears
+                Task {
+                    await cartManager.fetchBusinessHours(for: shop)
+                }
             }
             .overlay(
                 Group {

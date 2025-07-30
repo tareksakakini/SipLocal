@@ -19,6 +19,7 @@ struct CheckoutView: View {
     @State private var userData: UserData? = nil // <-- Store user data
     @State private var selectedPickupTime = Date().addingTimeInterval(5 * 60) // Default to 5 minutes from now
     @State private var showingTimePicker = false
+    @State private var showingClosedShopAlert = false
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
@@ -76,35 +77,49 @@ struct CheckoutView: View {
                         
                         // Pickup Time Section
                         VStack(spacing: 12) {
-                            HStack {
-                                Text("Pickup Time")
-                                    .font(.headline)
-                                    .fontWeight(.medium)
-                                Spacer()
-                            }
-                            
                             Button(action: {
                                 showingTimePicker = true
                             }) {
-                                HStack {
-                                    Image(systemName: "clock")
-                                        .foregroundColor(.secondary)
-                                    
-                                    Text(formatPickupTime(selectedPickupTime))
-                                        .foregroundColor(.primary)
+                                HStack(spacing: 16) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Pickup at")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        
+                                        Text(formatPickupTime(selectedPickupTime))
+                                            .font(.body)
+                                            .fontWeight(.semibold)
+                                            .foregroundColor(.primary)
+                                    }
                                     
                                     Spacer()
                                     
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
+                                    // Chevron with subtle background
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color(.systemGray5))
+                                            .frame(width: 28, height: 28)
+                                        
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(.secondary)
+                                    }
                                 }
-                                .padding()
-                                .background(Color.white)
-                                .cornerRadius(12)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .fill(Color.white)
+                                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 16)
+                                        .stroke(Color(.systemGray5), lineWidth: 1)
+                                )
                             }
+                            .buttonStyle(PlainButtonStyle())
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
                         .padding(.bottom, 20)
                     }
                 }
@@ -129,6 +144,14 @@ struct CheckoutView: View {
                     
                     // Payment Button
                     Button(action: {
+                        // Check if shop is closed before allowing payment
+                        if let firstItem = cartManager.items.first,
+                           let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
+                           !isOpen {
+                            showingClosedShopAlert = true
+                            return
+                        }
+                        
                         self.showingCardEntry = true
                     }) {
                         HStack {
@@ -182,6 +205,11 @@ struct CheckoutView: View {
                 .presentationDetents([.fraction(0.4)])
                 .presentationDragIndicator(.visible)
         }
+        .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("This coffee shop is currently closed. Please try again during business hours.")
+        }
         .sheet(isPresented: $showingPaymentResult) {
             PaymentResultView(
                 isSuccess: paymentSuccess,
@@ -228,6 +256,14 @@ struct CheckoutView: View {
             if wasCancelled {
                 self.paymentResult = "Card entry was canceled."
                 self.showingCardEntry = false
+            }
+        }
+        .onAppear {
+            // Fetch business hours for the shop in cart
+            if let firstItem = cartManager.items.first {
+                Task {
+                    await cartManager.fetchBusinessHours(for: firstItem.shop)
+                }
             }
         }
     }

@@ -12,6 +12,7 @@ struct MenuCategorySelectionView: View {
     @State private var customizingItem: MenuItem? = nil
     @State private var selectedModifiers: [String: Set<String>] = [:]
     @State private var showingDifferentShopAlert = false
+    @State private var showingClosedShopAlert = false
     @State private var pendingItem: (item: MenuItem, customizations: String?, price: Double)?
     
     var body: some View {
@@ -63,6 +64,12 @@ struct MenuCategorySelectionView: View {
                                         category: "",
                                         cartManager: cartManager,
                                         onAdd: {
+                                            // Check if shop is closed
+                                            if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                                                showingClosedShopAlert = true
+                                                return
+                                            }
+                                            
                                             let hasCustomizations = (item.modifierLists != nil && !(item.modifierLists?.isEmpty ?? true)) || (item.variations != nil && item.variations!.count > 1)
                                             if !hasCustomizations {
                                                 let success = cartManager.addItem(shop: shop, menuItem: item, category: "")
@@ -160,6 +167,13 @@ struct MenuCategorySelectionView: View {
                     item: item,
                     selectedModifiers: $selectedModifiers,
                     onAdd: { totalPriceWithModifiers, customizationDesc in
+                        // Check if shop is closed
+                        if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                            showingClosedShopAlert = true
+                            customizingItem = nil
+                            return
+                        }
+                        
                         let success = cartManager.addItem(shop: shop, menuItem: item, category: "", customizations: customizationDesc, itemPriceWithModifiers: totalPriceWithModifiers)
                         if success {
                             customizingItem = nil
@@ -179,6 +193,31 @@ struct MenuCategorySelectionView: View {
                         customizingItem = nil
                     }
                 )
+            }
+            .alert("Different Coffee Shop", isPresented: $showingDifferentShopAlert) {
+                Button("Clear Cart & Add Item", role: .destructive) {
+                    cartManager.clearCart()
+                    if let pending = pendingItem {
+                        let _ = cartManager.addItem(shop: shop, menuItem: pending.item, category: "", customizations: pending.customizations, itemPriceWithModifiers: pending.price)
+                        showItemAddedPopup = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            withAnimation {
+                                showItemAddedPopup = false
+                            }
+                        }
+                    }
+                    pendingItem = nil
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingItem = nil
+                }
+            } message: {
+                Text("Your cart contains items from a different coffee shop. To add this item, you need to clear your current cart first.")
+            }
+            .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This coffee shop is currently closed. Please try again during business hours.")
             }
             .overlay(
                 Group {
@@ -208,6 +247,12 @@ struct MenuCategorySelectionView: View {
                 // Load menu data when view appears
                 if menuDataManager.getMenuCategories(for: shop).isEmpty {
                     await menuDataManager.fetchMenuData(for: shop)
+                }
+            }
+            .onAppear {
+                // Fetch business hours when view appears
+                Task {
+                    await cartManager.fetchBusinessHours(for: shop)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToExploreTab"))) { _ in
