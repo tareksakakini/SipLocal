@@ -1,6 +1,5 @@
 import SwiftUI
 import SquareInAppPaymentsSDK
-import PassKit
 import Combine
 
 struct CheckoutView: View {
@@ -21,11 +20,9 @@ struct CheckoutView: View {
     @State private var selectedPickupTime = Date().addingTimeInterval(5 * 60) // Default to 5 minutes from now
     @State private var showingTimePicker = false
     @State private var showingClosedShopAlert = false
-    @State private var selectedPaymentMethod: PaymentMethod = .creditCard
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
-    @StateObject private var applePayService = ApplePayService()
     
     // Add an instance of our payment service
     private let paymentService = PaymentService()
@@ -145,86 +142,6 @@ struct CheckoutView: View {
                     }
                     .padding(.horizontal)
                     
-                    // Payment Method Selection
-                    VStack(spacing: 12) {
-                        Text("Payment Method")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        
-                        VStack(spacing: 8) {
-                            // Credit Card Option
-                            Button(action: {
-                                selectedPaymentMethod = .creditCard
-                            }) {
-                                HStack {
-                                    Image(systemName: "creditcard.fill")
-                                        .foregroundColor(.blue)
-                                    Text("Credit Card")
-                                        .fontWeight(.medium)
-                                    Spacer()
-                                    if selectedPaymentMethod == .creditCard {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.green)
-                                    }
-                                }
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(selectedPaymentMethod == .creditCard ? Color.blue.opacity(0.1) : Color.white)
-                                        .stroke(selectedPaymentMethod == .creditCard ? Color.blue : Color(.systemGray4), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            
-                            // Apple Pay Option
-                            if applePayService.isApplePayAvailable {
-                                Button(action: {
-                                    selectedPaymentMethod = .applePay
-                                }) {
-                                    HStack {
-                                        Image(systemName: "applelogo")
-                                            .foregroundColor(.black)
-                                        Text("Apple Pay")
-                                            .fontWeight(.medium)
-                                        Spacer()
-                                        if selectedPaymentMethod == .applePay {
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green)
-                                        }
-                                    }
-                                    .padding()
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(selectedPaymentMethod == .applePay ? Color.black.opacity(0.1) : Color.white)
-                                            .stroke(selectedPaymentMethod == .applePay ? Color.black : Color(.systemGray4), lineWidth: 1)
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            } else {
-                                // Show disabled Apple Pay option with explanation
-                                HStack {
-                                    Image(systemName: "applelogo")
-                                        .foregroundColor(.gray)
-                                    Text("Apple Pay")
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.gray)
-                                    Spacer()
-                                    Text("Not Available")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                .padding()
-                                .background(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color(.systemGray6))
-                                        .stroke(Color(.systemGray4), lineWidth: 1)
-                                )
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    
                     // Payment Button
                     Button(action: {
                         // Check if shop is closed before allowing payment
@@ -235,11 +152,7 @@ struct CheckoutView: View {
                             return
                         }
                         
-                        if selectedPaymentMethod == .applePay {
-                            processApplePayPayment()
-                        } else {
-                            self.showingCardEntry = true
-                        }
+                        self.showingCardEntry = true
                     }) {
                         HStack {
                             if isProcessingPayment {
@@ -248,24 +161,17 @@ struct CheckoutView: View {
                                     .scaleEffect(0.8)
                                 Text("Processing...")
                             } else {
-                                if selectedPaymentMethod == .applePay {
-                                    Image(systemName: "applelogo")
-                                        .font(.system(size: 16, weight: .medium))
-                                    Text("Pay with Apple Pay")
-                                        .fontWeight(.semibold)
-                                } else {
-                                    Text("Pay with Card")
-                                        .fontWeight(.semibold)
-                                }
+                                Text("Pay")
+                                    .fontWeight(.semibold)
                             }
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(isProcessingPayment ? Color.gray : (selectedPaymentMethod == .applePay ? Color.black : Color.black))
+                        .background(isProcessingPayment ? Color.gray : Color.black)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
-                    .disabled(isProcessingPayment || (selectedPaymentMethod == .applePay && !applePayService.isApplePayAvailable))
+                    .disabled(isProcessingPayment)
                     .padding(.horizontal)
                     .padding(.bottom)
                     
@@ -361,117 +267,6 @@ struct CheckoutView: View {
             if let firstItem = cartManager.items.first {
                 Task {
                     await cartManager.fetchBusinessHours(for: firstItem.shop)
-                }
-            }
-        }
-    }
-    
-    private func processApplePayPayment() {
-        guard let firstItem = cartManager.items.first else {
-            paymentResult = "No items in cart"
-            return
-        }
-        
-        let merchantId = firstItem.shop.merchantId
-        guard let userId = authManager.currentUser?.uid else {
-            paymentResult = "User not logged in."
-            return
-        }
-        
-        // Present Apple Pay
-        applePayService.presentApplePay(
-            amount: cartManager.totalPrice,
-            merchantId: merchantId,
-            shopName: firstItem.shop.name
-        ) { paymentToken in
-            if let token = paymentToken {
-                // Process the payment with the token
-                self.handleApplePayPayment(token: token)
-            } else {
-                DispatchQueue.main.async {
-                    self.paymentResult = "Apple Pay was cancelled or failed"
-                    self.showingPaymentResult = true
-                }
-            }
-        }
-    }
-    
-    private func handleApplePayPayment(token: PKPaymentToken) {
-        // This will be called when the user authorizes the payment
-        isProcessingPayment = true
-        paymentResult = "Processing Apple Pay payment..."
-        
-        guard let firstItem = cartManager.items.first else {
-            paymentResult = "No items in cart"
-            isProcessingPayment = false
-            return
-        }
-        
-        let merchantId = firstItem.shop.merchantId
-        guard let userId = authManager.currentUser?.uid else {
-            paymentResult = "User not logged in."
-            isProcessingPayment = false
-            return
-        }
-        
-        authManager.getUserData(userId: userId) { userData, error in
-            guard let userData = userData else {
-                DispatchQueue.main.async {
-                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
-                    self.isProcessingPayment = false
-                }
-                return
-            }
-            
-            Task {
-                do {
-                    let credentials = try await self.tokenService.getMerchantTokens(merchantId: merchantId)
-                    
-                    let result = await self.applePayService.processApplePayPayment(
-                        amount: self.cartManager.totalPrice,
-                        merchantId: merchantId,
-                        oauthToken: credentials.oauth_token,
-                        cartItems: self.cartManager.items,
-                        customerName: userData.fullName,
-                        customerEmail: userData.email,
-                        userId: userId,
-                        coffeeShop: self.cartManager.items.first!.shop,
-                        pickupTime: self.selectedPickupTime,
-                        paymentToken: token
-                    )
-                    
-                    await MainActor.run {
-                        switch result {
-                        case .success(let transaction):
-                            self.paymentResult = transaction.message
-                            self.paymentSuccess = true
-                            self.transactionId = transaction.transactionId
-                            self.completedOrderItems = self.cartManager.items
-                            self.completedOrderTotal = self.cartManager.totalPrice
-                            self.completedOrderShop = self.cartManager.items.first?.shop
-                            
-                            Task {
-                                await self.orderManager.refreshOrders()
-                            }
-                            self.cartManager.clearCart()
-                            
-                        case .failure(let error):
-                            self.paymentResult = error.localizedDescription
-                            self.paymentSuccess = false
-                            self.transactionId = nil
-                        }
-                        
-                        self.isProcessingPayment = false
-                        self.showingPaymentResult = true
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.paymentResult = "Failed to retrieve payment credentials: \(error.localizedDescription)"
-                        self.paymentSuccess = false
-                        self.transactionId = nil
-                        self.isProcessingPayment = false
-                        self.showingPaymentResult = true
-                    }
                 }
             }
         }
@@ -817,12 +612,6 @@ extension Calendar {
         components.second = 0
         return self.date(from: components)
     }
-}
-
-// MARK: - Payment Method Enum
-enum PaymentMethod {
-    case creditCard
-    case applePay
 }
 
 // Preview

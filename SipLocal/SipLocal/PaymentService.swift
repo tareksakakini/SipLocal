@@ -11,27 +11,21 @@ struct TransactionResult {
 
 // A simple enum for our payment errors
 enum PaymentError: Error, LocalizedError {
-    case networkError(String)
+    case networkError
     case serverError(String)
-    case paymentFailed(String)
-    case invalidResponse
     
     var errorDescription: String? {
         switch self {
-        case .networkError(let message):
-            return "Network error: \(message)"
+        case .networkError:
+            return "A network error occurred. Please check your connection and try again."
         case .serverError(let message):
             return message
-        case .paymentFailed(let message):
-            return message
-        case .invalidResponse:
-            return "Invalid response from server"
         }
     }
 }
 
 class PaymentService {
-    let functions = Functions.functions()
+    private let functions = Functions.functions()
     
     // This function calls our Firebase Cloud Function to process the payment
     func processPayment(nonce: String, amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<TransactionResult, PaymentError> {

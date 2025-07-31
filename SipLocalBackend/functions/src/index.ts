@@ -107,7 +107,6 @@ interface PaymentData {
     imageName: string;
     stampName: string;
   };
-  paymentMethod?: string; // Add payment method (credit_card, apple_pay, etc.)
 }
 
 
@@ -208,7 +207,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const {nonce, amount, merchantId, oauth_token, items, paymentMethod} = paymentData;
+  const {nonce, amount, merchantId, oauth_token, items} = paymentData;
   const idempotencyKey = uuidv4();
 
   // Initialize Square client with coffee shop's oauth token
@@ -367,74 +366,21 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       }
     }
 
-    // Handle different payment methods
-    let response;
-    
-    if (paymentMethod === "apple_pay") {
-      // For Apple Pay, we need to create a payment with a different approach
-      // Apple Pay provides a payment token that needs to be processed differently
-      try {
-        functions.logger.info('Processing Apple Pay payment...');
-        
-        // For Apple Pay, we need to use the card_nonce field instead of sourceId
-        // The Apple Pay token is actually a card nonce that Square can process
-        const request: any = {
-          card_nonce: nonce,
-          idempotencyKey: idempotencyKey,
-          amountMoney: {
-            amount: BigInt(amount), // Amount in cents
-            currency: "USD" as Square.Currency,
-          },
-          orderId: orderId,
-          autocomplete: true, // Complete the payment immediately for Apple Pay
-        };
-        if (customerId) {
-          request.customerId = customerId;
-        }
-        
-        functions.logger.info('Creating Apple Pay payment with request:', {
-          cardNonceLength: nonce.length,
-          amount: amount,
-          orderId: orderId,
-          hasCustomerId: !!customerId
-        });
-        
-        response = await squareClient.payments.create(request);
-        functions.logger.info('Apple Pay payment created successfully:', {
-          paymentId: response.payment?.id,
-          status: response.payment?.status
-        });
-        
-      } catch (error: any) {
-        functions.logger.error('Apple Pay payment failed:', {
-          error: error.message,
-          details: error.errors || error.details,
-          code: error.code,
-          fullError: JSON.stringify(error)
-        });
-        throw new functions.https.HttpsError(
-          "internal",
-          "Apple Pay payment failed: " + (error.message || JSON.stringify(error))
-        );
-      }
-    } else {
-      // Standard credit card payment
-      const request: any = {
-        sourceId: nonce,
-        idempotencyKey: idempotencyKey,
-        amountMoney: {
-          amount: BigInt(amount), // Amount in cents
-          currency: "USD" as Square.Currency,
-        },
-        orderId: orderId,
-        autocomplete: false, // Only authorize, don't complete payment yet
-      };
-      if (customerId) {
-        request.customerId = customerId;
-      }
-      
-      response = await squareClient.payments.create(request);
+    const request: any = {
+      sourceId: nonce,
+      idempotencyKey: idempotencyKey,
+      amountMoney: {
+        amount: BigInt(amount), // Amount in cents
+        currency: "USD" as Square.Currency,
+      },
+      orderId: orderId,
+      autocomplete: false, // Only authorize, don't complete payment yet
+    };
+    if (customerId) {
+      request.customerId = customerId;
     }
+
+    const response = await squareClient.payments.create(request);
     
     if (response.payment) {
       const payment = response.payment;
@@ -449,12 +395,12 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       const orderData = {
         transactionId: payment.id,
         paymentStatus: payment.status,
-        paymentMethod: paymentMethod || "credit_card",
         amount: payment.amountMoney?.amount?.toString(),
         currency: payment.amountMoney?.currency,
         merchantId: merchantId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentMethod: "card",
         receiptNumber: payment.receiptNumber || null,
         receiptUrl: payment.receiptUrl || null,
         userId: paymentData.userId, // Add userId to orderData
