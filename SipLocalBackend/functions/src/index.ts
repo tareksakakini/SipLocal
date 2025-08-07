@@ -1309,6 +1309,12 @@ export const squareWebhook = functions.https.onRequest(async (req, res) => {
     }
 
     functions.logger.info("Processing webhook type:", webhookData.type);
+    functions.logger.info("DEBUG: Webhook data overview:", {
+      type: webhookData.type,
+      hasData: !!webhookData.data,
+      dataKeys: webhookData.data ? Object.keys(webhookData.data) : [],
+      fullWebhook: JSON.stringify(webhookData, null, 2)
+    });
 
     // Handle different webhook types
     switch (webhookData.type) {
@@ -1421,9 +1427,24 @@ async function handleOrderUpdated(webhookData: any) {
 // Handle order.created webhook
 async function handleOrderCreated(webhookData: any) {
   try {
+    functions.logger.info("DEBUG: Full webhook data structure for order.created:", {
+      webhookData: JSON.stringify(webhookData, null, 2),
+      dataKeys: Object.keys(webhookData.data || {}),
+      hasId: !!webhookData.data?.id,
+      hasObject: !!webhookData.data?.object,
+      idKeys: webhookData.data?.id ? Object.keys(webhookData.data.id) : null,
+      objectKeys: webhookData.data?.object ? Object.keys(webhookData.data.object) : null
+    });
+
     const order = webhookData.data?.id?.order;
     if (!order) {
-      functions.logger.error("No order data in webhook");
+      functions.logger.error("No order data in webhook - trying alternative paths");
+      // Try alternative data paths
+      const altOrder = webhookData.data?.object?.order || webhookData.data?.object?.order_created;
+      if (altOrder) {
+        functions.logger.info("Found order data at alternative path:", altOrder);
+        return;
+      }
       return;
     }
 
