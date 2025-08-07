@@ -109,6 +109,31 @@ interface PaymentData {
   };
 }
 
+// Define the expected data structure for external payment orders
+interface ExternalPaymentData {
+  amount: number;
+  merchantId: string;
+  oauth_token: string;
+  items?: Array<{ name: string; quantity: number; price: number; customizations?: string }>;
+  customerName?: string;
+  customerEmail?: string;
+  pickupTime?: string; // ISO string for pickup time
+  userId?: string;
+  coffeeShopData?: {
+    id: string;
+    name: string;
+    address: string;
+    latitude: number;
+    longitude: number;
+    phone: string;
+    website: string;
+    description: string;
+    imageName: string;
+    stampName: string;
+  };
+  externalPayment?: boolean; // Flag to indicate external payment
+}
+
 
 // Function to get merchant tokens from Firestore (HTTP trigger)
 export const getMerchantTokens = functions.https.onRequest(async (req, res) => {
@@ -164,8 +189,24 @@ export const processPayment = functions.https.onCall(async (data, context) => {
   functions.logger.info("Data type:", typeof data);
   functions.logger.info("Data keys:", Object.keys(data || {}));
   
-  // Extract payment data from Firebase callable structure  
-  const requestData = data.data as PaymentData;
+  // Extract payment data - check if data is nested in data property
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    // Data is nested (some clients send it this way)
+    requestData = data.data;
+    functions.logger.info("Using nested data.data structure");
+  } else {
+    // Data is direct (most clients send it this way)
+    requestData = data;
+    functions.logger.info("Using direct data structure");
+  }
+  
+  functions.logger.info("Extracted requestData for payment:", {
+    hasNonce: !!requestData?.nonce,
+    hasAmount: !!requestData?.amount,
+    hasMerchantId: !!requestData?.merchantId,
+    hasOauthToken: !!requestData?.oauth_token
+  });
   const paymentData: PaymentData = {
     nonce: requestData.nonce,
     merchantId: requestData.merchantId, 
@@ -527,6 +568,382 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError(
       "internal",
       "Payment failed. Please try again.",
+      error.message,
+    );
+  }
+});
+
+// Function to submit orders to Square without payment processing
+export const submitOrderWithExternalPayment = functions.https.onCall(async (data, context) => {
+  functions.logger.info("=== EXTERNAL PAYMENT ORDER FUNCTION v2 - UPDATED VERSION ===");
+  functions.logger.info("Raw external payment data received:", data);
+  functions.logger.info("Data type:", typeof data);
+  functions.logger.info("Data keys:", Object.keys(data || {}));
+  functions.logger.info("Context:", context);
+  
+  // Extract order data - check if data is nested in data property
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    // Data is nested (some clients send it this way)
+    requestData = data.data;
+    functions.logger.info("Using nested data.data structure");
+  } else {
+    // Data is direct (most clients send it this way)
+    requestData = data;
+    functions.logger.info("Using direct data structure");
+  }
+  
+  functions.logger.info("Extracted requestData:", {
+    hasAmount: !!requestData?.amount,
+    hasMerchantId: !!requestData?.merchantId,
+    hasOauthToken: !!requestData?.oauth_token,
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    oauth_token: requestData?.oauth_token ? requestData.oauth_token.substring(0, 10) + "..." : "MISSING"
+  });
+  
+  const orderData: ExternalPaymentData = {
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    oauth_token: requestData?.oauth_token,
+    items: requestData?.items || [],
+    customerName: requestData?.customerName,
+    customerEmail: requestData?.customerEmail,
+    pickupTime: requestData?.pickupTime,
+    userId: requestData?.userId,
+    coffeeShopData: requestData?.coffeeShopData,
+    externalPayment: true
+  };
+
+  functions.logger.info("External payment order request received:", {
+    amount: orderData.amount,
+    merchantId: orderData.merchantId,
+    hasOauthToken: !!orderData.oauth_token,
+    externalPayment: orderData.externalPayment
+  });
+
+  // Validate the request data
+  if (!orderData.amount || !orderData.merchantId || !orderData.oauth_token) {
+    functions.logger.error("Request validation failed", {
+      orderData,
+      hasAmount: !!orderData.amount,
+      hasMerchantId: !!orderData.merchantId,
+      hasOauthToken: !!orderData.oauth_token
+    });
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "The function must be called with 'amount', 'merchantId', and 'oauth_token' arguments."
+    );
+  }
+
+  const {amount, merchantId, oauth_token, items} = orderData;
+  const transactionId = uuidv4(); // Generate a unique transaction ID for external payment order
+
+  // Initialize Square client with coffee shop's oauth token
+  const accessToken = oauth_token;
+  const environment = process.env.SQUARE_ENVIRONMENT || "sandbox";
+  
+  if (!accessToken) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Square access token not provided"
+    );
+  }
+
+  const squareClient = new SquareClient({
+    token: accessToken,
+    environment: environment === "production" ? 
+      SquareEnvironment.Production : SquareEnvironment.Sandbox,
+  });
+
+  // Fetch locationId from Firestore or Square API
+  let locationId = "";
+  try {
+    const doc = await admin.firestore()
+      .collection("merchant_tokens")
+      .doc(merchantId)
+      .get();
+    if (!doc.exists) {
+      throw new functions.https.HttpsError("not-found", "Merchant tokens not found");
+    }
+    const tokenData = doc.data();
+    locationId = tokenData?.locationId || "";
+    if (!locationId) {
+      // Fetch locations from Square API
+      const locationsResponse = await squareClient.locations.list();
+      if (!locationsResponse.locations || locationsResponse.locations.length === 0) {
+        throw new functions.https.HttpsError("not-found", "No locations found for merchant");
+      }
+      // Use the first location
+      locationId = locationsResponse.locations[0].id || "";
+      // Cache it in Firestore for next time
+      await admin.firestore()
+        .collection("merchant_tokens")
+        .doc(merchantId)
+        .update({ locationId });
+    }
+    if (!locationId) {
+      throw new functions.https.HttpsError("internal", "locationId could not be determined");
+    }
+  } catch (locError) {
+    functions.logger.error("Failed to fetch locationId:", locError);
+    throw new functions.https.HttpsError("internal", "Failed to fetch locationId");
+  }
+
+  let customerId: string | undefined = undefined;
+  if (orderData.customerEmail && orderData.customerName) {
+    try {
+      const customersApi = squareClient.customers;
+      const searchResp = await customersApi.search({
+        query: {
+          filter: {
+            emailAddress: {
+              exact: orderData.customerEmail
+            }
+          }
+        }
+      });
+      if (searchResp.customers && searchResp.customers.length > 0) {
+        customerId = searchResp.customers[0].id;
+        functions.logger.info('Found existing Square customer for external order', { customerId });
+      } else {
+        // Create new customer
+        const createResp = await customersApi.create({
+          givenName: orderData.customerName,
+          emailAddress: orderData.customerEmail
+        });
+        customerId = createResp.customer?.id;
+        functions.logger.info('Created new Square customer for external order', { customerId });
+      }
+    } catch (customerError) {
+      functions.logger.error('Failed to look up or create Square customer for external order:', customerError);
+      // Continue without customerId
+    }
+  }
+
+  try {
+    // Create Square order without payment processing
+    functions.logger.info("Creating external payment order in Square...", {
+      amount: amount,
+      merchantId: merchantId
+    });
+    
+    let orderId: string | undefined = undefined;
+    if (items && items.length > 0) {
+      // Build line items for Square order
+      const lineItems = items.map(item => ({
+        name: item.name,
+        quantity: item.quantity.toString(),
+        basePriceMoney: {
+          amount: BigInt(item.price), // price in cents
+          currency: "USD" as any,
+        },
+        note: item.customizations || undefined,
+      }));
+
+      // Create the order with external payment details
+      const orderRequest: any = {
+        order: {
+          locationId: locationId,
+          lineItems,
+          state: "OPEN", // Set order to OPEN (active) state
+          source: {
+            name: "SipLocal App - External Payment"
+          },
+          fulfillments: [
+            {
+              type: "PICKUP",
+              state: "PROPOSED",
+              pickupDetails: {
+                recipient: {
+                  displayName: orderData.customerName || "Customer",
+                  emailAddress: orderData.customerEmail || undefined
+                },
+                pickupAt: orderData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                note: "Order placed via mobile app - Payment handled externally"
+              }
+            }
+          ]
+          // Note: We'll create an external payment separately to link with this order
+        },
+        idempotencyKey: uuidv4(),
+      };
+
+      if (customerId) {
+        orderRequest.order.customerId = customerId;
+      }
+
+      try {
+        functions.logger.info('Creating Square order with external payment:', {
+          hasLineItems: !!orderRequest.order.lineItems?.length,
+          locationId: orderRequest.order.locationId,
+          customerPresent: !!orderRequest.order.customerId,
+          hasTenders: !!orderRequest.order.tenders?.length,
+          orderRequestStructure: JSON.stringify(orderRequest, (key, value) => 
+            typeof value === 'bigint' ? value.toString() : value, 2)
+        });
+        
+        // First verify locationId is correct for this merchant
+        try {
+          const locationsResponse = await squareClient.locations.list();
+          functions.logger.info('Available locations for merchant:', {
+            locations: locationsResponse.locations?.map(loc => ({
+              id: loc.id,
+              name: loc.name,
+              status: loc.status
+            }))
+          });
+        } catch (locError) {
+          functions.logger.error('Failed to list locations:', locError);
+        }
+        
+        // Call createOrder (not calculateOrder) - this is the key difference
+        const orderResponse = await squareClient.orders.create(orderRequest);
+        
+        functions.logger.info('Square createOrder API response:', {
+          hasOrder: !!orderResponse.order,
+          orderId: orderResponse.order?.id,
+          orderState: orderResponse.order?.state,
+          fullResponse: JSON.stringify(orderResponse, (key, value) => 
+            typeof value === 'bigint' ? value.toString() : value, 2)
+        });
+        
+        // Check for errors in the response
+        if (orderResponse.errors) {
+          functions.logger.error("Square returned errors:", orderResponse.errors);
+          throw new Error("Square API errors: " + JSON.stringify(orderResponse.errors, (key, value) => 
+            typeof value === 'bigint' ? value.toString() : value));
+        }
+        
+        orderId = orderResponse.order?.id;
+        functions.logger.info('Square order created successfully for external payment', { 
+          orderId,
+          orderExists: !!orderResponse.order,
+          orderState: orderResponse.order?.state
+        });
+
+        // Create external payment to make order visible in Square dashboard
+        if (orderId) {
+          functions.logger.info('Creating external payment to link with order...');
+          try {
+            const paymentResponse = await squareClient.payments.create({
+              idempotencyKey: uuidv4(),
+              sourceId: 'EXTERNAL',
+              externalDetails: {
+                type: 'OTHER',
+                source: 'SipLocal App'
+              },
+              amountMoney: {
+                amount: BigInt(amount), // in cents
+                currency: 'USD'
+              },
+              orderId: orderId,
+              locationId: locationId
+            });
+
+            functions.logger.info('External payment recorded successfully:', {
+              paymentId: paymentResponse.payment?.id,
+              status: paymentResponse.payment?.status,
+              orderId: orderId,
+              amount: amount
+            });
+          } catch (paymentError: any) {
+            functions.logger.error('Failed to create external payment (order still created):', paymentError);
+            // Don't throw here - the order was created successfully, just the payment link failed
+            // The order may not show in dashboard but at least it exists
+          }
+        }
+      } catch (orderError: any) {
+        functions.logger.error('Failed to create Square order for external payment:', orderError);
+        if (orderError.errors && Array.isArray(orderError.errors)) {
+          throw new functions.https.HttpsError(
+            "internal",
+            "Failed to create Square order: " + orderError.errors.map((e: any) => e.detail || e.message).join("; ")
+          );
+        }
+        throw new functions.https.HttpsError(
+          "internal",
+          "Failed to create Square order: " + (orderError.message || JSON.stringify(orderError))
+        );
+      }
+    }
+
+    functions.logger.info("External payment order created successfully", {
+      transactionId: transactionId,
+      orderId: orderId
+    });
+
+    // Save order to Firestore with external payment flag
+    const firestoreOrderData = {
+      transactionId: transactionId,
+      paymentStatus: "EXTERNAL", // Mark as external payment
+      amount: amount.toString(), // Store amount in cents as string
+      currency: "USD",
+      merchantId: merchantId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentMethod: "external",
+      receiptNumber: null,
+      receiptUrl: null,
+      userId: orderData.userId,
+      coffeeShopData: orderData.coffeeShopData,
+      items: orderData.items || [],
+      customerName: orderData.customerName,
+      customerEmail: orderData.customerEmail,
+      pickupTime: orderData.pickupTime,
+      orderId: orderId, // Store Square order ID for status tracking
+      status: "SUBMITTED", // Order submitted, awaiting preparation
+      externalPayment: true, // Flag for external payment
+    };
+
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .set(firestoreOrderData);
+      
+      functions.logger.info("External payment order saved to Firestore", {
+        transactionId: transactionId,
+      });
+    } catch (firestoreError) {
+      functions.logger.error("Failed to save external payment order to Firestore:", firestoreError);
+      // Continue anyway since the Square order was created
+    }
+
+    // Return success response
+    return {
+      success: true,
+      transactionId: transactionId,
+      orderId: orderId,
+      status: "SUBMITTED",
+      amount: amount.toString(),
+      currency: "USD",
+      receiptNumber: null,
+      receiptUrl: null,
+    };
+
+  } catch (error: any) {
+    functions.logger.error("External payment order failed:", error);
+
+    // Handle specific Square API errors
+    if (error.errors) {
+      const squareError = error.errors[0];
+      functions.logger.error("Square API Error:", {
+        category: squareError.category,
+        code: squareError.code,
+        detail: squareError.detail,
+      });
+      
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Failed to create order in Square: " + squareError.detail,
+        squareError.detail,
+      );
+    }
+
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to create external payment order.",
       error.message,
     );
   }

@@ -95,4 +95,74 @@ class PaymentService {
             return .failure(.serverError(error.localizedDescription))
         }
     }
+    
+    // Submit order to Square without processing payment
+    func submitOrderWithExternalPayment(amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<TransactionResult, PaymentError> {
+        // Convert dollars to cents for Square API (multiply by 100)
+        let amountInCents = Int(amount * 100)
+        
+        print("Calling Firebase function to submit order without payment")
+        print("Amount: \(amount) dollars (\(amountInCents) cents)")
+        print("MerchantId: \(merchantId)")
+        print("OAuth token: \(oauthToken.prefix(10))...")
+        
+        // Prepare cart items for backend
+        let itemsForBackend = cartItems.map { item in
+            return [
+                "name": item.menuItem.name,
+                "quantity": item.quantity,
+                "price": Int(item.itemPriceWithModifiers * 100), // price in cents
+                "customizations": item.customizations ?? ""
+            ]
+        }
+        
+        var callData: [String: Any] = [
+            "amount": amountInCents,
+            "merchantId": merchantId,
+            "oauth_token": oauthToken,
+            "items": itemsForBackend,
+            "customerName": customerName,
+            "customerEmail": customerEmail,
+            "userId": userId,
+            "coffeeShopData": coffeeShop.toDictionary(),
+            "externalPayment": true // Flag to indicate external payment handling
+        ]
+        
+        // Add pickup time if provided
+        if let pickupTime = pickupTime {
+            let formatter = ISO8601DateFormatter()
+            callData["pickupTime"] = formatter.string(from: pickupTime)
+        }
+        
+        print("Calling Firebase function with external payment data: \(callData)")
+        
+        do {
+            // Call the Firebase function for external payment orders
+            let result = try await functions.httpsCallable("submitOrderWithExternalPayment").call(callData)
+            
+            // Parse the response
+            if let data = result.data as? [String: Any],
+               let success = data["success"] as? Bool,
+               success == true,
+               let transactionId = data["transactionId"] as? String {
+                let receiptUrl = data["receiptUrl"] as? String
+                let orderId = data["orderId"] as? String
+                let transactionResult = TransactionResult(
+                    transactionId: transactionId,
+                    message: "Order submitted successfully! Payment handled externally.",
+                    receiptUrl: receiptUrl,
+                    orderId: orderId
+                )
+                print("Firebase function returned success for external payment order: \(transactionId)")
+                return .success(transactionResult)
+            } else {
+                print("Firebase function returned unexpected response: \(result.data)")
+                return .failure(.serverError("Unexpected response from server"))
+            }
+            
+        } catch {
+            print("Firebase function call failed for external payment: \(error)")
+            return .failure(.serverError(error.localizedDescription))
+        }
+    }
 } 

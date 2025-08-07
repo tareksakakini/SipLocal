@@ -142,9 +142,9 @@ struct CheckoutView: View {
                     }
                     .padding(.horizontal)
                     
-                    // Payment Button
+                    // Checkout Button (External Payment)
                     Button(action: {
-                        // Check if shop is closed before allowing payment
+                        // Check if shop is closed before allowing checkout
                         if let firstItem = cartManager.items.first,
                            let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
                            !isOpen {
@@ -152,16 +152,17 @@ struct CheckoutView: View {
                             return
                         }
                         
-                        self.showingCardEntry = true
+                        // Submit order without payment processing
+                        submitOrderWithExternalPayment()
                     }) {
                         HStack {
                             if isProcessingPayment {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
-                                Text("Processing...")
+                                Text("Submitting...")
                             } else {
-                                Text("Pay")
+                                Text("Place Order")
                                     .fontWeight(.semibold)
                             }
                         }
@@ -347,6 +348,91 @@ struct CheckoutView: View {
                         transactionId = nil
                         isProcessingPayment = false
                         self.showingCardEntry = false
+                        self.showingPaymentResult = true
+                    }
+                }
+            }
+        }
+    }
+    
+    private func submitOrderWithExternalPayment() {
+        isProcessingPayment = true
+        paymentResult = "Submitting order..."
+        
+        guard let firstItem = cartManager.items.first else {
+            paymentResult = "No items in cart"
+            isProcessingPayment = false
+            return
+        }
+        
+        let merchantId = firstItem.shop.merchantId
+        
+        // Fetch user data before submitting order
+        guard let userId = authManager.currentUser?.uid else {
+            paymentResult = "User not logged in."
+            isProcessingPayment = false
+            return
+        }
+        
+        authManager.getUserData(userId: userId) { userData, error in
+            guard let userData = userData else {
+                DispatchQueue.main.async {
+                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
+                    self.isProcessingPayment = false
+                }
+                return
+            }
+            
+            Task {
+                do {
+                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+                    print("Debug - Submitting order to Square without payment:")
+                    print("  amount: \(cartManager.totalPrice)")
+                    print("  merchantId: \(merchantId)")
+                    print("  oauth_token: \(credentials.oauth_token.prefix(10))...")
+                    
+                    // Submit order with external payment flag
+                    let result = await paymentService.submitOrderWithExternalPayment(
+                        amount: cartManager.totalPrice,
+                        merchantId: merchantId,
+                        oauthToken: credentials.oauth_token,
+                        cartItems: cartManager.items,
+                        customerName: userData.fullName,
+                        customerEmail: userData.email,
+                        userId: userId,
+                        coffeeShop: cartManager.items.first!.shop,
+                        pickupTime: selectedPickupTime
+                    )
+                    
+                    await MainActor.run {
+                        switch result {
+                        case .success(let transaction):
+                            paymentResult = "Order submitted successfully! Payment will be handled externally."
+                            paymentSuccess = true
+                            transactionId = transaction.transactionId
+                            completedOrderItems = cartManager.items
+                            completedOrderTotal = cartManager.totalPrice
+                            completedOrderShop = cartManager.items.first?.shop
+                            // Orders are now stored in Firestore by the backend
+                            // Refresh orders to show the new order
+                            Task {
+                                await orderManager.refreshOrders()
+                            }
+                            cartManager.clearCart()
+                        case .failure(let error):
+                            paymentResult = error.localizedDescription
+                            paymentSuccess = false
+                            transactionId = nil
+                        }
+                        isProcessingPayment = false
+                        self.showingPaymentResult = true
+                    }
+                } catch {
+                    await MainActor.run {
+                        paymentResult = "Failed to submit order: \(error.localizedDescription)"
+                        paymentSuccess = false
+                        transactionId = nil
+                        isProcessingPayment = false
                         self.showingPaymentResult = true
                     }
                 }
