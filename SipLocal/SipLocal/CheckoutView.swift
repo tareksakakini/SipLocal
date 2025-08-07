@@ -1,6 +1,7 @@
 import SwiftUI
 import SquareInAppPaymentsSDK
 import Combine
+import StripePaymentSheet
 
 struct CheckoutView: View {
     @EnvironmentObject var cartManager: CartManager
@@ -20,6 +21,10 @@ struct CheckoutView: View {
     @State private var selectedPickupTime = Date().addingTimeInterval(5 * 60) // Default to 5 minutes from now
     @State private var showingTimePicker = false
     @State private var showingClosedShopAlert = false
+    
+    // Stripe PaymentSheet state
+    @State private var paymentSheet: PaymentSheet?
+    @State private var stripePaymentResult: PaymentSheetResult?
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
@@ -142,7 +147,41 @@ struct CheckoutView: View {
                     }
                     .padding(.horizontal)
                     
-                    // Checkout Button (External Payment)
+                    // Stripe Payment Button
+                    Button(action: {
+                        // Check if shop is closed before allowing checkout
+                        if let firstItem = cartManager.items.first,
+                           let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
+                           !isOpen {
+                            showingClosedShopAlert = true
+                            return
+                        }
+                        
+                        // Process payment with Stripe
+                        processStripePayment()
+                    }) {
+                        HStack {
+                            if isProcessingPayment {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                                Text("Processing...")
+                            } else {
+                                Image(systemName: "creditcard")
+                                Text("Pay with Stripe")
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(isProcessingPayment ? Color.gray : Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .disabled(isProcessingPayment)
+                    .padding(.horizontal)
+                    
+                    // External Payment Button (Keep existing functionality)
                     Button(action: {
                         // Check if shop is closed before allowing checkout
                         if let firstItem = cartManager.items.first,
@@ -162,7 +201,8 @@ struct CheckoutView: View {
                                     .scaleEffect(0.8)
                                 Text("Submitting...")
                             } else {
-                                Text("Place Order")
+                                Image(systemName: "doc.text")
+                                Text("Place Order (External Payment)")
                                     .fontWeight(.semibold)
                             }
                         }
@@ -437,6 +477,160 @@ struct CheckoutView: View {
                     }
                 }
             }
+        }
+    }
+    
+    private func processStripePayment() {
+        isProcessingPayment = true
+        paymentResult = "Processing Stripe payment..."
+        
+        guard let firstItem = cartManager.items.first else {
+            paymentResult = "No items in cart"
+            isProcessingPayment = false
+            return
+        }
+        
+        let merchantId = firstItem.shop.merchantId
+        
+        // Fetch user data before payment
+        guard let userId = authManager.currentUser?.uid else {
+            paymentResult = "User not logged in."
+            isProcessingPayment = false
+            return
+        }
+        
+        authManager.getUserData(userId: userId) { userData, error in
+            guard let userData = userData else {
+                DispatchQueue.main.async {
+                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
+                    self.isProcessingPayment = false
+                }
+                return
+            }
+            
+            Task {
+                do {
+                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+                    print("Debug - Processing Stripe payment:")
+                    print("  amount: \(cartManager.totalPrice)")
+                    print("  merchantId: \(merchantId)")
+                    print("  oauth_token: \(credentials.oauth_token.prefix(10)))...")
+                    
+                    // Get PaymentIntent and client secret from backend
+                    let result = await paymentService.processPaymentWithStripe(
+                        amount: cartManager.totalPrice,
+                        merchantId: merchantId,
+                        oauthToken: credentials.oauth_token,
+                        cartItems: cartManager.items,
+                        customerName: userData.fullName,
+                        customerEmail: userData.email,
+                        userId: userId,
+                        coffeeShop: cartManager.items.first!.shop,
+                        pickupTime: selectedPickupTime
+                    )
+                    
+                    await MainActor.run {
+                        switch result {
+                        case .success(let (transaction, clientSecret)):
+                            if let clientSecret = clientSecret {
+                                // Create PaymentSheet configuration
+                                var configuration = PaymentSheet.Configuration()
+                                configuration.merchantDisplayName = cartManager.items.first?.shop.name ?? "Coffee Shop"
+                                configuration.allowsDelayedPaymentMethods = false
+                                
+                                // Create PaymentSheet
+                                self.paymentSheet = PaymentSheet(paymentIntentClientSecret: clientSecret, configuration: configuration)
+                                
+                                // Store transaction details for later use
+                                self.transactionId = transaction.transactionId
+                                self.completedOrderItems = cartManager.items
+                                self.completedOrderTotal = cartManager.totalPrice
+                                self.completedOrderShop = cartManager.items.first?.shop
+                                
+                                // Present PaymentSheet
+                                self.isProcessingPayment = false
+                                self.presentPaymentSheet()
+                            } else {
+                                paymentResult = "Failed to get payment client secret"
+                                paymentSuccess = false
+                                transactionId = nil
+                                isProcessingPayment = false
+                                self.showingPaymentResult = true
+                            }
+                        case .failure(let error):
+                            paymentResult = error.localizedDescription
+                            paymentSuccess = false
+                            transactionId = nil
+                            isProcessingPayment = false
+                            self.showingPaymentResult = true
+                        }
+                    }
+                } catch {
+                    await MainActor.run {
+                        paymentResult = "Failed to process Stripe payment: \(error.localizedDescription)"
+                        paymentSuccess = false
+                        transactionId = nil
+                        isProcessingPayment = false
+                        self.showingPaymentResult = true
+                    }
+                }
+            }
+        }
+    }
+    
+    private func presentPaymentSheet() {
+        // Add a small delay to ensure any existing presentations are finished
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                  let window = windowScene.windows.first else {
+                self.paymentResult = "Unable to present payment sheet"
+                self.paymentSuccess = false
+                self.showingPaymentResult = true
+                return
+            }
+            
+            // Find the top-most view controller
+            var topViewController = window.rootViewController
+            while let presentedViewController = topViewController?.presentedViewController {
+                topViewController = presentedViewController
+            }
+            
+            guard let presentingViewController = topViewController else {
+                self.paymentResult = "Unable to find presenting view controller"
+                self.paymentSuccess = false
+                self.showingPaymentResult = true
+                return
+            }
+            
+            self.paymentSheet?.present(from: presentingViewController) { [self] result in
+                DispatchQueue.main.async {
+                    self.stripePaymentResult = result
+                    self.handleStripePaymentResult(result)
+                }
+            }
+        }
+    }
+    
+    private func handleStripePaymentResult(_ result: PaymentSheetResult) {
+        switch result {
+        case .completed:
+            paymentResult = "Payment successful with Stripe!"
+            paymentSuccess = true
+            // Orders are now stored in Firestore by the backend
+            // Refresh orders to show the new order
+            Task {
+                await orderManager.refreshOrders()
+            }
+            cartManager.clearCart()
+            showingPaymentResult = true
+        case .canceled:
+            paymentResult = "Payment was canceled."
+            paymentSuccess = false
+            showingPaymentResult = true
+        case .failed(let error):
+            paymentResult = "Payment failed: \(error.localizedDescription)"
+            paymentSuccess = false
+            showingPaymentResult = true
         }
     }
     

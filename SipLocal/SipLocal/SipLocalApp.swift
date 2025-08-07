@@ -10,6 +10,7 @@ import FirebaseCore
 import Firebase
 import SquareInAppPaymentsSDK
 import OneSignalFramework // ✅ Import OneSignal
+import Stripe
 
 class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication,
@@ -22,6 +23,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // Square In-App Payments
         SQIPInAppPaymentsSDK.squareApplicationID = "sq0idp-e4abRkjlBijc_l97fVO62Q"
         print("Square In-App Payments SDK initialized with production appID")
+        
+        // Stripe Configuration
+        StripeAPI.defaultPublishableKey = "pk_test_51RtCBfRt7p0sLokNhaWSVNpPCKvtW7qeluVKW1anJKYFEegPTSbpuF11ydT7X7suW66lwpZz04cJ8d94excKZPlL001UHfY7qT"
+        print("Stripe SDK initialized")
         
         // ✅ OneSignal Initialization
         OneSignal.initialize("f626f99f-94ea-4859-bac9-10911153f295", withLaunchOptions: launchOptions)

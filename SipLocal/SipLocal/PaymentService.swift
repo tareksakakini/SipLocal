@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseFunctions
+import Stripe
 
 // A simple struct to represent a successful transaction
 struct TransactionResult {
@@ -162,6 +163,78 @@ class PaymentService {
             
         } catch {
             print("Firebase function call failed for external payment: \(error)")
+            return .failure(.serverError(error.localizedDescription))
+        }
+    }
+    
+    // Process payment with Stripe and create order in Square
+    func processPaymentWithStripe(amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<(TransactionResult, String?), PaymentError> {
+        // Convert dollars to cents for Stripe API (multiply by 100)
+        let amountInCents = Int(amount * 100)
+        
+        print("Processing Stripe payment and creating Square order")
+        print("Amount: \(amount) dollars (\(amountInCents) cents)")
+        print("MerchantId: \(merchantId)")
+        print("OAuth token: \(oauthToken.prefix(10))...")
+        
+        // Prepare cart items for backend
+        let itemsForBackend = cartItems.map { item in
+            return [
+                "name": item.menuItem.name,
+                "quantity": item.quantity,
+                "price": Int(item.itemPriceWithModifiers * 100), // price in cents
+                "customizations": item.customizations ?? ""
+            ]
+        }
+        
+        var callData: [String: Any] = [
+            "amount": amountInCents,
+            "merchantId": merchantId,
+            "oauth_token": oauthToken,
+            "items": itemsForBackend,
+            "customerName": customerName,
+            "customerEmail": customerEmail,
+            "userId": userId,
+            "coffeeShopData": coffeeShop.toDictionary(),
+            "paymentMethod": "stripe" // Flag to indicate Stripe payment processing
+        ]
+        
+        // Add pickup time if provided
+        if let pickupTime = pickupTime {
+            let formatter = ISO8601DateFormatter()
+            callData["pickupTime"] = formatter.string(from: pickupTime)
+        }
+        
+        print("Calling Firebase function for Stripe payment with data: \(callData)")
+        
+        do {
+            // Call the Firebase function for Stripe payment processing
+            let result = try await functions.httpsCallable("processStripePayment").call(callData)
+            
+            // Parse the response
+            if let data = result.data as? [String: Any],
+               let success = data["success"] as? Bool,
+               success == true,
+               let transactionId = data["transactionId"] as? String {
+                let receiptUrl = data["receiptUrl"] as? String
+                let orderId = data["orderId"] as? String
+                let clientSecret = data["stripeClientSecret"] as? String
+                let transactionResult = TransactionResult(
+                    transactionId: transactionId,
+                    message: "Payment intent created. Complete payment to proceed.",
+                    receiptUrl: receiptUrl,
+                    orderId: orderId
+                )
+                print("Firebase function returned success for Stripe payment: \(transactionId)")
+                print("Client secret received: \(clientSecret != nil ? "Yes" : "No")")
+                return .success((transactionResult, clientSecret))
+            } else {
+                print("Firebase function returned unexpected response: \(result.data)")
+                return .failure(.serverError("Unexpected response from server"))
+            }
+            
+        } catch {
+            print("Firebase function call failed for Stripe payment: \(error)")
             return .failure(.serverError(error.localizedDescription))
         }
     }

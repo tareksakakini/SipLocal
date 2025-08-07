@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E60B35072E45679D00C37FF4 /* Stripe in Frameworks */ = {isa = PBXBuildFile; productRef = E60B35062E45679D00C37FF4 /* Stripe */; };
+		E60B35092E45679D00C37FF4 /* StripeApplePay in Frameworks */ = {isa = PBXBuildFile; productRef = E60B35082E45679D00C37FF4 /* StripeApplePay */; };
+		E60B350B2E45679D00C37FF4 /* StripeConnect in Frameworks */ = {isa = PBXBuildFile; productRef = E60B350A2E45679D00C37FF4 /* StripeConnect */; };
+		E60B350D2E45679D00C37FF4 /* StripeFinancialConnections in Frameworks */ = {isa = PBXBuildFile; productRef = E60B350C2E45679D00C37FF4 /* StripeFinancialConnections */; };
+		E60B350F2E456DC100C37FF4 /* StripePaymentSheet in Frameworks */ = {isa = PBXBuildFile; productRef = E60B350E2E456DC100C37FF4 /* StripePaymentSheet */; };
 		E62101102E3838810070209A /* OneSignalFramework in Frameworks */ = {isa = PBXBuildFile; productRef = E621010F2E3838810070209A /* OneSignalFramework */; };
 		E621FFEB2E2AB0260070209A /* SquareBuyerVerificationSDK in Frameworks */ = {isa = PBXBuildFile; productRef = E621FFEA2E2AB0260070209A /* SquareBuyerVerificationSDK */; };
 		E621FFED2E2AB0260070209A /* SquareInAppPaymentsSDK in Frameworks */ = {isa = PBXBuildFile; productRef = E621FFEC2E2AB0260070209A /* SquareInAppPaymentsSDK */; };
@@ -49,13 +54,18 @@
 			buildActionMask = 2147483647;
 			files = (
 				E6913D3C2E1C321C0082D6F5 /* FirebaseDatabase in Frameworks */,
+				E60B35092E45679D00C37FF4 /* StripeApplePay in Frameworks */,
+				E60B350D2E45679D00C37FF4 /* StripeFinancialConnections in Frameworks */,
 				E6913D3E2E1C321C0082D6F5 /* FirebaseFirestore in Frameworks */,
+				E60B350F2E456DC100C37FF4 /* StripePaymentSheet in Frameworks */,
 				E621FFED2E2AB0260070209A /* SquareInAppPaymentsSDK in Frameworks */,
 				E621FFFF2E2B15F20070209A /* FirebaseFunctions in Frameworks */,
 				E6913D3A2E1C321C0082D6F5 /* FirebaseCore in Frameworks */,
+				E60B35072E45679D00C37FF4 /* Stripe in Frameworks */,
 				E6913D402E1C321C0082D6F5 /* FirebaseStorage in Frameworks */,
 				E6913D382E1C321C0082D6F5 /* FirebaseAuth in Frameworks */,
 				E62101102E3838810070209A /* OneSignalFramework in Frameworks */,
+				E60B350B2E45679D00C37FF4 /* StripeConnect in Frameworks */,
 				E621FFEB2E2AB0260070209A /* SquareBuyerVerificationSDK in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -117,6 +127,11 @@
 				E621FFEC2E2AB0260070209A /* SquareInAppPaymentsSDK */,
 				E621FFFE2E2B15F20070209A /* FirebaseFunctions */,
 				E621010F2E3838810070209A /* OneSignalFramework */,
+				E60B35062E45679D00C37FF4 /* Stripe */,
+				E60B35082E45679D00C37FF4 /* StripeApplePay */,
+				E60B350A2E45679D00C37FF4 /* StripeConnect */,
+				E60B350C2E45679D00C37FF4 /* StripeFinancialConnections */,
+				E60B350E2E456DC100C37FF4 /* StripePaymentSheet */,
 			);
 			productName = SipLocal;
 			productReference = E6913D212E1C221E0082D6F5 /* SipLocal.app */;
@@ -150,6 +165,7 @@
 				E6913D362E1C321C0082D6F5 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				E621FFE92E2AB0260070209A /* XCRemoteSwiftPackageReference "in-app-payments-ios" */,
 				E621010E2E3838810070209A /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */,
+				E60B35052E45679D00C37FF4 /* XCRemoteSwiftPackageReference "stripe-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = E6913D222E1C221E0082D6F5 /* Products */;
@@ -409,6 +425,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		E60B35052E45679D00C37FF4 /* XCRemoteSwiftPackageReference "stripe-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stripe/stripe-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 24.0.0;
+			};
+		};
 		E621010E2E3838810070209A /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/OneSignal/OneSignal-iOS-SDK";
@@ -436,6 +460,31 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		E60B35062E45679D00C37FF4 /* Stripe */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E60B35052E45679D00C37FF4 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = Stripe;
+		};
+		E60B35082E45679D00C37FF4 /* StripeApplePay */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E60B35052E45679D00C37FF4 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeApplePay;
+		};
+		E60B350A2E45679D00C37FF4 /* StripeConnect */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E60B35052E45679D00C37FF4 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeConnect;
+		};
+		E60B350C2E45679D00C37FF4 /* StripeFinancialConnections */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E60B35052E45679D00C37FF4 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripeFinancialConnections;
+		};
+		E60B350E2E456DC100C37FF4 /* StripePaymentSheet */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = E60B35052E45679D00C37FF4 /* XCRemoteSwiftPackageReference "stripe-ios" */;
+			productName = StripePaymentSheet;
+		};
 		E621010F2E3838810070209A /* OneSignalFramework */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = E621010E2E3838810070209A /* XCRemoteSwiftPackageReference "OneSignal-iOS-SDK" */;
