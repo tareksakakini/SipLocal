@@ -2,9 +2,18 @@ import Foundation
 
 class TokenService {
     private let baseURL = "https://us-central1-coffee-55670.cloudfunctions.net"
+    private static var memoryCache: [String: SquareCredentials] = [:]
+    private static var cacheTimestamps: [String: TimeInterval] = [:]
+    private let cacheTTL: TimeInterval = 60 * 30 // 30 minutes
     
     func getMerchantTokens(merchantId: String) async throws -> SquareCredentials {
         print("🔐 TokenService: Fetching tokens for merchantId: \(merchantId)")
+        // Serve from in-memory cache if fresh
+        if let creds = Self.memoryCache[merchantId], let ts = Self.cacheTimestamps[merchantId] {
+            if Date().timeIntervalSince1970 - ts < cacheTTL {
+                return creds
+            }
+        }
         
         guard let url = URL(string: "\(baseURL)/getMerchantTokens") else {
             throw TokenServiceError.invalidURL
@@ -63,11 +72,15 @@ class TokenService {
             
             print("✅ TokenService: Successfully parsed tokens for merchant: \(merchantIdFromTokens)")
             
-            return SquareCredentials(
+            let creds = SquareCredentials(
                 oauth_token: oauthToken,
                 merchantId: merchantIdFromTokens,
                 refreshToken: refreshToken
             )
+            // cache
+            Self.memoryCache[merchantId] = creds
+            Self.cacheTimestamps[merchantId] = Date().timeIntervalSince1970
+            return creds
         } catch {
             print("❌ TokenService: Error fetching merchant tokens: \(error)")
             if let nsError = error as NSError? {

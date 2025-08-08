@@ -28,6 +28,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         StripeAPI.defaultPublishableKey = "pk_test_51RtCBfRt7p0sLokNhaWSVNpPCKvtW7qeluVKW1anJKYFEegPTSbpuF11ydT7X7suW66lwpZz04cJ8d94excKZPlL001UHfY7qT"
         print("Stripe SDK initialized")
         
+        // Configure larger URLCache to speed up image and API response caching
+        let memoryCapacity = 50 * 1024 * 1024 // 50 MB
+        let diskCapacity = 200 * 1024 * 1024  // 200 MB
+        let cache = URLCache(memoryCapacity: memoryCapacity, diskCapacity: diskCapacity)
+        URLCache.shared = cache
+        
         // ✅ OneSignal Initialization
         OneSignal.initialize("f626f99f-94ea-4859-bac9-10911153f295", withLaunchOptions: launchOptions)
         
