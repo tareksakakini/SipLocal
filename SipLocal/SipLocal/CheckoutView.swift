@@ -168,47 +168,13 @@ struct CheckoutView: View {
                                 Text("Processing...")
                             } else {
                                 Image(systemName: "creditcard")
-                                Text("Pay with Stripe")
+                                Text("Pay")
                                     .fontWeight(.semibold)
                             }
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(isProcessingPayment ? Color.gray : Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    .disabled(isProcessingPayment)
-                    .padding(.horizontal)
-                    
-                    // External Payment Button (Keep existing functionality)
-                    Button(action: {
-                        // Check if shop is closed before allowing checkout
-                        if let firstItem = cartManager.items.first,
-                           let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
-                           !isOpen {
-                            showingClosedShopAlert = true
-                            return
-                        }
-                        
-                        // Submit order without payment processing
-                        submitOrderWithExternalPayment()
-                    }) {
-                        HStack {
-                            if isProcessingPayment {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                                Text("Submitting...")
-                            } else {
-                                Image(systemName: "doc.text")
-                                Text("Place Order (External Payment)")
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(isProcessingPayment ? Color.gray : Color.black)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
