@@ -37,49 +37,42 @@ struct CoffeeShopDetailView: View {
                                 .font(.body)
                                 .fixedSize(horizontal: false, vertical: true)
                             
+                            // Quick action buttons
+                            HStack(spacing: 12) {
+                                QuickActionButton(systemImageName: "menucard", title: "Menu") {
+                                    showMenu = true
+                                }
+                                QuickActionButton(systemImageName: "mappin.and.ellipse", title: "Directions") {
+                                    openMapsForDirections(to: shop.address)
+                                }
+                                QuickActionButton(systemImageName: "globe", title: "Website") {
+                                    openWebsite(shop.website)
+                                }
+                                QuickActionButton(systemImageName: "phone.fill", title: "Call") {
+                                    makePhoneCall(to: shop.phone)
+                                }
+                            }
+                            .padding(.top, 12)
+                            
                             Divider()
                             
-                            Button(action: {
-                                openMapsForDirections(to: shop.address)
-                            }) {
-                                HStack {
+                            // Details (non-interactive rows)
+                            VStack(alignment: .leading, spacing: 10) {
+                                HStack(alignment: .top, spacing: 8) {
                                     Image(systemName: "mappin.and.ellipse")
                                     Text(shop.address)
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
                                 }
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
-                            
-                            Button(action: {
-                                makePhoneCall(to: shop.phone)
-                            }) {
-                                HStack {
+                                HStack(spacing: 8) {
                                     Image(systemName: "phone.fill")
                                     Text(shop.phone)
-                                    Spacer()
-                                    Image(systemName: "arrow.up.right")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
+                                        .font(.subheadline)
+                                        .foregroundColor(.primary)
                                 }
+                                
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .font(.subheadline)
-                            .foregroundColor(.primary)
                             
-                            HStack {
-                                Image(systemName: "globe")
-                                if let url = URL(string: shop.website) {
-                                    Link("Visit Website", destination: url)
-                                }
-                            }
-                            .font(.subheadline)
-                            
-                            Divider()
                             
                             // Business Hours Section
                             if isLoadingBusinessHours {
@@ -96,29 +89,7 @@ struct CoffeeShopDetailView: View {
                                 BusinessHoursUnavailableView()
                             }
                             
-                            Divider()
                             
-                            // Menu Button
-                            Button(action: {
-                                showMenu = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "menucard")
-                                        .font(.title3)
-                                        .foregroundColor(.white)
-                                    Text("View Menu")
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.white)
-                                    Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .font(.subheadline)
-                                        .foregroundColor(.white)
-                                }
-                                .padding()
-                                .background(Color.black)
-                                .cornerRadius(12)
-                            }
                         }
                         .padding()
                         .frame(width: geometry.size.width)
@@ -212,6 +183,11 @@ struct CoffeeShopDetailView: View {
         }
     }
     
+    private func openWebsite(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        UIApplication.shared.open(url)
+    }
+    
     private func fetchBusinessHours() {
         isLoadingBusinessHours = true
         businessHoursError = nil
@@ -239,4 +215,29 @@ struct CoffeeShopDetailView: View {
             }
         }
     }
-} 
+}
+
+// MARK: - QuickActionButton
+private struct QuickActionButton: View {
+    let systemImageName: String
+    let title: String
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: systemImageName)
+                    .font(.headline)
+                Text(title)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(Color.black)
+            .cornerRadius(12)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
