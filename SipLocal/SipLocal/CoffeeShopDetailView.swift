@@ -39,17 +39,37 @@ struct CoffeeShopDetailView: View {
                             
                             Divider()
                             
-                            HStack {
-                                Image(systemName: "mappin.and.ellipse")
-                                Text(shop.address)
+                            Button(action: {
+                                openMapsForDirections(to: shop.address)
+                            }) {
+                                HStack {
+                                    Image(systemName: "mappin.and.ellipse")
+                                    Text(shop.address)
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
                             }
+                            .buttonStyle(PlainButtonStyle())
                             .font(.subheadline)
+                            .foregroundColor(.primary)
                             
-                            HStack {
-                                Image(systemName: "phone.fill")
-                                Text(shop.phone)
+                            Button(action: {
+                                makePhoneCall(to: shop.phone)
+                            }) {
+                                HStack {
+                                    Image(systemName: "phone.fill")
+                                    Text(shop.phone)
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                }
                             }
+                            .buttonStyle(PlainButtonStyle())
                             .font(.subheadline)
+                            .foregroundColor(.primary)
                             
                             HStack {
                                 Image(systemName: "globe")
@@ -162,6 +182,33 @@ struct CoffeeShopDetailView: View {
                     self.isFavorite = originalState
                 }
             }
+        }
+    }
+    
+    private func makePhoneCall(to phoneNumber: String) {
+        let cleanedPhoneNumber = phoneNumber.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
+        print("📞 Attempting to call: \(cleanedPhoneNumber)")
+        
+        if let phoneURL = URL(string: "tel://\(cleanedPhoneNumber)") {
+            if UIApplication.shared.canOpenURL(phoneURL) {
+                print("✅ Opening phone app for call")
+                UIApplication.shared.open(phoneURL)
+            } else {
+                print("❌ Cannot open phone URL - likely running on simulator")
+                // Show alert for simulator testing
+                #if targetEnvironment(simulator)
+                print("🔍 Simulator detected - phone call would work on real device")
+                #endif
+            }
+        } else {
+            print("❌ Invalid phone URL created")
+        }
+    }
+    
+    private func openMapsForDirections(to address: String) {
+        let encodedAddress = address.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? address
+        if let mapsURL = URL(string: "http://maps.apple.com/?q=\(encodedAddress)") {
+            UIApplication.shared.open(mapsURL)
         }
     }
     
