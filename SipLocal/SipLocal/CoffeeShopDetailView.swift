@@ -232,11 +232,15 @@ private struct QuickActionButton: View {
                     .font(.caption)
                     .fontWeight(.semibold)
             }
-            .foregroundColor(.white)
+            .foregroundColor(.black)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
-            .background(Color.black)
+            .background(Color.white)
             .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.black, lineWidth: 1)
+            )
         }
         .buttonStyle(PlainButtonStyle())
     }
