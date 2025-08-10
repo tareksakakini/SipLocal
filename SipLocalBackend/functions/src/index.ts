@@ -91,7 +91,15 @@ interface PaymentData {
   amount: number;
   merchantId: string;
   oauth_token: string;
-  items?: Array<{ name: string; quantity: number; price: number; customizations?: string }>;
+  items?: Array<{
+    id?: string;
+    name: string;
+    quantity: number;
+    price: number;
+    customizations?: string;
+    selectedSizeId?: string | null;
+    selectedModifierIdsByList?: Record<string, string[]> | null;
+  }>;
   customerName?: string;
   customerEmail?: string;
   pickupTime?: string; // ISO string for pickup time
@@ -115,7 +123,15 @@ interface ExternalPaymentData {
   amount: number;
   merchantId: string;
   oauth_token: string;
-  items?: Array<{ name: string; quantity: number; price: number; customizations?: string }>;
+  items?: Array<{
+    id?: string;
+    name: string;
+    quantity: number;
+    price: number;
+    customizations?: string;
+    selectedSizeId?: string | null;
+    selectedModifierIdsByList?: Record<string, string[]> | null;
+  }>;
   customerName?: string;
   customerEmail?: string;
   pickupTime?: string; // ISO string for pickup time
@@ -447,7 +463,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
         receiptUrl: payment.receiptUrl || null,
         userId: paymentData.userId, // Add userId to orderData
         coffeeShopData: paymentData.coffeeShopData, // Add coffeeShopData to orderData
-        items: paymentData.items || [], // Store order items
+         items: paymentData.items || [], // Store order items (now include ids and selection metadata)
         customerName: paymentData.customerName,
         customerEmail: paymentData.customerEmail,
         pickupTime: paymentData.pickupTime,

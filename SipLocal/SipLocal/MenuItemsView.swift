@@ -8,6 +8,7 @@ struct MenuItemsView: View {
     @StateObject private var menuDataManager = MenuDataManager.shared
     @State private var showingCart = false
     @State private var customizingItem: MenuItem? = nil
+    @State private var initialSelectedSizeId: String? = nil
     @State private var showingDifferentShopAlert = false
     @State private var showingClosedShopAlert = false
     @State private var pendingItem: (item: MenuItem, customizations: String?, price: Double)?
@@ -138,7 +139,8 @@ struct MenuItemsView: View {
                 DrinkCustomizationSheet(
                     item: item,
                     selectedModifiers: $selectedModifiers,
-                    onAdd: { totalPriceWithModifiers, customizationDesc in
+                    initialSelectedSizeId: initialSelectedSizeId,
+                    onAdd: { totalPriceWithModifiers, customizationDesc, selectedSizeIdOut, selectedModsOut in
                         // Check if shop is closed
                         if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
                             showingClosedShopAlert = true
@@ -147,7 +149,15 @@ struct MenuItemsView: View {
                         }
                         
                         // Add to cart with customizations and pricing from the customization sheet
-                        let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc, itemPriceWithModifiers: totalPriceWithModifiers)
+                        let success = cartManager.addItem(
+                            shop: shop,
+                            menuItem: item,
+                            category: category.name,
+                            customizations: customizationDesc,
+                            itemPriceWithModifiers: totalPriceWithModifiers,
+                            selectedSizeId: selectedSizeIdOut,
+                            selectedModifierIdsByList: selectedModsOut
+                        )
                         if success {
                             customizingItem = nil
                             showItemAddedPopup = true
@@ -167,6 +177,9 @@ struct MenuItemsView: View {
                         customizingItem = nil
                     }
                 )
+                .onDisappear {
+                    initialSelectedSizeId = nil
+                }
             }
             .alert("Different Coffee Shop", isPresented: $showingDifferentShopAlert) {
                 Button("Clear Cart & Add Item", role: .destructive) {
@@ -549,7 +562,8 @@ struct SizeOptionCard: View {
 struct DrinkCustomizationSheet: View {
     let item: MenuItem
     @Binding var selectedModifiers: [String: Set<String>]
-    var onAdd: (Double, String) -> Void
+    var initialSelectedSizeId: String? = nil
+    var onAdd: (Double, String, String?, [String: [String]]?) -> Void
     var onCancel: () -> Void
     
     @State private var selectedSizeId: String?
@@ -689,7 +703,14 @@ struct DrinkCustomizationSheet: View {
                     }
                     .padding(.horizontal)
                     
-                    Button(action: { onAdd(totalPrice, buildCustomizationDescription()) }) {
+                    Button(action: {
+                        // Convert selection binding to plain [String: [String]] for persistence
+                        var modsOut: [String: [String]] = [:]
+                        for (listId, setIds) in selectedModifiers {
+                            modsOut[listId] = Array(setIds)
+                        }
+                        onAdd(totalPrice, buildCustomizationDescription(), selectedSizeId, modsOut.isEmpty ? nil : modsOut)
+                    }) {
                         Text("Add to Cart")
                             .font(.headline)
                             .fontWeight(.semibold)
@@ -714,12 +735,15 @@ struct DrinkCustomizationSheet: View {
             }
         }
         .onAppear {
-            // Initialize selected size to first variation if not already set
-            if selectedSizeId == nil,
-               let variations = item.variations,
-               variations.count > 1,
-               let firstVariation = variations.first {
-                selectedSizeId = firstVariation.id
+            // Initialize selected size to provided initial or first variation if not already set
+            if selectedSizeId == nil {
+                if let initial = initialSelectedSizeId {
+                    selectedSizeId = initial
+                } else if let variations = item.variations,
+                          variations.count > 1,
+                          let firstVariation = variations.first {
+                    selectedSizeId = firstVariation.id
+                }
             }
         }
     }

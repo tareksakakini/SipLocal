@@ -419,7 +419,9 @@ struct FirestoreOrder: Codable {
                     category: "Unknown",
                     quantity: 1,
                     customizations: nil,
-                    itemPriceWithModifiers: 0.0
+                    itemPriceWithModifiers: 0.0,
+                    selectedSizeId: nil,
+                    selectedModifierIdsByList: nil
                 )
             ]
         }
@@ -513,15 +515,18 @@ struct CoffeeShopData: Codable {
 }
 
 struct FirestoreOrderItem: Codable {
+    let id: String?
     let name: String
     let quantity: Int
     let price: Int // Price in cents
     let customizations: String?
+    let selectedSizeId: String?
+    let selectedModifierIdsByList: [String: [String]]?
     
     func toCartItem(coffeeShop: CoffeeShop) -> CartItem? {
         // Create a basic MenuItem from the stored data
         let menuItem = MenuItem(
-            id: name, // Use name as ID since we don't store the original ID
+            id: id ?? name, // Use Square id if available, fallback to name
             name: name,
             price: Double(price) / 100.0, // Convert cents to dollars
             variations: nil,
@@ -536,7 +541,9 @@ struct FirestoreOrderItem: Codable {
             category: "Unknown", // We don't store category in Firestore
             quantity: quantity,
             customizations: customizations,
-            itemPriceWithModifiers: Double(price) / 100.0
+            itemPriceWithModifiers: Double(price) / 100.0,
+            selectedSizeId: selectedSizeId,
+            selectedModifierIdsByList: selectedModifierIdsByList
         )
     }
 }

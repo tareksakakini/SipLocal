@@ -260,6 +260,12 @@ struct OrderRow: View {
                                 
                                 Spacer()
                                 
+                                // Show setup details briefly when available
+                                if let sizeId = item.selectedSizeId {
+                                    Text("Size: \(sizeId)")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
                                 Text("×\(item.quantity)")
                                     .font(.body)
                                     .foregroundColor(.secondary)

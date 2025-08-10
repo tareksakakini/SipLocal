@@ -38,14 +38,17 @@ class PaymentService {
         print("Calling Firebase function with merchantId: \(merchantId)")
         print("Calling Firebase function with oauth_token: \(oauthToken.prefix(10))...")
         
-        // Prepare cart items for backend
+        // Prepare cart items for backend, include identifiers and selections for reordering
         let itemsForBackend = cartItems.map { item in
             return [
+                "id": item.menuItemId,
                 "name": item.menuItem.name,
                 "quantity": item.quantity,
-                "price": Int(item.itemPriceWithModifiers * 100), // price in cents
-                "customizations": item.customizations ?? ""
-            ]
+                "price": Int(item.itemPriceWithModifiers * 100),
+                "customizations": item.customizations ?? "",
+                "selectedSizeId": item.selectedSizeId ?? NSNull(),
+                "selectedModifierIdsByList": item.selectedModifierIdsByList ?? NSNull()
+            ] as [String : Any]
         }
         
         var callData: [String: Any] = [
@@ -107,14 +110,17 @@ class PaymentService {
         print("MerchantId: \(merchantId)")
         print("OAuth token: \(oauthToken.prefix(10))...")
         
-        // Prepare cart items for backend
+        // Prepare cart items for backend, include identifiers and selections for reordering
         let itemsForBackend = cartItems.map { item in
             return [
+                "id": item.menuItemId,
                 "name": item.menuItem.name,
                 "quantity": item.quantity,
-                "price": Int(item.itemPriceWithModifiers * 100), // price in cents
-                "customizations": item.customizations ?? ""
-            ]
+                "price": Int(item.itemPriceWithModifiers * 100),
+                "customizations": item.customizations ?? "",
+                "selectedSizeId": item.selectedSizeId ?? NSNull(),
+                "selectedModifierIdsByList": item.selectedModifierIdsByList ?? NSNull()
+            ] as [String : Any]
         }
         
         var callData: [String: Any] = [
@@ -177,14 +183,17 @@ class PaymentService {
         print("MerchantId: \(merchantId)")
         print("OAuth token: \(oauthToken.prefix(10))...")
         
-        // Prepare cart items for backend
+        // Prepare cart items for backend, include identifiers and selections for reordering
         let itemsForBackend = cartItems.map { item in
             return [
+                "id": item.menuItemId,
                 "name": item.menuItem.name,
                 "quantity": item.quantity,
-                "price": Int(item.itemPriceWithModifiers * 100), // price in cents
-                "customizations": item.customizations ?? ""
-            ]
+                "price": Int(item.itemPriceWithModifiers * 100),
+                "customizations": item.customizations ?? "",
+                "selectedSizeId": item.selectedSizeId ?? NSNull(),
+                "selectedModifierIdsByList": item.selectedModifierIdsByList ?? NSNull()
+            ] as [String : Any]
         }
         
         var callData: [String: Any] = [
