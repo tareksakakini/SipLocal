@@ -283,28 +283,36 @@ struct OrderAgainSection: View {
     @State private var initialSelectedSizeId: String? = nil
     @State private var showingClosedShopAlert = false
 
-    private struct RepeatKey: Hashable {
+    private struct RepeatKey: Hashable, Equatable {
         let menuItemId: String
         let selectedSizeId: String?
         let selectedModifierIdsByList: [String: [String]]?
-        let customizations: String?
-        let name: String
+
+        static func == (lhs: RepeatKey, rhs: RepeatKey) -> Bool {
+            guard lhs.menuItemId == rhs.menuItemId,
+                  lhs.selectedSizeId == rhs.selectedSizeId else { return false }
+            return normalize(lhs.selectedModifierIdsByList) == normalize(rhs.selectedModifierIdsByList)
+        }
 
         func hash(into hasher: inout Hasher) {
             hasher.combine(menuItemId)
             hasher.combine(selectedSizeId)
-            // Normalize modifier lists for stable hashing
-            if let lists = selectedModifierIdsByList {
-                for key in lists.keys.sorted() {
-                    hasher.combine(key)
-                    for v in (lists[key] ?? []).sorted() {
-                        hasher.combine(v)
-                    }
+            let lists = Self.normalize(selectedModifierIdsByList)
+            for key in lists.keys.sorted() {
+                hasher.combine(key)
+                for v in (lists[key] ?? []) {
+                    hasher.combine(v)
                 }
-            } else {
-                hasher.combine(0)
             }
-            hasher.combine(customizations ?? "")
+        }
+
+        private static func normalize(_ map: [String: [String]]?) -> [String: [String]] {
+            guard let map = map else { return [:] }
+            var out: [String: [String]] = [:]
+            for (k, v) in map {
+                out[k] = v.sorted()
+            }
+            return out
         }
     }
 
@@ -316,9 +324,7 @@ struct OrderAgainSection: View {
                 let key = RepeatKey(
                     menuItemId: item.menuItemId,
                     selectedSizeId: item.selectedSizeId,
-                    selectedModifierIdsByList: item.selectedModifierIdsByList,
-                    customizations: item.customizations,
-                    name: item.menuItem.name
+                    selectedModifierIdsByList: item.selectedModifierIdsByList
                 )
                 let current = counts[key]
                 counts[key] = ( (current?.count ?? 0) + item.quantity, current?.sample ?? item )
@@ -355,7 +361,7 @@ struct OrderAgainSection: View {
                             if let liveItem = findMenuItem(by: entry.key.menuItemId, in: categories) {
                                 OrderAgainCard(
                                     displayName: liveItem.name,
-                                    subtitle: entry.key.customizations ?? "",
+                                    subtitle: entry.sample.customizations ?? "",
                                     count: entry.count,
                                     imageURL: liveItem.imageURL,
                                     price: liveItem.price,
