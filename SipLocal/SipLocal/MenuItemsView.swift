@@ -69,7 +69,8 @@ struct OrderAgainItemsView: View {
                             let liveItem = entry.menuItem
                             let hasCustomizations = (liveItem.modifierLists != nil && !(liveItem.modifierLists?.isEmpty ?? true)) || (liveItem.variations != nil && liveItem.variations!.count > 1)
                             if !hasCustomizations {
-                                let _ = cartManager.addItem(shop: shop, menuItem: liveItem, category: "Order Again")
+                                let catName = categoryName(for: liveItem.id)
+                                let _ = cartManager.addItem(shop: shop, menuItem: liveItem, category: catName)
                             } else {
                                 customizingItem = liveItem
                                 initialSelectedSizeId = entry.key.selectedSizeId
@@ -128,10 +129,11 @@ struct OrderAgainItemsView: View {
                         customizingItem = nil
                         return
                     }
+                    let catName = categoryName(for: item.id)
                     let _ = cartManager.addItem(
                         shop: shop,
                         menuItem: item,
-                        category: "Order Again",
+                        category: catName,
                         customizations: desc,
                         itemPriceWithModifiers: total,
                         selectedSizeId: selectedSizeIdOut,
@@ -147,6 +149,14 @@ struct OrderAgainItemsView: View {
         } message: {
             Text("This coffee shop is currently closed. Please try again during business hours.")
         }
+    }
+
+    private func categoryName(for itemId: String) -> String {
+        let categories = MenuDataManager.shared.getMenuCategories(for: shop)
+        for cat in categories {
+            if cat.items.contains(where: { $0.id == itemId }) { return cat.name }
+        }
+        return "Other"
     }
 }
 
