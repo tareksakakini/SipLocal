@@ -1,5 +1,157 @@
 import SwiftUI
 
+struct OrderAgainItemsView: View {
+    let shop: CoffeeShop
+    @EnvironmentObject var orderManager: OrderManager
+    @EnvironmentObject var cartManager: CartManager
+    @State private var customizingItem: MenuItem? = nil
+    @State private var selectedModifiers: [String: Set<String>] = [:]
+    @State private var initialSelectedSizeId: String? = nil
+    @State private var showingClosedShopAlert = false
+
+    private struct RepeatKey: Hashable, Equatable {
+        let menuItemId: String
+        let selectedSizeId: String?
+        let selectedModifierIdsByList: [String: [String]]?
+        static func == (lhs: RepeatKey, rhs: RepeatKey) -> Bool {
+            guard lhs.menuItemId == rhs.menuItemId, lhs.selectedSizeId == rhs.selectedSizeId else { return false }
+            return normalize(lhs.selectedModifierIdsByList) == normalize(rhs.selectedModifierIdsByList)
+        }
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(menuItemId)
+            hasher.combine(selectedSizeId)
+            let lists = Self.normalize(selectedModifierIdsByList)
+            for key in lists.keys.sorted() { hasher.combine(key); for v in (lists[key] ?? []) { hasher.combine(v) } }
+        }
+        private static func normalize(_ map: [String: [String]]?) -> [String: [String]] {
+            guard let map = map else { return [:] }
+            var out: [String: [String]] = [:]
+            for (k, v) in map { out[k] = v.sorted() }
+            return out
+        }
+    }
+
+    private struct Entry: Identifiable {
+        let id = UUID()
+        let key: RepeatKey
+        let count: Int
+        let sample: CartItem
+        let menuItem: MenuItem
+    }
+
+    private var entries: [Entry] {
+        let categories = MenuDataManager.shared.getMenuCategories(for: shop)
+        func findMenuItem(id: String) -> MenuItem? {
+            for category in categories { if let m = category.items.first(where: { $0.id == id }) { return m } }
+            return nil
+        }
+        var counts: [RepeatKey: (count: Int, sample: CartItem)] = [:]
+        for order in orderManager.orders where order.coffeeShop.id == shop.id && [.completed, .cancelled].contains(order.status) {
+            for item in order.items {
+                let key = RepeatKey(menuItemId: item.menuItemId, selectedSizeId: item.selectedSizeId, selectedModifierIdsByList: item.selectedModifierIdsByList)
+                let cur = counts[key]
+                counts[key] = ((cur?.count ?? 0) + item.quantity, cur?.sample ?? item)
+            }
+        }
+        let sorted = counts.map { ($0.key, $0.value.count, $0.value.sample) }.sorted { $0.1 > $1.1 }
+        return sorted.compactMap { (key, count, sample) in
+            guard let menuItem = findMenuItem(id: key.menuItemId) else { return nil }
+            return Entry(key: key, count: count, sample: sample, menuItem: menuItem)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(entries) { entry in
+                        Button(action: {
+                            let liveItem = entry.menuItem
+                            let hasCustomizations = (liveItem.modifierLists != nil && !(liveItem.modifierLists?.isEmpty ?? true)) || (liveItem.variations != nil && liveItem.variations!.count > 1)
+                            if !hasCustomizations {
+                                let _ = cartManager.addItem(shop: shop, menuItem: liveItem, category: "Order Again")
+                            } else {
+                                customizingItem = liveItem
+                                initialSelectedSizeId = entry.key.selectedSizeId
+                                selectedModifiers.removeAll()
+                                if let map = entry.key.selectedModifierIdsByList {
+                                    for (listId, ids) in map { selectedModifiers[listId] = Set(ids) }
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 12) {
+                                // Thumbnail
+                                if let imageURL = entry.menuItem.imageURL, let url = URL(string: imageURL) {
+                                    AsyncImage(url: url) { phase in
+                                        switch phase {
+                                        case .success(let image): image.resizable().scaledToFill().frame(width: 56, height: 56).clipped().cornerRadius(8)
+                                        default: RoundedRectangle(cornerRadius: 8).fill(Color(.systemGray5)).frame(width: 56, height: 56).overlay(Image(systemName: "photo").foregroundColor(.gray))
+                                        }
+                                    }
+                                } else {
+                                    RoundedRectangle(cornerRadius: 8).fill(Color(.systemGray5)).frame(width: 56, height: 56).overlay(Image(systemName: "cup.and.saucer").foregroundColor(.gray))
+                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(entry.menuItem.name).font(.body).fontWeight(.semibold).foregroundColor(.primary).lineLimit(1)
+                                        Spacer()
+                                        Text("×\(entry.count)").font(.caption).foregroundColor(.secondary)
+                                    }
+                                    if let subtitle = entry.sample.customizations, !subtitle.isEmpty {
+                                        Text(subtitle).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                                    }
+                                    Text(String(format: "$%.2f", entry.menuItem.price)).font(.caption).fontWeight(.medium).foregroundColor(.primary)
+                                }
+                            }
+                            .padding(16)
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding()
+            }
+            .background(Color(.systemGray6))
+            .navigationTitle("Order Again")
+            .navigationBarTitleDisplayMode(.large)
+        }
+        .sheet(item: $customizingItem) { item in
+            DrinkCustomizationSheet(
+                item: item,
+                selectedModifiers: $selectedModifiers,
+                initialSelectedSizeId: initialSelectedSizeId,
+                onAdd: { total, desc, selectedSizeIdOut, selectedModsOut in
+                    if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                        showingClosedShopAlert = true
+                        customizingItem = nil
+                        return
+                    }
+                    let _ = cartManager.addItem(
+                        shop: shop,
+                        menuItem: item,
+                        category: "Order Again",
+                        customizations: desc,
+                        itemPriceWithModifiers: total,
+                        selectedSizeId: selectedSizeIdOut,
+                        selectedModifierIdsByList: selectedModsOut
+                    )
+                    customizingItem = nil
+                },
+                onCancel: { customizingItem = nil }
+            )
+        }
+        .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("This coffee shop is currently closed. Please try again during business hours.")
+        }
+    }
+}
+
+import SwiftUI
+
 struct MenuItemsView: View {
     let shop: CoffeeShop
     let category: MenuCategory
