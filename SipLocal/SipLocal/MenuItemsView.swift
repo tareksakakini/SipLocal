@@ -8,6 +8,7 @@ struct OrderAgainItemsView: View {
     @State private var selectedModifiers: [String: Set<String>] = [:]
     @State private var initialSelectedSizeId: String? = nil
     @State private var showingClosedShopAlert = false
+    @State private var showingCart = false
 
     private struct RepeatKey: Hashable, Equatable {
         let menuItemId: String
@@ -117,6 +118,33 @@ struct OrderAgainItemsView: View {
             .background(Color(.systemGray6))
             .navigationTitle("Order Again")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingCart = true
+                    }) {
+                        ZStack {
+                            Image(systemName: "cart")
+                                .font(.system(size: 20, weight: .medium))
+                            if cartManager.totalItems > 0 {
+                                Text("\(cartManager.totalItems)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .frame(minWidth: 16, minHeight: 16)
+                                    .background(Color.red)
+                                    .clipShape(Circle())
+                                    .offset(x: 10, y: -10)
+                            }
+                        }
+                        .foregroundColor(.primary)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingCart) {
+            CartView()
+                .environmentObject(cartManager)
         }
         .sheet(item: $customizingItem) { item in
             DrinkCustomizationSheet(
