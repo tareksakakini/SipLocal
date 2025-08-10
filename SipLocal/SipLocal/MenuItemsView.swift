@@ -97,12 +97,12 @@ struct OrderAgainItemsView: View {
                                     HStack {
                                         Text(entry.menuItem.name).font(.body).fontWeight(.semibold).foregroundColor(.primary).lineLimit(1)
                                         Spacer()
-                                        Text("×\(entry.count)").font(.caption).foregroundColor(.secondary)
+                                        Text("Ordered \(entry.count) times").font(.caption).foregroundColor(.secondary)
                                     }
                                     if let subtitle = entry.sample.customizations, !subtitle.isEmpty {
                                         Text(subtitle).font(.caption).foregroundColor(.secondary).lineLimit(1)
                                     }
-                                    Text(String(format: "$%.2f", entry.menuItem.price)).font(.caption).fontWeight(.medium).foregroundColor(.primary)
+                                    Text(String(format: "$%.2f", entry.sample.itemPriceWithModifiers)).font(.caption).fontWeight(.medium).foregroundColor(.primary)
                                 }
                             }
                             .padding(16)
