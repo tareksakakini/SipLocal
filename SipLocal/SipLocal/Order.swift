@@ -64,6 +64,9 @@ class OrderManager: ObservableObject {
     private let auth = Auth.auth()
     private var listenerRegistration: ListenerRegistration?
     
+    // Payment capture timer
+    private var paymentCaptureTimers: [String: Timer] = [:]
+    
     init() {
         // Load orders when user is authenticated
         if auth.currentUser != nil {
@@ -89,6 +92,9 @@ class OrderManager: ObservableObject {
     
     deinit {
         removeListener()
+        // Clean up all payment capture timers
+        paymentCaptureTimers.values.forEach { $0.invalidate() }
+        paymentCaptureTimers.removeAll()
     }
     
     // MARK: - Real-time Listener Setup
@@ -246,11 +252,70 @@ class OrderManager: ObservableObject {
         }
     }
     
+    // MARK: - Payment Capture Timer
+    
+    func startPaymentCaptureTimer(transactionId: String, clientSecret: String, paymentService: PaymentService) {
+        print("🕒 Starting payment capture timer for transaction: \(transactionId)")
+        
+        // Cancel any existing timer for this transaction
+        paymentCaptureTimers[transactionId]?.invalidate()
+        
+        // Create a new timer
+        let timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { _ in
+            print("🔥 Payment capture timer fired for transaction: \(transactionId)")
+            
+            Task {
+                await self.capturePayment(transactionId: transactionId, clientSecret: clientSecret, paymentService: paymentService)
+            }
+        }
+        
+        // Store the timer
+        paymentCaptureTimers[transactionId] = timer
+        
+        // Add to run loop to ensure it fires
+        RunLoop.main.add(timer, forMode: .common)
+        print("✅ Payment capture timer scheduled successfully")
+    }
+    
+    private func capturePayment(transactionId: String, clientSecret: String, paymentService: PaymentService) async {
+        print("💳 Capturing payment for transaction: \(transactionId)")
+        
+        let result = await paymentService.completeStripePayment(
+            clientSecret: clientSecret,
+            transactionId: transactionId
+        )
+        
+        await MainActor.run {
+            // Clean up the timer
+            paymentCaptureTimers[transactionId]?.invalidate()
+            paymentCaptureTimers.removeValue(forKey: transactionId)
+            
+            switch result {
+            case .success(let transaction):
+                print("✅ Payment captured successfully: \(transaction)")
+                // Refresh orders to show updated status
+                Task {
+                    await self.refreshOrders()
+                }
+            case .failure(let error):
+                print("❌ Payment capture failed: \(error.localizedDescription)")
+                // Could implement retry logic or notification here
+            }
+        }
+    }
+    
     // MARK: - Order Cancellation
     
     func cancelOrder(paymentId: String) async throws {
         guard auth.currentUser != nil else {
             throw OrderError.notAuthenticated
+        }
+        
+        // Cancel any pending payment capture timer for this order
+        if let timer = paymentCaptureTimers[paymentId] {
+            print("🛑 Cancelling payment capture timer for order: \(paymentId)")
+            timer.invalidate()
+            paymentCaptureTimers.removeValue(forKey: paymentId)
         }
         
         // Call Firebase Cloud Function to cancel the order

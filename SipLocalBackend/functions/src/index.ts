@@ -651,7 +651,7 @@ export const processStripePayment = functions.https.onCall(async (data, context)
     );
   }
 
-  const {amount, merchantId, oauth_token, items} = paymentData;
+  const {amount, merchantId, oauth_token} = paymentData;
   const transactionId = uuidv4(); // Generate unique transaction ID
 
   // Initialize Stripe client
@@ -710,10 +710,11 @@ export const processStripePayment = functions.https.onCall(async (data, context)
       merchantId: merchantId
     });
 
-    // Create Stripe PaymentIntent (don't confirm yet - let client handle payment method collection)
+    // Create Stripe PaymentIntent with manual capture (authorize now, capture later)
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount, // amount in cents
       currency: 'usd',
+      capture_method: 'manual', // This allows us to authorize now and capture later
       description: `Order from ${paymentData.coffeeShopData?.name || 'Coffee Shop'}`,
       receipt_email: paymentData.customerEmail, // Use receipt_email instead of customer_email
       metadata: {
@@ -727,7 +728,7 @@ export const processStripePayment = functions.https.onCall(async (data, context)
       automatic_payment_methods: {
         enabled: true,
       },
-      // Don't confirm immediately - let the client collect payment method and confirm
+      // Client will collect payment method and confirm, but payment will only be authorized
     });
 
     functions.logger.info("Stripe PaymentIntent created:", {
@@ -737,85 +738,9 @@ export const processStripePayment = functions.https.onCall(async (data, context)
       clientSecret: paymentIntent.client_secret ? "present" : "missing"
     });
 
-    // For now, we'll assume the payment will be successful
-    // In a real implementation, you'd wait for webhook confirmation
-    // But for this integration, we'll proceed with order creation
-
-    // 2. Create Square order (similar to external payment flow)
-    let squareOrderId: string | undefined = undefined;
-    if (items && items.length > 0) {
-      const lineItems = items.map((item: any) => ({
-        name: item.name,
-        quantity: item.quantity.toString(),
-        basePriceMoney: {
-          amount: BigInt(item.price),
-          currency: "USD" as any,
-        },
-        note: item.customizations || undefined,
-      }));
-
-      const orderRequest: any = {
-        order: {
-          locationId: locationId,
-          lineItems,
-          state: "OPEN",
-          source: {
-            name: "SipLocal App - Stripe Payment"
-          },
-          fulfillments: [
-            {
-              type: "PICKUP",
-              state: "PROPOSED",
-              pickupDetails: {
-                recipient: {
-                  displayName: paymentData.customerName || "Customer",
-                  emailAddress: paymentData.customerEmail || undefined
-                },
-                pickupAt: paymentData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-                note: "Order placed via mobile app - Paid with Stripe"
-              }
-            }
-          ]
-        },
-        idempotencyKey: uuidv4(),
-      };
-
-      try {
-        functions.logger.info('Creating Square order for Stripe payment...');
-        const orderResponse = await squareClient.orders.create(orderRequest);
-        squareOrderId = orderResponse.order?.id;
-        functions.logger.info('Square order created successfully for Stripe payment', { 
-          orderId: squareOrderId,
-          orderState: orderResponse.order?.state
-        });
-
-        // Create external payment record in Square to link with order
-        if (squareOrderId) {
-          try {
-            await squareClient.payments.create({
-              idempotencyKey: uuidv4(),
-              sourceId: 'EXTERNAL',
-              externalDetails: {
-                type: 'OTHER',
-                source: 'Stripe Payment'
-              },
-              amountMoney: {
-                amount: BigInt(amount),
-                currency: 'USD'
-              },
-              orderId: squareOrderId,
-              locationId: locationId
-            });
-            functions.logger.info('External payment record created in Square for Stripe payment');
-          } catch (paymentError: any) {
-            functions.logger.error('Failed to create external payment record (order still created):', paymentError);
-          }
-        }
-      } catch (orderError: any) {
-        functions.logger.error('Failed to create Square order for Stripe payment:', orderError);
-        // Continue anyway - Stripe payment was successful
-      }
-    }
+    // Note: We will create the Square order later during payment capture phase
+    // This ensures the merchant only sees the order after payment is confirmed
+    functions.logger.info('Skipping Square order creation during authorization phase');
 
     // 3. Save order to Firestore
     const firestoreOrderData = {
@@ -836,8 +761,8 @@ export const processStripePayment = functions.https.onCall(async (data, context)
       customerName: paymentData.customerName,
       customerEmail: paymentData.customerEmail,
       pickupTime: paymentData.pickupTime,
-      orderId: squareOrderId,
-      status: "SUBMITTED", // Order submitted and paid
+      orderId: null, // Square order will be created during capture phase
+      status: "AUTHORIZED", // Order authorized, awaiting payment completion
     };
 
     try {
@@ -858,8 +783,8 @@ export const processStripePayment = functions.https.onCall(async (data, context)
     return {
       success: true,
       transactionId: transactionId,
-      orderId: squareOrderId,
-      status: "PENDING_PAYMENT", // Update status to indicate payment is pending
+      orderId: null, // Square order will be created during capture phase
+      status: "AUTHORIZED", // Payment authorized, awaiting capture
       amount: amount.toString(),
       currency: "USD",
       stripePaymentIntentId: paymentIntent.id,
@@ -890,6 +815,279 @@ export const processStripePayment = functions.https.onCall(async (data, context)
       "internal",
       "Failed to process Stripe payment.",
       error.message,
+    );
+  }
+});
+
+// Function to complete Stripe payment after 30-second delay
+export const completeStripePayment = functions.https.onCall(async (data, context) => {
+  functions.logger.info("=== COMPLETE STRIPE PAYMENT FUNCTION ===");
+  functions.logger.info("Complete payment data received:", data);
+  
+  // Extract data - handle nested structure
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    requestData = data.data;
+  } else {
+    requestData = data;
+  }
+  
+  const clientSecret = requestData.clientSecret;
+  const transactionId = requestData.transactionId;
+  
+  if (!clientSecret || !transactionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "clientSecret and transactionId are required"
+    );
+  }
+  
+  // Initialize Stripe client
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecretKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Stripe secret key not configured"
+    );
+  }
+  
+  const stripe = new Stripe(stripeSecretKey);
+  
+  try {
+    // Extract PaymentIntent ID from client secret
+    const paymentIntentId = clientSecret.split('_secret_')[0];
+    
+    // Retrieve the PaymentIntent to check its status
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    
+    functions.logger.info("PaymentIntent status:", {
+      id: paymentIntent.id,
+      status: paymentIntent.status,
+      amount: paymentIntent.amount
+    });
+    
+    // Check if the payment is ready to be captured
+    if (paymentIntent.status === 'requires_capture') {
+      // Capture the authorized payment
+      functions.logger.info("Capturing authorized payment:", {
+        id: paymentIntent.id,
+        amount: paymentIntent.amount
+      });
+      
+      const capturedPaymentIntent = await stripe.paymentIntents.capture(paymentIntent.id);
+      functions.logger.info("Payment captured successfully:", {
+        id: capturedPaymentIntent.id,
+        status: capturedPaymentIntent.status
+      });
+    } else if (paymentIntent.status === 'succeeded') {
+      // Payment was already captured (shouldn't happen in our flow, but handle gracefully)
+      functions.logger.info("Payment was already captured:", {
+        id: paymentIntent.id,
+        status: paymentIntent.status
+      });
+    } else {
+      // Payment is in an unexpected state
+      functions.logger.error("PaymentIntent is not ready for capture:", {
+        id: paymentIntent.id,
+        status: paymentIntent.status
+      });
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Payment is in unexpected state: ${paymentIntent.status}. Expected 'requires_capture' or 'succeeded'.`
+      );
+    }
+    
+    // Get the order data from Firestore to create Square order
+    let orderData: any = null;
+    let squareOrderId: string | undefined = undefined;
+    
+    try {
+      const orderDoc = await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .get();
+        
+      if (!orderDoc.exists) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Order not found in Firestore"
+        );
+      }
+      
+      orderData = orderDoc.data();
+      functions.logger.info("Retrieved order data for Square order creation:", {
+        transactionId: transactionId,
+        hasItems: !!(orderData?.items && orderData.items.length > 0),
+        merchantId: orderData?.merchantId
+      });
+    } catch (firestoreError) {
+      functions.logger.error("Failed to retrieve order data:", firestoreError);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to retrieve order data"
+      );
+    }
+    
+    // Now create the Square order since payment is being captured
+    if (orderData && orderData.items && orderData.items.length > 0) {
+      try {
+        // Get merchant tokens for Square client
+        let oauthToken = "";
+        let locationId = "";
+        if (orderData.merchantId) {
+          const merchantDoc = await admin.firestore()
+            .collection("merchant_tokens")
+            .doc(orderData.merchantId)
+            .get();
+          if (merchantDoc.exists) {
+            const merchantData = merchantDoc.data();
+            oauthToken = merchantData?.oauth_token || "";
+            locationId = merchantData?.locationId || "";
+          }
+        }
+        
+        if (!oauthToken) {
+          throw new Error("No oauth token available for Square order creation");
+        }
+        
+        // Initialize Square client
+        const squareClient = new SquareClient({
+          token: oauthToken,
+          environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+            SquareEnvironment.Production : SquareEnvironment.Sandbox,
+        });
+        
+        // Fetch location ID if not available
+        if (!locationId) {
+          const locationsResponse = await squareClient.locations.list();
+          if (locationsResponse.locations && locationsResponse.locations.length > 0) {
+            locationId = locationsResponse.locations[0].id || "";
+          }
+        }
+        
+        if (!locationId) {
+          throw new Error("No location ID available for Square order creation");
+        }
+        
+        const lineItems = orderData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity.toString(),
+          basePriceMoney: {
+            amount: BigInt(item.price),
+            currency: "USD" as any,
+          },
+          note: item.customizations || undefined,
+        }));
+
+        const orderRequest: any = {
+          order: {
+            locationId: locationId,
+            lineItems,
+            state: "OPEN",
+            source: {
+              name: "SipLocal App - Stripe Payment (Captured)"
+            },
+            fulfillments: [
+              {
+                type: "PICKUP",
+                state: "PROPOSED",
+                pickupDetails: {
+                  recipient: {
+                    displayName: orderData.customerName || "Customer",
+                    emailAddress: orderData.customerEmail || undefined
+                  },
+                  pickupAt: orderData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                  note: "Order placed via mobile app - Paid with Stripe (Payment Captured)"
+                }
+              }
+            ]
+          },
+          idempotencyKey: uuidv4(),
+        };
+
+        functions.logger.info('Creating Square order after payment capture...');
+        const orderResponse = await squareClient.orders.create(orderRequest);
+        squareOrderId = orderResponse.order?.id;
+        functions.logger.info('Square order created successfully after payment capture', { 
+          orderId: squareOrderId,
+          orderState: orderResponse.order?.state,
+          transactionId: transactionId
+        });
+
+        // Create external payment record in Square to link with order
+        if (squareOrderId) {
+          try {
+            await squareClient.payments.create({
+              idempotencyKey: uuidv4(),
+              sourceId: 'EXTERNAL',
+              externalDetails: {
+                type: 'OTHER',
+                source: 'Stripe Payment (Captured)'
+              },
+              amountMoney: {
+                amount: BigInt(orderData.amount || 0),
+                currency: 'USD'
+              },
+              orderId: squareOrderId,
+              locationId: locationId
+            });
+            functions.logger.info('External payment record created in Square after capture');
+          } catch (paymentError: any) {
+            functions.logger.error('Failed to create external payment record (order still created):', paymentError);
+          }
+        }
+      } catch (orderError: any) {
+        functions.logger.error('Failed to create Square order after payment capture:', orderError);
+        // Don't fail the entire operation - payment was captured successfully
+      }
+    }
+    
+    // Update order status in Firestore to SUBMITTED
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .update({
+          status: "SUBMITTED",
+          paymentStatus: paymentIntent.status.toUpperCase(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          stripePaymentCompleted: true,
+          stripePaymentCompletedAt: admin.firestore.FieldValue.serverTimestamp(),
+          orderId: squareOrderId || null // Add Square order ID if created
+        });
+        
+      functions.logger.info("Order status updated to SUBMITTED", {
+        transactionId: transactionId
+      });
+    } catch (firestoreError) {
+      functions.logger.error("Failed to update order status:", firestoreError);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Failed to update order status"
+      );
+    }
+    
+    return {
+      success: true,
+      transactionId: transactionId,
+      orderId: squareOrderId,
+      paymentStatus: paymentIntent.status,
+      message: "Payment completed successfully"
+    };
+    
+  } catch (error: any) {
+    functions.logger.error("Failed to complete Stripe payment:", error);
+    
+    if (error.type && error.type.startsWith('Stripe')) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Payment completion failed: " + error.message
+      );
+    }
+    
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to complete payment: " + error.message
     );
   }
 });
@@ -1422,34 +1620,49 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
       );
     }
 
-    if (!orderData.oauthToken) {
-      functions.logger.error("Missing oauthToken in order data:", paymentId);
-      throw new functions.https.HttpsError(
-        "internal",
-        "Missing payment credentials"
-      );
-    }
-
-    // Initialize Square client
-    const squareClient = new SquareClient({
-      token: orderData.oauthToken,
-      environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-        SquareEnvironment.Production : SquareEnvironment.Sandbox,
-    });
-
-    // Cancel the payment authorization
-    functions.logger.info("Cancelling Square payment:", paymentId);
-    try {
-      await squareClient.payments.cancel({
-        paymentId: paymentId
-      });
-      functions.logger.info("Successfully cancelled Square payment:", paymentId);
-    } catch (paymentError) {
-      functions.logger.error("Failed to cancel Square payment:", {
-        paymentId,
-        error: paymentError
-      });
-      // Continue with order cancellation even if payment cancellation fails
+    // For Stripe payments, we need to cancel the PaymentIntent instead of Square payment
+    if (orderData.stripePaymentIntentId) {
+      functions.logger.info("Cancelling Stripe PaymentIntent:", orderData.stripePaymentIntentId);
+      
+      try {
+        // Initialize Stripe client
+        const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+        if (!stripeSecretKey) {
+          functions.logger.error("Stripe secret key not configured");
+        } else {
+          const stripe = new Stripe(stripeSecretKey);
+          await stripe.paymentIntents.cancel(orderData.stripePaymentIntentId);
+          functions.logger.info("Successfully cancelled Stripe PaymentIntent:", orderData.stripePaymentIntentId);
+        }
+      } catch (stripeError) {
+        functions.logger.error("Failed to cancel Stripe PaymentIntent:", {
+          paymentIntentId: orderData.stripePaymentIntentId,
+          error: stripeError
+        });
+        // Continue with order cancellation even if payment cancellation fails
+      }
+    } else if (orderData.oauthToken) {
+      // Legacy Square payment cancellation
+      functions.logger.info("Cancelling Square payment (legacy):", paymentId);
+      
+      try {
+        const squareClient = new SquareClient({
+          token: orderData.oauthToken,
+          environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+            SquareEnvironment.Production : SquareEnvironment.Sandbox,
+        });
+        
+        await squareClient.payments.cancel({
+          paymentId: paymentId
+        });
+        functions.logger.info("Successfully cancelled Square payment:", paymentId);
+      } catch (paymentError) {
+        functions.logger.error("Failed to cancel Square payment:", {
+          paymentId,
+          error: paymentError
+        });
+        // Continue with order cancellation even if payment cancellation fails
+      }
     }
 
     // Cancel the order if it exists
@@ -1469,7 +1682,15 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
           const merchantData = merchantDoc.data();
           const locationId = merchantData?.locationId;
           
-          if (locationId) {
+          const oauthToken = merchantData?.oauth_token;
+          
+          if (locationId && oauthToken) {
+            const squareClient = new SquareClient({
+              token: oauthToken,
+              environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+                SquareEnvironment.Production : SquareEnvironment.Sandbox,
+            });
+            
             await squareClient.orders.update({
               orderId: orderData.orderId,
               order: {
@@ -1481,7 +1702,7 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
             });
             functions.logger.info("Successfully cancelled Square order:", orderData.orderId);
           } else {
-            functions.logger.error("Missing locationId for merchant:", orderData.merchantId);
+            functions.logger.error("Missing locationId or oauth_token for merchant:", orderData.merchantId);
           }
         }
       } catch (orderError) {
@@ -1491,6 +1712,8 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
         });
         // Continue with Firestore update even if Square order cancellation fails
       }
+    } else {
+      functions.logger.info("No Square order to cancel (order was in AUTHORIZED state)");
     }
 
     // Update order status in Firestore

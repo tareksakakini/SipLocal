@@ -173,8 +173,8 @@ class PaymentService {
         }
     }
     
-    // Process payment with Stripe and create order in Square
-    func processPaymentWithStripe(amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<(TransactionResult, String?), PaymentError> {
+    // Create authorized order with Stripe (payment intent created but not processed)
+    func createAuthorizedOrderWithStripe(amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<(TransactionResult, String?), PaymentError> {
         // Convert dollars to cents for Stripe API (multiply by 100)
         let amountInCents = Int(amount * 100)
         
@@ -244,6 +244,38 @@ class PaymentService {
             
         } catch {
             print("Firebase function call failed for Stripe payment: \(error)")
+            return .failure(.serverError(error.localizedDescription))
+        }
+    }
+    
+    // Complete the payment processing after authorization delay
+    func completeStripePayment(clientSecret: String, transactionId: String) async -> Result<TransactionResult, PaymentError> {
+        let functions = Functions.functions()
+        let data = [
+            "clientSecret": clientSecret,
+            "transactionId": transactionId
+        ]
+        
+        do {
+            let result = try await functions.httpsCallable("completeStripePayment").call(data)
+            
+            if let data = result.data as? [String: Any],
+               let success = data["success"] as? Bool,
+               success == true {
+                let transactionResult = TransactionResult(
+                    transactionId: transactionId,
+                    message: "Payment completed successfully!",
+                    receiptUrl: data["receiptUrl"] as? String,
+                    orderId: data["orderId"] as? String
+                )
+                print("Stripe payment completed successfully: \(transactionId)")
+                return .success(transactionResult)
+            } else {
+                print("Failed to complete Stripe payment: \(result.data)")
+                return .failure(.serverError("Failed to complete payment"))
+            }
+        } catch {
+            print("Error completing Stripe payment: \(error)")
             return .failure(.serverError(error.localizedDescription))
         }
     }

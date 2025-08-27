@@ -26,6 +26,9 @@ struct CheckoutView: View {
     @State private var paymentSheet: PaymentSheet?
     @State private var stripePaymentResult: PaymentSheetResult?
     
+    // Store client secret for payment capture
+    @State private var pendingClientSecret: String?
+    
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
     
@@ -277,6 +280,9 @@ struct CheckoutView: View {
                 }
             }
         }
+        .onDisappear {
+            // No cleanup needed - OrderManager handles the payment capture timer
+        }
     }
     
     private func processPayment(nonce: String) {
@@ -483,7 +489,7 @@ struct CheckoutView: View {
                     print("  oauth_token: \(credentials.oauth_token.prefix(10)))...")
                     
                     // Get PaymentIntent and client secret from backend
-                    let result = await paymentService.processPaymentWithStripe(
+                    let result = await paymentService.createAuthorizedOrderWithStripe(
                         amount: cartManager.totalPrice,
                         merchantId: merchantId,
                         oauthToken: credentials.oauth_token,
@@ -509,6 +515,7 @@ struct CheckoutView: View {
                                 
                                 // Store transaction details for later use
                                 self.transactionId = transaction.transactionId
+                                self.pendingClientSecret = clientSecret
                                 self.completedOrderItems = cartManager.items
                                 self.completedOrderTotal = cartManager.totalPrice
                                 self.completedOrderShop = cartManager.items.first?.shop
@@ -580,9 +587,20 @@ struct CheckoutView: View {
     private func handleStripePaymentResult(_ result: PaymentSheetResult) {
         switch result {
         case .completed:
-            paymentResult = "Payment successful with Stripe!"
+            paymentResult = "Order placed successfully! Check your orders to track status."
             paymentSuccess = true
-            // Orders are now stored in Firestore by the backend
+            
+            // Start the 30-second background timer for payment completion via OrderManager
+            if let transactionId = self.transactionId,
+               let clientSecret = self.pendingClientSecret {
+                orderManager.startPaymentCaptureTimer(
+                    transactionId: transactionId,
+                    clientSecret: clientSecret,
+                    paymentService: paymentService
+                )
+            }
+            
+            // Orders are now stored in Firestore by the backend with AUTHORIZED status
             // Refresh orders to show the new order
             Task {
                 await orderManager.refreshOrders()
@@ -859,6 +877,7 @@ extension Calendar {
         return self.date(from: components)
     }
 }
+
 
 // Preview
 struct CheckoutView_Previews: PreviewProvider {
