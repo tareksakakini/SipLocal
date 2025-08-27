@@ -56,10 +56,8 @@ struct MenuView: View {
                 }
             }
             .task {
-                // Load menu data when view appears
-                if menuDataManager.getMenuCategories(for: shop).isEmpty {
-                    await menuDataManager.fetchMenuData(for: shop)
-                }
+                // Prime menu for instant cached load + background refresh
+                await menuDataManager.primeMenu(for: shop)
             }
         }
     }

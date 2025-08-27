@@ -3,6 +3,7 @@ import SwiftUI
 struct OrderView: View {
     @State private var searchText = ""
     @State private var isSearching = false
+    @EnvironmentObject var cartManager: CartManager
     let coffeeShops = DataService.loadCoffeeShops()
     
     var filteredShops: [CoffeeShop] {
@@ -58,10 +59,34 @@ struct OrderView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 12))
                                     
                                     VStack(alignment: .leading, spacing: 6) {
-                                        Text(shop.name)
-                                            .font(.headline)
-                                            .foregroundColor(.primary)
-                                            .lineLimit(1)
+                                        HStack {
+                                            Text(shop.name)
+                                                .font(.headline)
+                                                .foregroundColor(.primary)
+                                                .lineLimit(1)
+                                            
+                                            Spacer()
+                                            
+                                            // Business Hours Status
+                                            if let isLoading = cartManager.isLoadingBusinessHours[shop.id], isLoading {
+                                                ProgressView()
+                                                    .scaleEffect(0.6)
+                                            } else if let isOpen = cartManager.isShopOpen(shop: shop) {
+                                                HStack(spacing: 4) {
+                                                    Text(isOpen ? "Open" : "Closed")
+                                                        .font(.caption2)
+                                                        .fontWeight(.semibold)
+                                                        .foregroundColor(.white)
+                                                        .padding(.horizontal, 8)
+                                                        .padding(.vertical, 4)
+                                                        .background(
+                                                            Capsule()
+                                                                .fill(isOpen ? Color.green : Color.red)
+                                                        )
+                                                }
+                                            }
+                                        }
+                                        
                                         Text(shop.address)
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
@@ -77,6 +102,12 @@ struct OrderView: View {
                                 .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
                             }
                             .buttonStyle(PlainButtonStyle())
+                            .onAppear {
+                                // Fetch business hours when card appears
+                                Task {
+                                    await cartManager.fetchBusinessHours(for: shop)
+                                }
+                            }
                         }
                         if filteredShops.isEmpty {
                             VStack(spacing: 12) {
@@ -102,5 +133,6 @@ struct OrderView: View {
 struct OrderView_Previews: PreviewProvider {
     static var previews: some View {
         OrderView()
+            .environmentObject(CartManager())
     }
 } 

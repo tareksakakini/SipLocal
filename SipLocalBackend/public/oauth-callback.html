@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SipLocal - OAuth Authorization</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 40px 20px;
+            background: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 500px;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .logo {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 30px;
+            border-radius: 16px;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        .status {
+            font-size: 18px;
+            margin-bottom: 30px;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .code-container {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .next-steps {
+            text-align: left;
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .next-steps h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+        .next-steps ol {
+            margin-bottom: 0;
+        }
+        .next-steps li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="logo.png" alt="SipLocal Logo" class="logo">
+        <h2 style="margin: 0 0 20px 0; color: #333; font-size: 20px; margin-top: -20px;">SipLocal</h2>
+        <h1>OAuth Authorization</h1>
+        
+        <div id="status" class="status"></div>
+        <div id="authCode" class="code-container" style="display: none;"></div>
+        <div id="nextSteps" class="next-steps" style="display: none;">
+            <h3>Next Steps</h3>
+            <ol>
+                <li>Copy the authorization code above</li>
+                <li>Send authorization code to SipLocal onboarding team</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        function displayResult() {
+            const code = getUrlParameter('code');
+            const error = getUrlParameter('error');
+            const errorDescription = getUrlParameter('error_description');
+            
+            const statusDiv = document.getElementById('status');
+            const authCodeDiv = document.getElementById('authCode');
+            const nextStepsDiv = document.getElementById('nextSteps');
+
+            if (error) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `
+                    <strong>Authorization Failed</strong><br>
+                    Error: ${error}<br>
+                    ${errorDescription ? `Description: ${errorDescription}` : ''}
+                `;
+            } else if (code) {
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = '<strong>Authorization Successful!</strong><br>Your merchant account has been authorized.';
+                
+                authCodeDiv.style.display = 'block';
+                authCodeDiv.innerHTML = `<strong>Authorization Code:</strong><br>${code}`;
+                
+                nextStepsDiv.style.display = 'block';
+            } else {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '<strong>No authorization data received</strong><br>Please try the authorization process again.';
+            }
+        }
+
+        // Display result when page loads
+        displayResult();
+    </script>
+</body>
+</html>

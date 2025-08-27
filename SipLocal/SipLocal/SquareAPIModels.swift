@@ -168,4 +168,147 @@ struct SquareModifierData: Codable {
         case modifierListId = "modifier_list_id"
         case onByDefault = "on_by_default"
     }
+}
+
+// MARK: - Square Order API Response Models
+
+struct SquareOrderResponse: Codable {
+    let order: SquareOrder?
+    let errors: [SquareError]?
+}
+
+struct SquareOrder: Codable {
+    let id: String
+    let locationId: String
+    let state: String
+    let lineItems: [SquareOrderLineItem]?
+    let fulfillments: [SquareOrderFulfillment]?
+    let createdAt: String?
+    let updatedAt: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case id
+        case locationId = "location_id"
+        case state
+        case lineItems = "line_items"
+        case fulfillments
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct SquareOrderLineItem: Codable {
+    let uid: String?
+    let name: String
+    let quantity: String
+    let basePriceMoney: SquareMoney?
+    let totalMoney: SquareMoney?
+    let note: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case uid, name, quantity, note
+        case basePriceMoney = "base_price_money"
+        case totalMoney = "total_money"
+    }
+}
+
+struct SquareOrderFulfillment: Codable {
+    let uid: String?
+    let type: String
+    let state: String
+    let pickupDetails: SquarePickupDetails?
+    
+    enum CodingKeys: String, CodingKey {
+        case uid, type, state
+        case pickupDetails = "pickup_details"
+    }
+}
+
+struct SquarePickupDetails: Codable {
+    let recipient: SquareRecipient?
+    let pickupAt: String?
+    let note: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case recipient
+        case pickupAt = "pickup_at"
+        case note
+    }
+}
+
+struct SquareRecipient: Codable {
+    let displayName: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case displayName = "display_name"
+    }
+}
+
+// MARK: - Business Hours Models
+
+struct SquareLocationResponse: Codable {
+    let location: SquareLocation?
+    let errors: [SquareError]?
+}
+
+struct SquareLocationsResponse: Codable {
+    let locations: [SquareLocation]?
+    let errors: [SquareError]?
+}
+
+struct SquareLocation: Codable {
+    let id: String
+    let name: String?
+    let businessHours: SquareBusinessHours?
+    
+    enum CodingKeys: String, CodingKey {
+        case id, name
+        case businessHours = "business_hours"
+    }
+}
+
+struct SquareBusinessHours: Codable {
+    let periods: [SquareBusinessHoursPeriod]?
+    let specialDayPeriods: [SquareSpecialDayPeriod]?
+    
+    enum CodingKeys: String, CodingKey {
+        case periods
+        case specialDayPeriods = "special_day_periods"
+    }
+}
+
+struct SquareBusinessHoursPeriod: Codable {
+    let dayOfWeek: String
+    let startLocalTime: String?
+    let endLocalTime: String?
+    
+    enum CodingKeys: String, CodingKey {
+        case dayOfWeek = "day_of_week"
+        case startLocalTime = "start_local_time"
+        case endLocalTime = "end_local_time"
+    }
+}
+
+struct SquareSpecialDayPeriod: Codable {
+    let startDate: String?
+    let endDate: String?
+    let periods: [SquareBusinessHoursPeriod]?
+    
+    enum CodingKeys: String, CodingKey {
+        case startDate = "start_date"
+        case endDate = "end_date"
+        case periods
+    }
+}
+
+// MARK: - App Business Hours Models
+
+struct BusinessHoursInfo {
+    let weeklyHours: [String: [BusinessHoursPeriod]]
+    let isCurrentlyOpen: Bool
+}
+
+struct BusinessHoursPeriod {
+    let startTime: String
+    let endTime: String
 } 

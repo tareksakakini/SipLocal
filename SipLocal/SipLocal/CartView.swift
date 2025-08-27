@@ -3,49 +3,31 @@ import SwiftUI
 struct CartView: View {
     @EnvironmentObject var cartManager: CartManager
     @Environment(\.presentationMode) var presentationMode
+    @State private var showingClosedShopAlert = false
     
     var body: some View {
         NavigationStack {
-            VStack {
-                // Coffee Shop Header (when cart has items)
-                if !cartManager.items.isEmpty, let firstItem = cartManager.items.first {
-                    VStack(spacing: 4) {
-                        HStack {
-                            Image(systemName: "house.fill")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            Text(firstItem.shop.name)
-                                .font(.headline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.primary)
-                            
-                            Spacer()
-                        }
-                        
-                        Divider()
-                            .padding(.top, 4)
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 8)
-                }
-                
+            VStack(spacing: 0) {
                 if cartManager.items.isEmpty {
                     // Empty Cart State
-                    VStack(spacing: 20) {
+                    VStack(spacing: 24) {
+                        Spacer()
+                        
                         Image(systemName: "cart")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray.opacity(0.5))
+                            .font(.system(size: 80))
+                            .foregroundColor(.gray)
                         
-                        Text("Your cart is empty")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
+                        VStack(spacing: 8) {
+                            Text("Your cart is empty")
+                                .font(.title2)
+                                .fontWeight(.semibold)
+                            
+                            Text("Add some items to get started")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
                         
-                        Text("Add some delicious drinks to get started!")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
+                        Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -76,18 +58,38 @@ struct CartView: View {
                         }
                         .padding(.horizontal)
                         
-                        NavigationLink(destination: CheckoutView().environmentObject(cartManager)) {
-                            Text("Checkout")
-                                .font(.headline)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .background(Color.black)
-                                .cornerRadius(12)
+                        // Checkout Button - disabled if shop is closed
+                        if let firstItem = cartManager.items.first,
+                           let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
+                           !isOpen {
+                            Button(action: {
+                                showingClosedShopAlert = true
+                            }) {
+                                Text("Shop is Closed")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.red)
+                                    .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom)
+                        } else {
+                            NavigationLink(destination: CheckoutView().environmentObject(cartManager)) {
+                                Text("Checkout")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(Color.black)
+                                    .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom)
                         }
-                        .padding(.horizontal)
-                        .padding(.bottom)
                     }
                     .background(Color(.systemGray6))
                 }
@@ -116,6 +118,19 @@ struct CartView: View {
                             cartManager.clearCart()
                         }
                         .foregroundColor(.red)
+                    }
+                }
+            }
+            .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This coffee shop is currently closed. Please try again during business hours.")
+            }
+            .onAppear {
+                // Fetch business hours for the shop in cart
+                if let firstItem = cartManager.items.first {
+                    Task {
+                        await cartManager.fetchBusinessHours(for: firstItem.shop)
                     }
                 }
             }

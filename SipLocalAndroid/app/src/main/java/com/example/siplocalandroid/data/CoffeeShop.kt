@@ -44,7 +44,10 @@ data class MenuCategory(
 data class SquareCredentials(
     val appID: String,
     val accessToken: String,
-    val locationId: String
+    val locationId: String,
+    val oauth_token: String,
+    val merchantId: String,
+    val refreshToken: String
 )
 
 @Serializable

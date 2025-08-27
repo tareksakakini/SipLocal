@@ -2,20 +2,100 @@ import Foundation
 
 class SquareAPIService {
     static let shared = SquareAPIService()
+    private let tokenService = TokenService()
     
     private init() {}
     
     // MARK: - Main Function to Fetch Menu Data
     
     func fetchMenuData(for shop: CoffeeShop) async throws -> [MenuCategory] {
-        let catalogObjects = try await fetchCatalogObjects(credentials: shop.menu)
-        return processCatalogObjects(catalogObjects)
+        print("🔍 SquareAPIService: Starting menu fetch for shop: \(shop.name) (merchantId: \(shop.merchantId))")
+        
+        do {
+            // First, fetch the merchant tokens from the backend
+            print("🔍 SquareAPIService: Fetching tokens from backend...")
+            let credentials = try await tokenService.getMerchantTokens(merchantId: shop.merchantId)
+            print("🔍 SquareAPIService: Successfully got credentials, fetching catalog...")
+            
+            let catalogObjects = try await fetchCatalogObjects(credentials: credentials)
+            print("🔍 SquareAPIService: Successfully fetched \(catalogObjects.count) catalog objects")
+            
+            let categories = processCatalogObjects(catalogObjects)
+            print("🔍 SquareAPIService: Successfully processed into \(categories.count) menu categories")
+            
+            return categories
+        } catch {
+            print("❌ SquareAPIService: Error fetching menu data for \(shop.name): \(error)")
+            print("❌ SquareAPIService: Error type: \(type(of: error))")
+            print("❌ SquareAPIService: Error description: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    // MARK: - Order Status Fetching
+    
+    func fetchOrderStatus(orderId: String, merchantId: String) async throws -> OrderStatus {
+        do {
+            // First, fetch the merchant tokens from the backend
+            let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+            
+            let squareOrder = try await fetchSquareOrder(orderId: orderId, credentials: credentials)
+            
+            // Convert Square order state to our OrderStatus
+            let orderStatus = convertSquareOrderToOrderStatus(squareOrder)
+            
+            return orderStatus
+            
+        } catch {
+            print("❌ SquareAPIService: Error fetching order status: \(error)")
+            throw error
+        }
+    }
+    
+    // MARK: - Business Hours Fetching
+    
+    func fetchBusinessHours(for shop: CoffeeShop) async throws -> BusinessHoursInfo? {
+        print("🔍 SquareAPIService: Starting business hours fetch for shop: \(shop.name) (merchantId: \(shop.merchantId))")
+        
+        do {
+            // First, fetch the merchant tokens from the backend
+            let credentials = try await tokenService.getMerchantTokens(merchantId: shop.merchantId)
+            
+            // First, get the list of locations for this merchant
+            let locations = try await fetchLocations(credentials: credentials)
+            print("🔍 SquareAPIService: Found \(locations.count) locations for \(shop.name)")
+            
+            // Use the first location (most merchants have only one location)
+            guard let firstLocation = locations.first else {
+                print("❌ SquareAPIService: No locations found for \(shop.name)")
+                return nil
+            }
+            
+            print("🔍 SquareAPIService: Using location: \(firstLocation.id) - \(firstLocation.name ?? "Unnamed")")
+            
+            // Fetch location details which include business hours
+            let location = try await fetchLocationDetails(locationId: firstLocation.id, credentials: credentials)
+            
+            guard let businessHours = location.businessHours else {
+                print("🔍 SquareAPIService: No business hours found for \(shop.name)")
+                return nil
+            }
+            
+            let businessHoursInfo = processBusinessHours(businessHours)
+            print("🔍 SquareAPIService: Successfully processed business hours for \(shop.name)")
+            
+            return businessHoursInfo
+            
+        } catch {
+            print("❌ SquareAPIService: Error fetching business hours for \(shop.name): \(error)")
+            throw error
+        }
     }
     
     // MARK: - Private Functions
     
     private func fetchCatalogObjects(credentials: SquareCredentials) async throws -> [SquareCatalogObject] {
-        let baseURL = "https://connect.squareupsandbox.com/v2/catalog/search"
+        let baseURL = "https://connect.squareup.com/v2/catalog/search"
         
         guard let url = URL(string: baseURL) else {
             throw SquareAPIError.invalidURL
@@ -29,7 +109,7 @@ class SquareAPIService {
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("Bearer \(credentials.accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         
@@ -82,17 +162,45 @@ class SquareAPIService {
         let images = objects.filter { $0.type == "IMAGE" }
         let modifierLists = objects.filter { $0.type == "MODIFIER_LIST" }
         
-        print("DEBUG: Found \(categories.count) categories, \(items.count) items, \(images.count) images, and \(modifierLists.count) modifier lists")
+        // Create image mapping for quick lookup
+        let imageMapping: [String: String] = Dictionary(uniqueKeysWithValues: images.compactMap { imageObject in
+            guard let imageData = imageObject.imageData, let url = imageData.url else { return nil }
+            return (imageObject.id, url)
+        })
         
-        // Create image mapping (image ID -> image URL)
-        let imageMapping = createImageMapping(from: images)
+        // Create modifier list mapping for quick lookup
+        let modifierListMapping: [String: MenuItemModifierList] = Dictionary(uniqueKeysWithValues: modifierLists.compactMap { modifierListObject in
+            guard let modifierListData = modifierListObject.modifierListData else { return nil }
+            
+            // Convert SquareModifierListData to MenuItemModifierList
+            let modifiers = modifierListData.modifiers?.compactMap { squareModifier -> MenuItemModifier? in
+                guard let modifierData = squareModifier.modifierData else { return nil }
+                
+                // Convert price from cents to dollars
+                let priceInCents = modifierData.priceMoney?.amount ?? 0
+                let price = Double(priceInCents) / 100.0
+                
+                return MenuItemModifier(
+                    id: squareModifier.id,
+                    name: modifierData.name,
+                    price: price,
+                    isDefault: modifierData.onByDefault ?? false
+                )
+            } ?? []
+            
+            return (modifierListObject.id, MenuItemModifierList(
+                id: modifierListObject.id,
+                name: modifierListData.name,
+                selectionType: modifierListData.selectionType ?? "SINGLE",
+                minSelections: 0, // Will be updated by getModifierLists
+                maxSelections: 1, // Will be updated by getModifierLists
+                modifiers: modifiers
+            ))
+        })
         
-        // Create modifier list mapping (modifier list ID -> modifier list data)
-        let modifierListMapping = createModifierListMapping(from: modifierLists)
-        
-        // Create menu categories
+        // Process categories and their items
+        var processedItemIds = Set<String>()
         var menuCategories: [MenuCategory] = []
-        var processedItemIds: Set<String> = []
         
         for categoryObject in categories {
             guard let categoryData = categoryObject.categoryData else { continue }
@@ -110,13 +218,11 @@ class SquareAPIService {
                 // Mark this item as processed
                 processedItemIds.insert(itemObject.id)
                 
-                // Get the primary variation (usually the first one)
-                let variation = itemData.variations?.first
-                let variationData = variation?.itemVariationData
+                // Process all variations to get size options
+                let variations = processItemVariations(itemData.variations)
                 
-                // Convert price from cents to dollars
-                let priceInCents = variationData?.priceMoney?.amount ?? 0
-                let price = Double(priceInCents) / 100.0
+                // Get base price from first variation for backward compatibility
+                let basePrice = variations.first?.price ?? 0.0
                 
                 // Get modifier lists for this item
                 let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
@@ -128,8 +234,10 @@ class SquareAPIService {
                 let customizations = extractCustomizationTypes(from: modifierLists)
                 
                 return MenuItem(
+                    id: itemObject.id, // <-- Pass unique Square id
                     name: itemData.name,
-                    price: price,
+                    price: basePrice,
+                    variations: variations.isEmpty ? nil : variations,
                     customizations: customizations,
                     imageURL: imageURL,
                     modifierLists: modifierLists
@@ -137,28 +245,22 @@ class SquareAPIService {
             }
             
             if !categoryItems.isEmpty {
-                let menuCategory = MenuCategory(
-                    name: categoryData.name,
-                    items: categoryItems
-                )
-                menuCategories.append(menuCategory)
+                menuCategories.append(MenuCategory(name: categoryData.name, items: categoryItems))
             }
         }
         
-        // Handle uncategorized items (items without a category or items that didn't match any category)
-        let uncategorizedItems = items.compactMap { itemObject -> MenuItem? in
+        // Add any remaining items that weren't assigned to categories
+        let remainingItems = items.compactMap { itemObject -> MenuItem? in
             guard let itemData = itemObject.itemData else { return nil }
             
-            // Skip items that were already processed
+            // Skip if already processed
             guard !processedItemIds.contains(itemObject.id) else { return nil }
             
-            // Get the primary variation (usually the first one)
-            let variation = itemData.variations?.first
-            let variationData = variation?.itemVariationData
+            // Process all variations to get size options
+            let variations = processItemVariations(itemData.variations)
             
-            // Convert price from cents to dollars
-            let priceInCents = variationData?.priceMoney?.amount ?? 0
-            let price = Double(priceInCents) / 100.0
+            // Get base price from first variation for backward compatibility
+            let basePrice = variations.first?.price ?? 0.0
             
             // Get modifier lists for this item
             let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
@@ -170,54 +272,22 @@ class SquareAPIService {
             let customizations = extractCustomizationTypes(from: modifierLists)
             
             return MenuItem(
+                id: itemObject.id,
                 name: itemData.name,
-                price: price,
+                price: basePrice,
+                variations: variations.isEmpty ? nil : variations,
                 customizations: customizations,
                 imageURL: imageURL,
                 modifierLists: modifierLists
             )
         }
         
-        // If there are uncategorized items, add them to an "Other" category
-        if !uncategorizedItems.isEmpty {
-            menuCategories.append(MenuCategory(name: "Other", items: uncategorizedItems))
+        if !remainingItems.isEmpty {
+            menuCategories.append(MenuCategory(name: "Other", items: remainingItems))
         }
         
-        // If no categories found at all, create a default "Menu" category with all items
-        if menuCategories.isEmpty && !items.isEmpty {
-            let allItems = items.compactMap { itemObject -> MenuItem? in
-                guard let itemData = itemObject.itemData else { return nil }
-                
-                let variation = itemData.variations?.first
-                let variationData = variation?.itemVariationData
-                
-                let priceInCents = variationData?.priceMoney?.amount ?? 0
-                let price = Double(priceInCents) / 100.0
-                
-                // Get modifier lists for this item
-                let modifierLists = getModifierLists(for: itemData, from: modifierListMapping)
-                
-                // Get image URL for this item
-                let imageURL = getImageURL(for: itemData, from: imageMapping)
-                
-                // Keep legacy customizations for backward compatibility
-                let customizations = extractCustomizationTypes(from: modifierLists)
-                
-                return MenuItem(
-                    name: itemData.name,
-                    price: price,
-                    customizations: customizations,
-                    imageURL: imageURL,
-                    modifierLists: modifierLists
-                )
-            }
-            
-            if !allItems.isEmpty {
-                menuCategories.append(MenuCategory(name: "Menu", items: allItems))
-            }
-        }
-        
-        return menuCategories
+        // Sort by ordinal to maintain consistent ordering
+        return menuCategories.sorted { $0.name < $1.name }
     }
     
     private func createModifierListMapping(from modifierLists: [SquareCatalogObject]) -> [String: MenuItemModifierList] {
@@ -290,6 +360,28 @@ class SquareAPIService {
         return modifierLists
     }
     
+    private func processItemVariations(_ squareVariations: [SquareItemVariation]?) -> [MenuItemVariation] {
+        guard let squareVariations = squareVariations else { return [] }
+        
+        let variations = squareVariations.compactMap { variation -> MenuItemVariation? in
+            guard let variationData = variation.itemVariationData else { return nil }
+            
+            // Convert price from cents to dollars
+            let priceInCents = variationData.priceMoney?.amount ?? 0
+            let price = Double(priceInCents) / 100.0
+            
+            return MenuItemVariation(
+                id: variation.id,
+                name: variationData.name ?? "Size",
+                price: price,
+                ordinal: variationData.ordinal ?? 0
+            )
+        }
+        
+        // Sort by ordinal to maintain consistent ordering
+        return variations.sorted { $0.ordinal < $1.ordinal }
+    }
+    
     private func extractCustomizationTypes(from modifierLists: [MenuItemModifierList]) -> [String]? {
         guard !modifierLists.isEmpty else { return nil }
         
@@ -340,6 +432,293 @@ class SquareAPIService {
         let imageURL = imageMapping[firstImageId]
         print("DEBUG: Item '\(itemData.name)' -> imageId: \(firstImageId) -> URL: \(imageURL ?? "nil")")
         return imageURL
+    }
+    
+    private func fetchSquareOrder(orderId: String, credentials: SquareCredentials) async throws -> SquareOrder {
+        let baseURL = "https://connect.squareup.com/v2/orders/\(orderId)"
+        
+        guard let url = URL(string: baseURL) else {
+            throw SquareAPIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw SquareAPIError.invalidResponse
+            }
+            
+            guard httpResponse.statusCode == 200 else {
+                // Try to decode error response
+                if let errorResponse = try? JSONDecoder().decode(SquareErrorResponse.self, from: data) {
+                    throw SquareAPIError.apiError(errorResponse.errors?.first?.detail ?? "Unknown error")
+                }
+                throw SquareAPIError.httpError(httpResponse.statusCode)
+            }
+            
+            let orderResponse = try JSONDecoder().decode(SquareOrderResponse.self, from: data)
+            
+            guard let order = orderResponse.order else {
+                throw SquareAPIError.apiError("Order not found")
+            }
+            
+            return order
+            
+        } catch {
+            if error is SquareAPIError {
+                throw error
+            }
+            throw SquareAPIError.networkError(error)
+        }
+    }
+    
+    private func convertSquareOrderStateToOrderStatus(_ squareState: String) -> OrderStatus {
+        switch squareState.uppercased() {
+        case "OPEN":
+            // For Square, OPEN means the order is active and being processed
+            // We'll check fulfillment states to determine the exact status
+            return .inProgress
+        case "COMPLETED":
+            return .completed
+        case "CANCELED":
+            return .cancelled
+        case "DRAFT":
+            return .draft
+        case "PENDING":
+            return .pending
+        default:
+            // Default to submitted for unknown states
+            return .submitted
+        }
+    }
+    
+    private func convertSquareOrderToOrderStatus(_ squareOrder: SquareOrder) -> OrderStatus {
+        // First check the main order state
+        let baseStatus = convertSquareOrderStateToOrderStatus(squareOrder.state)
+        
+        // If the order is OPEN, check fulfillment states for more specific status
+        if baseStatus == .inProgress {
+            // Check fulfillment states to determine if it's ready for pickup
+            if let fulfillments = squareOrder.fulfillments {
+                for fulfillment in fulfillments {
+                    if fulfillment.type == "PICKUP" {
+                        switch fulfillment.state.uppercased() {
+                        case "PROPOSED":
+                            return .submitted // Order submitted, waiting for merchant
+                        case "RESERVED":
+                            return .inProgress // Merchant has accepted and is preparing
+                        case "PREPARED":
+                            return .ready // Order is ready for pickup
+                        case "FULFILLED":
+                            return .completed // Order has been picked up
+                        case "CANCELED":
+                            return .cancelled
+                        default:
+                            return .inProgress
+                        }
+                    }
+                }
+            }
+        }
+        
+        return baseStatus
+    }
+    
+    private func fetchLocationDetails(locationId: String, credentials: SquareCredentials) async throws -> SquareLocation {
+        let baseURL = "https://connect.squareup.com/v2/locations/\(locationId)"
+        
+        guard let url = URL(string: baseURL) else {
+            throw SquareAPIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw SquareAPIError.invalidResponse
+            }
+            
+            print("🔍 SquareAPIService: Location details API response status: \(httpResponse.statusCode)")
+            
+            guard httpResponse.statusCode == 200 else {
+                // Try to decode error response
+                if let errorResponse = try? JSONDecoder().decode(SquareErrorResponse.self, from: data) {
+                    let errorDetail = errorResponse.errors?.first?.detail ?? "Unknown error"
+                    print("❌ SquareAPIService: Location details API error: \(errorDetail)")
+                    throw SquareAPIError.apiError(errorDetail)
+                }
+                print("❌ SquareAPIService: Location details API HTTP error: \(httpResponse.statusCode)")
+                throw SquareAPIError.httpError(httpResponse.statusCode)
+            }
+            
+            let locationResponse = try JSONDecoder().decode(SquareLocationResponse.self, from: data)
+            
+            guard let location = locationResponse.location else {
+                throw SquareAPIError.apiError("Location not found")
+            }
+            
+            print("🔍 SquareAPIService: Location details - ID: \(location.id), Name: \(location.name ?? "Unnamed")")
+            if let businessHours = location.businessHours {
+                print("🔍 SquareAPIService: Business hours found - Periods: \(businessHours.periods?.count ?? 0)")
+                if let periods = businessHours.periods {
+                    for period in periods {
+                        print("🔍 SquareAPIService: Period - Day: \(period.dayOfWeek), Start: \(period.startLocalTime ?? "N/A"), End: \(period.endLocalTime ?? "N/A")")
+                    }
+                }
+            } else {
+                print("🔍 SquareAPIService: No business hours found for this location")
+            }
+            
+            return location
+            
+        } catch {
+            if error is SquareAPIError {
+                throw error
+            }
+            throw SquareAPIError.networkError(error)
+        }
+    }
+    
+    private func fetchLocations(credentials: SquareCredentials) async throws -> [SquareLocation] {
+        let baseURL = "https://connect.squareup.com/v2/locations"
+        
+        guard let url = URL(string: baseURL) else {
+            throw SquareAPIError.invalidURL
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(credentials.oauth_token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw SquareAPIError.invalidResponse
+            }
+            
+            print("🔍 SquareAPIService: Locations API response status: \(httpResponse.statusCode)")
+            
+            guard httpResponse.statusCode == 200 else {
+                // Try to decode error response
+                if let errorResponse = try? JSONDecoder().decode(SquareErrorResponse.self, from: data) {
+                    let errorDetail = errorResponse.errors?.first?.detail ?? "Unknown error"
+                    print("❌ SquareAPIService: Locations API error: \(errorDetail)")
+                    throw SquareAPIError.apiError(errorDetail)
+                }
+                print("❌ SquareAPIService: Locations API HTTP error: \(httpResponse.statusCode)")
+                throw SquareAPIError.httpError(httpResponse.statusCode)
+            }
+            
+            let locationsResponse = try JSONDecoder().decode(SquareLocationsResponse.self, from: data)
+            
+            let locations = locationsResponse.locations ?? []
+            print("🔍 SquareAPIService: Found \(locations.count) locations")
+            
+            for location in locations {
+                print("🔍 SquareAPIService: Location - ID: \(location.id), Name: \(location.name ?? "Unnamed"), Has Business Hours: \(location.businessHours != nil)")
+            }
+            
+            return locations
+            
+        } catch {
+            if error is SquareAPIError {
+                throw error
+            }
+            throw SquareAPIError.networkError(error)
+        }
+    }
+    
+    private func processBusinessHours(_ businessHours: SquareBusinessHours) -> BusinessHoursInfo {
+        var weeklyHours: [String: [BusinessHoursPeriod]] = [:]
+        
+        // Process regular weekly periods
+        if let periods = businessHours.periods {
+            for period in periods {
+                let dayOfWeek = period.dayOfWeek
+                let periodInfo = BusinessHoursPeriod(
+                    startTime: period.startLocalTime ?? "",
+                    endTime: period.endLocalTime ?? ""
+                )
+                
+                if weeklyHours[dayOfWeek] == nil {
+                    weeklyHours[dayOfWeek] = []
+                }
+                weeklyHours[dayOfWeek]?.append(periodInfo)
+            }
+        }
+        
+        // Determine if currently open
+        let isCurrentlyOpen = checkIfCurrentlyOpen(weeklyHours: weeklyHours)
+        
+        return BusinessHoursInfo(
+            weeklyHours: weeklyHours,
+            isCurrentlyOpen: isCurrentlyOpen
+        )
+    }
+    
+    private func checkIfCurrentlyOpen(weeklyHours: [String: [BusinessHoursPeriod]]) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        
+        // Get current day of week (1 = Sunday, 2 = Monday, etc.)
+        let weekday = calendar.component(.weekday, from: now)
+        
+        // Convert to Square's day format
+        let dayOfWeek = convertWeekdayToSquareFormat(weekday)
+        
+        guard let todayPeriods = weeklyHours[dayOfWeek] else {
+            return false
+        }
+        
+        // Get current time in HH:mm format
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "HH:mm"
+        let currentTime = timeFormatter.string(from: now)
+        
+        // Check if current time falls within any of today's periods
+        for period in todayPeriods {
+            if isTimeInRange(currentTime: currentTime, startTime: period.startTime, endTime: period.endTime) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    private func convertWeekdayToSquareFormat(_ weekday: Int) -> String {
+        switch weekday {
+        case 1: return "SUN"
+        case 2: return "MON"
+        case 3: return "TUE"
+        case 4: return "WED"
+        case 5: return "THU"
+        case 6: return "FRI"
+        case 7: return "SAT"
+        default: return "MON"
+        }
+    }
+    
+    private func isTimeInRange(currentTime: String, startTime: String, endTime: String) -> Bool {
+        // Handle cases where business hours span midnight
+        if startTime > endTime {
+            // Business hours span midnight (e.g., 22:00 to 02:00)
+            return currentTime >= startTime || currentTime <= endTime
+        } else {
+            // Normal business hours (e.g., 09:00 to 17:00)
+            return currentTime >= startTime && currentTime <= endTime
+        }
     }
 }
 

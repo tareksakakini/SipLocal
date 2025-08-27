@@ -7,8 +7,12 @@ struct PaymentResultView: View {
     let coffeeShop: CoffeeShop?
     let orderItems: [CartItem]?
     let totalAmount: Double?
+    let pickupTime: Date?
     let onDismiss: () -> Void
     let onTryAgain: (() -> Void)?
+    let onCancel: (() -> Void)?
+    
+    @EnvironmentObject var orderManager: OrderManager
     
     var body: some View {
         NavigationStack {
@@ -45,12 +49,9 @@ struct PaymentResultView: View {
                         .font(.title)
                         .fontWeight(.bold)
                         .multilineTextAlignment(.center)
-                    
-                    Text("Your payment was successful")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
                 }
             }
+            
             
             // Pickup Information Card (moved to show first)
             if let coffeeShop = coffeeShop {
@@ -73,6 +74,21 @@ struct PaymentResultView: View {
                             .font(.body)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.leading)
+                        
+                        if let pickupTime = pickupTime {
+                            Divider()
+                                .padding(.vertical, 4)
+                            
+                            HStack {
+                                Image(systemName: "clock")
+                                    .foregroundColor(.blue)
+                                    .font(.caption)
+                                
+                                Text("Pickup Time: \(formatPickupTime(pickupTime))")
+                                    .font(.body)
+                                    .fontWeight(.medium)
+                            }
+                        }
                     }
                 }
                 .padding()
@@ -168,7 +184,7 @@ struct PaymentResultView: View {
             
             // Action Button
             Button(action: onDismiss) {
-                Text("Done")
+                Text("Continue")
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity)
                     .padding()
@@ -231,6 +247,12 @@ struct PaymentResultView: View {
             }
         }
     }
+    
+    private func formatPickupTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
 }
 
 // Preview
@@ -252,7 +274,7 @@ struct PaymentResultView_Previews: PreviewProvider {
                     description: "Sample description",
                     imageName: "sample",
                     stampName: "sample",
-                    menu: SquareCredentials(appID: "", accessToken: "", locationId: "")
+                    merchantId: "SAMPLE_MERCHANT_ID"
                 ),
                 orderItems: [
                     CartItem(
@@ -267,9 +289,9 @@ struct PaymentResultView_Previews: PreviewProvider {
                             description: "Sample description",
                             imageName: "sample",
                             stampName: "sample",
-                            menu: SquareCredentials(appID: "", accessToken: "", locationId: "")
+                            merchantId: "SAMPLE_MERCHANT_ID"
                         ),
-                        menuItem: MenuItem(name: "Cappuccino", price: 4.50, customizations: nil, imageURL: nil, modifierLists: nil),
+                        menuItem: MenuItem(id: "item_cappuccino", name: "Cappuccino", price: 4.50, variations: nil, customizations: nil, imageURL: nil, modifierLists: nil),
                         category: "Coffee",
                         quantity: 2,
                         customizations: "Extra shot, oat milk"
@@ -286,19 +308,23 @@ struct PaymentResultView_Previews: PreviewProvider {
                             description: "Sample description",
                             imageName: "sample",
                             stampName: "sample",
-                            menu: SquareCredentials(appID: "", accessToken: "", locationId: "")
+                            merchantId: "SAMPLE_MERCHANT_ID"
                         ),
-                        menuItem: MenuItem(name: "Blueberry Muffin", price: 3.25, customizations: nil, imageURL: nil, modifierLists: nil),
+                        menuItem: MenuItem(id: "item_blueberry_muffin", name: "Blueberry Muffin", price: 3.25, variations: nil, customizations: nil, imageURL: nil, modifierLists: nil),
                         category: "Pastries",
                         quantity: 1,
                         customizations: nil
                     )
                 ],
                 totalAmount: 12.25,
+                pickupTime: Date().addingTimeInterval(10 * 60), // 10 minutes from now
                 onDismiss: {
                     print("Dismissed")
                 },
-                onTryAgain: nil
+                onTryAgain: nil,
+                onCancel: {
+                    print("Cancelled")
+                }
             )
             .previewDisplayName("Success")
             
@@ -309,12 +335,14 @@ struct PaymentResultView_Previews: PreviewProvider {
                 coffeeShop: nil,
                 orderItems: nil,
                 totalAmount: nil,
+                pickupTime: nil,
                 onDismiss: {
                     print("Dismissed")
                 },
                 onTryAgain: {
                     print("Try Again")
-                }
+                },
+                onCancel: nil
             )
             .previewDisplayName("Failure")
         }

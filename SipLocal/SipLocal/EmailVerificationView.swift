@@ -27,7 +27,7 @@ struct EmailVerificationView: View {
                 VStack(spacing: 20) {
                     Image(systemName: "envelope.circle.fill")
                         .font(.system(size: 80))
-                        .foregroundStyle(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .top, endPoint: .bottom))
+                        .foregroundStyle(LinearGradient(gradient: Gradient(colors: [Color(red: 0.65, green: 0.4, blue: 0.2), Color(red: 0.45, green: 0.25, blue: 0.1)]), startPoint: .top, endPoint: .bottom))
                     
                     Text("Verify Your Email")
                         .font(.largeTitle)
@@ -73,7 +73,7 @@ struct EmailVerificationView: View {
                         .frame(maxWidth: .infinity)
                         .frame(height: 55)
                         .foregroundColor(.white)
-                        .background(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing))
+                        .background(LinearGradient(gradient: Gradient(colors: [Color(red: 0.65, green: 0.4, blue: 0.2), Color(red: 0.45, green: 0.25, blue: 0.1)]), startPoint: .leading, endPoint: .trailing))
                         .cornerRadius(28)
                     }
                     .disabled(isCheckingStatus || isResendingEmail)
@@ -83,7 +83,7 @@ struct EmailVerificationView: View {
                         HStack {
                             if isResendingEmail {
                                 ProgressView()
-                                    .tint(.blue)
+                                    .tint(Color(red: 0.45, green: 0.25, blue: 0.1))
                             } else {
                                 Image(systemName: "arrow.clockwise.circle")
                                 Text("Resend Verification Email")
@@ -92,12 +92,12 @@ struct EmailVerificationView: View {
                         .font(.headline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .frame(height: 55)
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color(red: 0.45, green: 0.25, blue: 0.1))
                         .background(.white)
                         .cornerRadius(28)
                         .overlay(
                             RoundedRectangle(cornerRadius: 28)
-                                .stroke(LinearGradient(gradient: Gradient(colors: [Color.blue, Color.purple]), startPoint: .leading, endPoint: .trailing), lineWidth: 2)
+                                .stroke(LinearGradient(gradient: Gradient(colors: [Color(red: 0.65, green: 0.4, blue: 0.2), Color(red: 0.45, green: 0.25, blue: 0.1)]), startPoint: .leading, endPoint: .trailing), lineWidth: 2)
                         )
                     }
                     .disabled(isCheckingStatus || isResendingEmail)

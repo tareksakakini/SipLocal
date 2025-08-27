@@ -8,6 +8,13 @@ struct MenuItemModifier: Codable, Identifiable {
     let isDefault: Bool
 }
 
+struct MenuItemVariation: Codable, Identifiable {
+    let id: String
+    let name: String
+    let price: Double
+    let ordinal: Int
+}
+
 struct MenuItemModifierList: Codable, Identifiable {
     let id: String
     let name: String
@@ -18,12 +25,23 @@ struct MenuItemModifierList: Codable, Identifiable {
 }
 
 struct MenuItem: Codable, Identifiable {
-    var id: String { name }
+    let id: String // Unique Square item id
     let name: String
-    let price: Double
+    let price: Double // Base price (from first variation for backward compatibility)
+    let variations: [MenuItemVariation]?
     let customizations: [String]? // Keep for backward compatibility
     let imageURL: String?
     let modifierLists: [MenuItemModifierList]?
+    
+    // Helper to get the default variation price
+    var basePrice: Double {
+        return variations?.first?.price ?? price
+    }
+    
+    // Helper to check if item has size variations
+    var hasSizeVariations: Bool {
+        return variations != nil && variations!.count > 1
+    }
 }
 
 struct MenuCategory: Codable, Identifiable {
@@ -34,9 +52,9 @@ struct MenuCategory: Codable, Identifiable {
 
 // Square credentials structure
 struct SquareCredentials: Codable {
-    let appID: String
-    let accessToken: String
-    let locationId: String
+    let oauth_token: String
+    let merchantId: String
+    let refreshToken: String
 }
 
 struct CoffeeShop: Codable, Identifiable {
@@ -50,10 +68,27 @@ struct CoffeeShop: Codable, Identifiable {
     let description: String
     let imageName: String
     let stampName: String
-    let menu: SquareCredentials
+    let merchantId: String
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+    
+    // Helper method to convert to dictionary for backend
+    func toDictionary() -> [String: Any] {
+        return [
+            "id": id,
+            "name": name,
+            "address": address,
+            "latitude": latitude,
+            "longitude": longitude,
+            "phone": phone,
+            "website": website,
+            "description": description,
+            "imageName": imageName,
+            "stampName": stampName,
+            "merchantId": merchantId
+        ]
     }
 }
 

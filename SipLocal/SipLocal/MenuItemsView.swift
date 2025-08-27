@@ -1,5 +1,195 @@
 import SwiftUI
 
+struct OrderAgainItemsView: View {
+    let shop: CoffeeShop
+    @EnvironmentObject var orderManager: OrderManager
+    @EnvironmentObject var cartManager: CartManager
+    @State private var customizingItem: MenuItem? = nil
+    @State private var selectedModifiers: [String: Set<String>] = [:]
+    @State private var initialSelectedSizeId: String? = nil
+    @State private var showingClosedShopAlert = false
+    @State private var showingCart = false
+
+    private struct RepeatKey: Hashable, Equatable {
+        let menuItemId: String
+        let selectedSizeId: String?
+        let selectedModifierIdsByList: [String: [String]]?
+        static func == (lhs: RepeatKey, rhs: RepeatKey) -> Bool {
+            guard lhs.menuItemId == rhs.menuItemId, lhs.selectedSizeId == rhs.selectedSizeId else { return false }
+            return normalize(lhs.selectedModifierIdsByList) == normalize(rhs.selectedModifierIdsByList)
+        }
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(menuItemId)
+            hasher.combine(selectedSizeId)
+            let lists = Self.normalize(selectedModifierIdsByList)
+            for key in lists.keys.sorted() { hasher.combine(key); for v in (lists[key] ?? []) { hasher.combine(v) } }
+        }
+        private static func normalize(_ map: [String: [String]]?) -> [String: [String]] {
+            guard let map = map else { return [:] }
+            var out: [String: [String]] = [:]
+            for (k, v) in map { out[k] = v.sorted() }
+            return out
+        }
+    }
+
+    private struct Entry: Identifiable {
+        let id = UUID()
+        let key: RepeatKey
+        let count: Int
+        let sample: CartItem
+        let menuItem: MenuItem
+    }
+
+    private var entries: [Entry] {
+        let categories = MenuDataManager.shared.getMenuCategories(for: shop)
+        func findMenuItem(id: String) -> MenuItem? {
+            for category in categories { if let m = category.items.first(where: { $0.id == id }) { return m } }
+            return nil
+        }
+        var counts: [RepeatKey: (count: Int, sample: CartItem)] = [:]
+        for order in orderManager.orders where order.coffeeShop.id == shop.id && [.completed, .cancelled].contains(order.status) {
+            for item in order.items {
+                let key = RepeatKey(menuItemId: item.menuItemId, selectedSizeId: item.selectedSizeId, selectedModifierIdsByList: item.selectedModifierIdsByList)
+                let cur = counts[key]
+                counts[key] = ((cur?.count ?? 0) + item.quantity, cur?.sample ?? item)
+            }
+        }
+        let sorted = counts.map { ($0.key, $0.value.count, $0.value.sample) }.sorted { $0.1 > $1.1 }
+        return sorted.compactMap { (key, count, sample) in
+            guard let menuItem = findMenuItem(id: key.menuItemId) else { return nil }
+            return Entry(key: key, count: count, sample: sample, menuItem: menuItem)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(entries) { entry in
+                        Button(action: {
+                            let liveItem = entry.menuItem
+                            let hasCustomizations = (liveItem.modifierLists != nil && !(liveItem.modifierLists?.isEmpty ?? true)) || (liveItem.variations != nil && liveItem.variations!.count > 1)
+                            if !hasCustomizations {
+                                let catName = categoryName(for: liveItem.id)
+                                let _ = cartManager.addItem(shop: shop, menuItem: liveItem, category: catName)
+                            } else {
+                                customizingItem = liveItem
+                                initialSelectedSizeId = entry.key.selectedSizeId
+                                selectedModifiers.removeAll()
+                                if let map = entry.key.selectedModifierIdsByList {
+                                    for (listId, ids) in map { selectedModifiers[listId] = Set(ids) }
+                                }
+                            }
+                        }) {
+                            HStack(spacing: 12) {
+                                // Thumbnail
+                                if let imageURL = entry.menuItem.imageURL, let url = URL(string: imageURL) {
+                                    AsyncImage(url: url) { phase in
+                                        switch phase {
+                                        case .success(let image): image.resizable().scaledToFill().frame(width: 56, height: 56).clipped().cornerRadius(8)
+                                        default: RoundedRectangle(cornerRadius: 8).fill(Color(.systemGray5)).frame(width: 56, height: 56).overlay(Image(systemName: "photo").foregroundColor(.gray))
+                                        }
+                                    }
+                                } else {
+                                    RoundedRectangle(cornerRadius: 8).fill(Color(.systemGray5)).frame(width: 56, height: 56).overlay(Image(systemName: "cup.and.saucer").foregroundColor(.gray))
+                                }
+                                VStack(alignment: .leading, spacing: 4) {
+                                    HStack {
+                                        Text(entry.menuItem.name).font(.body).fontWeight(.semibold).foregroundColor(.primary).lineLimit(1)
+                                        Spacer()
+                                        Text("Ordered \(entry.count) times").font(.caption).foregroundColor(.secondary)
+                                    }
+                                    if let subtitle = entry.sample.customizations, !subtitle.isEmpty {
+                                        Text(subtitle).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                                    }
+                                    Text(String(format: "$%.2f", entry.sample.itemPriceWithModifiers)).font(.caption).fontWeight(.medium).foregroundColor(.primary)
+                                }
+                            }
+                            .padding(16)
+                            .background(Color.white)
+                            .cornerRadius(12)
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding()
+            }
+            .background(Color(.systemGray6))
+            .navigationTitle("Order Again")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        showingCart = true
+                    }) {
+                        ZStack {
+                            Image(systemName: "cart")
+                                .font(.system(size: 20, weight: .medium))
+                            if cartManager.totalItems > 0 {
+                                Text("\(cartManager.totalItems)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.white)
+                                    .frame(minWidth: 16, minHeight: 16)
+                                    .background(Color.red)
+                                    .clipShape(Circle())
+                                    .offset(x: 10, y: -10)
+                            }
+                        }
+                        .foregroundColor(.primary)
+                    }
+                }
+            }
+        }
+        .sheet(isPresented: $showingCart) {
+            CartView()
+                .environmentObject(cartManager)
+        }
+        .sheet(item: $customizingItem) { item in
+            DrinkCustomizationSheet(
+                item: item,
+                selectedModifiers: $selectedModifiers,
+                initialSelectedSizeId: initialSelectedSizeId,
+                onAdd: { total, desc, selectedSizeIdOut, selectedModsOut in
+                    if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                        showingClosedShopAlert = true
+                        customizingItem = nil
+                        return
+                    }
+                    let catName = categoryName(for: item.id)
+                    let _ = cartManager.addItem(
+                        shop: shop,
+                        menuItem: item,
+                        category: catName,
+                        customizations: desc,
+                        itemPriceWithModifiers: total,
+                        selectedSizeId: selectedSizeIdOut,
+                        selectedModifierIdsByList: selectedModsOut
+                    )
+                    customizingItem = nil
+                },
+                onCancel: { customizingItem = nil }
+            )
+        }
+        .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("This coffee shop is currently closed. Please try again during business hours.")
+        }
+    }
+
+    private func categoryName(for itemId: String) -> String {
+        let categories = MenuDataManager.shared.getMenuCategories(for: shop)
+        for cat in categories {
+            if cat.items.contains(where: { $0.id == itemId }) { return cat.name }
+        }
+        return "Other"
+    }
+}
+
+import SwiftUI
+
 struct MenuItemsView: View {
     let shop: CoffeeShop
     let category: MenuCategory
@@ -8,10 +198,13 @@ struct MenuItemsView: View {
     @StateObject private var menuDataManager = MenuDataManager.shared
     @State private var showingCart = false
     @State private var customizingItem: MenuItem? = nil
+    @State private var initialSelectedSizeId: String? = nil
     @State private var showingDifferentShopAlert = false
-    @State private var pendingItem: (item: MenuItem, customizations: String?)?
+    @State private var showingClosedShopAlert = false
+    @State private var pendingItem: (item: MenuItem, customizations: String?, price: Double)?
     // Store customization selections - maps modifier list ID to selected modifier IDs
     @State private var selectedModifiers: [String: Set<String>] = [:]
+    @State private var showItemAddedPopup = false
     
     var body: some View {
         NavigationStack {
@@ -53,9 +246,32 @@ struct MenuItemsView: View {
                                 category: category.name,
                                 cartManager: cartManager,
                                 onAdd: {
-                                    customizingItem = item
-                                    // Initialize selections with defaults
-                                    initializeModifierSelections(for: item)
+                                    // Check if shop is closed
+                                    if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                                        showingClosedShopAlert = true
+                                        return
+                                    }
+                                    
+                                    // If the item has no modifier lists and no size variations, add directly to cart
+                                    let hasCustomizations = (item.modifierLists != nil && !(item.modifierLists?.isEmpty ?? true)) || (item.variations != nil && item.variations!.count > 1)
+                                    if !hasCustomizations {
+                                        let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name)
+                                        if success {
+                                            showItemAddedPopup = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                                withAnimation {
+                                                    showItemAddedPopup = false
+                                                }
+                                            }
+                                        } else {
+                                            pendingItem = (item: item, customizations: nil, price: item.price)
+                                            showingDifferentShopAlert = true
+                                        }
+                                    } else {
+                                        customizingItem = item
+                                        // Initialize selections with defaults
+                                        initializeModifierSelections(for: item)
+                                    }
                                 }
                             )
                         }
@@ -113,16 +329,36 @@ struct MenuItemsView: View {
                 DrinkCustomizationSheet(
                     item: item,
                     selectedModifiers: $selectedModifiers,
-                    onAdd: {
-                        // Add to cart with customizations as a string description
-                        let customizationDesc = customizationDescription(for: item)
-                        let success = cartManager.addItem(shop: shop, menuItem: item, category: category.name, customizations: customizationDesc)
+                    initialSelectedSizeId: initialSelectedSizeId,
+                    onAdd: { totalPriceWithModifiers, customizationDesc, selectedSizeIdOut, selectedModsOut in
+                        // Check if shop is closed
+                        if let isOpen = cartManager.isShopOpen(shop: shop), !isOpen {
+                            showingClosedShopAlert = true
+                            customizingItem = nil
+                            return
+                        }
                         
+                        // Add to cart with customizations and pricing from the customization sheet
+                        let success = cartManager.addItem(
+                            shop: shop,
+                            menuItem: item,
+                            category: category.name,
+                            customizations: customizationDesc,
+                            itemPriceWithModifiers: totalPriceWithModifiers,
+                            selectedSizeId: selectedSizeIdOut,
+                            selectedModifierIdsByList: selectedModsOut
+                        )
                         if success {
                             customizingItem = nil
+                            showItemAddedPopup = true
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                withAnimation {
+                                    showItemAddedPopup = false
+                                }
+                            }
                         } else {
                             // Store the pending item and show alert
-                            pendingItem = (item: item, customizations: customizationDesc)
+                            pendingItem = (item: item, customizations: customizationDesc, price: totalPriceWithModifiers)
                             showingDifferentShopAlert = true
                             customizingItem = nil
                         }
@@ -131,12 +367,21 @@ struct MenuItemsView: View {
                         customizingItem = nil
                     }
                 )
+                .onDisappear {
+                    initialSelectedSizeId = nil
+                }
             }
             .alert("Different Coffee Shop", isPresented: $showingDifferentShopAlert) {
                 Button("Clear Cart & Add Item", role: .destructive) {
                     cartManager.clearCart()
                     if let pending = pendingItem {
-                        let _ = cartManager.addItem(shop: shop, menuItem: pending.item, category: category.name, customizations: pending.customizations)
+                        let _ = cartManager.addItem(shop: shop, menuItem: pending.item, category: category.name, customizations: pending.customizations, itemPriceWithModifiers: pending.price)
+                        showItemAddedPopup = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                            withAnimation {
+                                showItemAddedPopup = false
+                            }
+                        }
                     }
                     pendingItem = nil
                 }
@@ -146,9 +391,44 @@ struct MenuItemsView: View {
             } message: {
                 Text("Your cart contains items from a different coffee shop. To add this item, you need to clear your current cart first.")
             }
+            .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This coffee shop is currently closed. Please try again during business hours.")
+            }
             .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SwitchToExploreTab"))) { _ in
                 showingCart = false
             }
+            .onAppear {
+                // Fetch business hours when view appears
+                Task {
+                    await cartManager.fetchBusinessHours(for: shop)
+                }
+            }
+            .overlay(
+                Group {
+                    if showItemAddedPopup {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Spacer()
+                                Text("Item added")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 24)
+                                    .padding(.vertical, 12)
+                                    .background(Color.black.opacity(0.85))
+                                    .cornerRadius(16)
+                                    .shadow(radius: 8)
+                                Spacer()
+                            }
+                            .padding(.bottom, 40)
+                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .animation(.easeInOut(duration: 0.3), value: showItemAddedPopup)
+                    }
+                }
+            )
         }
     }
     
@@ -169,34 +449,79 @@ struct MenuItemsView: View {
     private func initializeModifierSelections(for item: MenuItem) {
         selectedModifiers.removeAll()
         
+        // Size variations are now handled separately, no need to add to selectedModifiers
+        
         guard let modifierLists = item.modifierLists else { return }
         
         for modifierList in modifierLists {
-            var defaultSelections: Set<String> = []
-            
-            // Find default modifiers
-            for modifier in modifierList.modifiers {
-                if modifier.isDefault {
-                    defaultSelections.insert(modifier.id)
-                }
+            initializeDefaultsForModifierList(modifierList)
+        }
+    }
+    
+    // Helper to initialize defaults for a modifier list
+    private func initializeDefaultsForModifierList(_ modifierList: MenuItemModifierList) {
+        var defaultSelections: Set<String> = []
+        
+        // Find default modifiers
+        for modifier in modifierList.modifiers {
+            if modifier.isDefault {
+                defaultSelections.insert(modifier.id)
             }
-            
-            // If no defaults and minimum selection required, select first modifier
-            if defaultSelections.isEmpty && modifierList.minSelections > 0 {
+        }
+        
+        // If no defaults found, select first modifier as fallback
+        // For single-selection lists, always select first if no defaults
+        // For multiple-selection lists, only select first if minimum selections required
+        if defaultSelections.isEmpty {
+            if modifierList.selectionType == "SINGLE" || modifierList.maxSelections == 1 {
+                // Single selection - always select first option
+                if let firstModifier = modifierList.modifiers.first {
+                    defaultSelections.insert(firstModifier.id)
+                }
+            } else if modifierList.minSelections > 0 {
+                // Multiple selection - only preselect if minimum required
                 if let firstModifier = modifierList.modifiers.first {
                     defaultSelections.insert(firstModifier.id)
                 }
             }
-            
-            selectedModifiers[modifierList.id] = defaultSelections
         }
+        
+        selectedModifiers[modifierList.id] = defaultSelections
+    }
+    
+    // Helper to create a modifier list from size variations
+    private func createSizeModifierList(from variations: [MenuItemVariation]) -> MenuItemModifierList {
+        let sizeModifiers = variations.map { variation in
+            MenuItemModifier(
+                id: variation.id,
+                name: variation.name,
+                price: variation.price - variations.first!.price, // Price difference from base
+                isDefault: variation.id == variations.first?.id // First variation is default
+            )
+        }
+        
+        return MenuItemModifierList(
+            id: "size_variations",
+            name: "Size",
+            selectionType: "SINGLE",
+            minSelections: 1,
+            maxSelections: 1,
+            modifiers: sizeModifiers
+        )
     }
     
     // Helper to build customization description (always show size, only non-default for others)
     private func customizationDescription(for item: MenuItem) -> String {
-        guard let modifierLists = item.modifierLists else { return "" }
-        
         var desc: [String] = []
+        
+        // Add size variation description - we need to access the selectedSizeId from the customization sheet
+        // For now, we'll handle this differently and pass the size info when adding to cart
+        
+        guard let modifierLists = item.modifierLists else { 
+            return desc.joined(separator: " | ")
+        }
+        
+        var modifierDesc: [String] = []
         
         for modifierList in modifierLists {
             if let selectedModifierIds = selectedModifiers[modifierList.id], !selectedModifierIds.isEmpty {
@@ -213,10 +538,13 @@ struct MenuItemsView: View {
                 }
                 
                 if !modifierNames.isEmpty {
-                    desc.append("\(modifierList.name): \(modifierNames.joined(separator: ", "))")
+                    modifierDesc.append("\(modifierList.name): \(modifierNames.joined(separator: ", "))")
                 }
             }
         }
+        
+        // Combine size description with other modifier descriptions
+        desc.append(contentsOf: modifierDesc)
         
         return desc.joined(separator: " | ")
     }
@@ -229,6 +557,17 @@ struct MenuItemCard: View {
     let cartManager: CartManager
     var onAdd: (() -> Void)? = nil
     
+    private func formatPrice(for item: MenuItem) -> String {
+        // Always show the smallest size price (starting price)
+        if let variations = item.variations, variations.count > 1 {
+            let minPrice = variations.map(\.price).min() ?? item.price
+            return String(format: "$%.2f", minPrice)
+        } else {
+            // Single size or no variations - show base price
+            return String(format: "$%.2f", item.price)
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             // Image Section
@@ -238,24 +577,28 @@ struct MenuItemCard: View {
                     case .success(let image):
                         image
                             .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                            .frame(height: 100)
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 115, height: 105)
                             .clipped()
-                            .cornerRadius(12, corners: [.topLeft, .topRight])
                     case .failure(_):
-                        // Show fallback image on error
-                        Image("sample_menu_pic")
-                            .resizable()
-                            .aspectRatio(1, contentMode: .fill)
-                            .frame(height: 100)
-                            .clipped()
-                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                        // Show fallback placeholder
+                        VStack {
+                            Image(systemName: "photo.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 40, height: 40)
+                                .foregroundColor(.gray)
+                            Text("Image Not Available")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                        .frame(width: 115, height: 105)
+                        .background(Color(.systemGray5))
                     case .empty:
                         // Show loading state
                         Rectangle()
                             .fill(Color.gray.opacity(0.3))
-                            .frame(height: 100)
-                            .cornerRadius(12, corners: [.topLeft, .topRight])
+                            .frame(width: 115, height: 105)
                             .overlay(
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle())
@@ -266,12 +609,19 @@ struct MenuItemCard: View {
                     }
                 }
             } else {
-                Image("sample_menu_pic")
-                    .resizable()
-                    .aspectRatio(1, contentMode: .fill)
-                    .frame(height: 100)
-                    .clipped()
-                    .cornerRadius(12, corners: [.topLeft, .topRight])
+                // Show fallback placeholder
+                VStack {
+                    Image(systemName: "photo.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .foregroundColor(.gray)
+                    Text("Image Not Available")
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                }
+                .frame(width: 115, height: 105)
+                .background(Color(.systemGray5))
             }
             
             // Content Section
@@ -284,7 +634,7 @@ struct MenuItemCard: View {
                     .foregroundColor(.primary)
                     .frame(height: 35) // Fixed height to prevent layout shifts
                 
-                Text("$\(item.price, specifier: "%.2f")")
+                Text(formatPrice(for: item))
                     .font(.headline)
                     .fontWeight(.bold)
                     .foregroundColor(.black)
@@ -331,16 +681,122 @@ struct RoundedCorner: Shape {
     }
 }
 
+// Size Selection Component - shows full prices prominently
+struct SizeSelectionView: View {
+    let variations: [MenuItemVariation]
+    @Binding var selectedSizeId: String?
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Size")
+                .font(.headline)
+                .fontWeight(.semibold)
+                .foregroundColor(.primary)
+            
+            LazyVGrid(columns: [
+                GridItem(.flexible()),
+                GridItem(.flexible()),
+                GridItem(.flexible())
+            ], spacing: 12) {
+                ForEach(variations) { variation in
+                    SizeOptionCard(
+                        variation: variation,
+                        isSelected: selectedSizeId == variation.id,
+                        onTap: {
+                            selectedSizeId = variation.id
+                        }
+                    )
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 16)
+        .background(Color(.systemGray6))
+        .cornerRadius(12)
+    }
+}
+
+// Individual size option card
+struct SizeOptionCard: View {
+    let variation: MenuItemVariation
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            VStack(spacing: 6) {
+                Text(variation.name)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundColor(isSelected ? .white : .primary)
+                
+                Text(String(format: "$%.2f", variation.price))
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(isSelected ? .white : .secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(isSelected ? Color.accentColor : Color(.systemBackground))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? Color.accentColor : Color(.systemGray4), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+}
+
 // Customization Sheet
 struct DrinkCustomizationSheet: View {
     let item: MenuItem
     @Binding var selectedModifiers: [String: Set<String>]
-    var onAdd: () -> Void
+    var initialSelectedSizeId: String? = nil
+    var onAdd: (Double, String, String?, [String: [String]]?) -> Void
     var onCancel: () -> Void
     
-    var totalPrice: Double {
-        var total = item.price
+    @State private var selectedSizeId: String?
+    
+    // Helper to create a modifier list from size variations
+    private func createSizeModifierList(from variations: [MenuItemVariation]) -> MenuItemModifierList {
+        let sizeModifiers = variations.map { variation in
+            MenuItemModifier(
+                id: variation.id,
+                name: variation.name,
+                price: variation.price - variations.first!.price, // Price difference from base
+                isDefault: variation.id == variations.first?.id // First variation is default
+            )
+        }
         
+        return MenuItemModifierList(
+            id: "size_variations",
+            name: "Size",
+            selectionType: "SINGLE",
+            minSelections: 1,
+            maxSelections: 1,
+            modifiers: sizeModifiers
+        )
+    }
+    
+    var totalPrice: Double {
+        var total: Double = 0.0
+        
+        // Get size price (full price, not incremental)
+        if let variations = item.variations, variations.count > 1 {
+            if let selectedSizeId = selectedSizeId,
+               let selectedVariation = variations.first(where: { $0.id == selectedSizeId }) {
+                total = selectedVariation.price
+            } else {
+                // Default to first variation if nothing selected
+                total = variations.first?.price ?? item.basePrice
+            }
+        } else {
+            // No size variations, use base price
+            total = item.basePrice
+        }
+        
+        // Add other modifier pricing (incremental)
         guard let modifierLists = item.modifierLists else { return total }
         
         for modifierList in modifierLists {
@@ -356,11 +812,53 @@ struct DrinkCustomizationSheet: View {
         return total
     }
     
+    // Build complete customization description including size
+    private func buildCustomizationDescription() -> String {
+        var desc: [String] = []
+        
+        // Add size if multiple variations exist
+        if let variations = item.variations, variations.count > 1,
+           let selectedSizeId = selectedSizeId,
+           let selectedVariation = variations.first(where: { $0.id == selectedSizeId }) {
+            desc.append("Size: \(selectedVariation.name)")
+        }
+        
+        // Add other modifiers (only non-default ones)
+        guard let modifierLists = item.modifierLists else {
+            return desc.joined(separator: " | ")
+        }
+        
+        for modifierList in modifierLists {
+            if let selectedModifierIds = selectedModifiers[modifierList.id], !selectedModifierIds.isEmpty {
+                let modifierNames = modifierList.modifiers.compactMap { modifier in
+                    if selectedModifierIds.contains(modifier.id) && !modifier.isDefault {
+                        return modifier.name
+                    }
+                    return nil
+                }
+                
+                if !modifierNames.isEmpty {
+                    desc.append("\(modifierList.name): \(modifierNames.joined(separator: ", "))")
+                }
+            }
+        }
+        
+        return desc.joined(separator: " | ")
+    }
+    
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
+                        // Show size variations with special UI
+                        if let variations = item.variations, variations.count > 1 {
+                            SizeSelectionView(
+                                variations: variations,
+                                selectedSizeId: $selectedSizeId
+                            )
+                        }
+                        
                         if let modifierLists = item.modifierLists {
                             ForEach(modifierLists) { modifierList in
                                 ModifierListSection(
@@ -371,8 +869,8 @@ struct DrinkCustomizationSheet: View {
                                     )
                                 )
                             }
-                        } else {
-                            // Show message if no modifiers available
+                        } else if item.variations == nil || item.variations!.count <= 1 {
+                            // Show message if no modifiers or variations available
                             Text("No customization options available")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
@@ -395,7 +893,14 @@ struct DrinkCustomizationSheet: View {
                     }
                     .padding(.horizontal)
                     
-                    Button(action: onAdd) {
+                    Button(action: {
+                        // Convert selection binding to plain [String: [String]] for persistence
+                        var modsOut: [String: [String]] = [:]
+                        for (listId, setIds) in selectedModifiers {
+                            modsOut[listId] = Array(setIds)
+                        }
+                        onAdd(totalPrice, buildCustomizationDescription(), selectedSizeId, modsOut.isEmpty ? nil : modsOut)
+                    }) {
                         Text("Add to Cart")
                             .font(.headline)
                             .fontWeight(.semibold)
@@ -416,6 +921,18 @@ struct DrinkCustomizationSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel", action: onCancel)
+                }
+            }
+        }
+        .onAppear {
+            // Initialize selected size to provided initial or first variation if not already set
+            if selectedSizeId == nil {
+                if let initial = initialSelectedSizeId {
+                    selectedSizeId = initial
+                } else if let variations = item.variations,
+                          variations.count > 1,
+                          let firstVariation = variations.first {
+                    selectedSizeId = firstVariation.id
                 }
             }
         }
@@ -683,32 +1200,40 @@ struct MenuItemsView_Previews: PreviewProvider {
         let sampleCategory = MenuCategory(name: "Hot Coffee", items: [
             // Item with all three types of modifiers
             MenuItem(
+                id: "item_americano",
                 name: "Americano",
                 price: 3.50,
+                variations: nil,
                 customizations: ["size", "milk", "other"],
                 imageURL: nil,
                 modifierLists: [sizeModifierList, milkModifierList, addonsModifierList]
             ),
             // Item with just size (segmented picker)
             MenuItem(
+                id: "item_espresso",
                 name: "Espresso",
                 price: 2.25,
+                variations: nil,
                 customizations: ["size"],
                 imageURL: nil,
                 modifierLists: [sizeModifierList]
             ),
             // Item with size and milk (segmented + wheel)
             MenuItem(
+                id: "item_latte",
                 name: "Latte",
                 price: 4.25,
+                variations: nil,
                 customizations: ["size", "milk"],
                 imageURL: nil,
                 modifierLists: [sizeModifierList, milkModifierList]
             ),
             // Item with no modifiers
             MenuItem(
+                id: "item_drip_coffee",
                 name: "Drip Coffee",
                 price: 2.75,
+                variations: nil,
                 customizations: nil,
                 imageURL: nil,
                 modifierLists: nil
