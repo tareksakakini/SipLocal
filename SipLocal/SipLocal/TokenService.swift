@@ -4,15 +4,32 @@ class TokenService {
     private let baseURL = "https://us-central1-coffee-55670.cloudfunctions.net"
     private static var memoryCache: [String: SquareCredentials] = [:]
     private static var cacheTimestamps: [String: TimeInterval] = [:]
+    private static let cacheQueue = DispatchQueue(label: "com.siplocal.tokenservice.cache", attributes: .concurrent)
     private let cacheTTL: TimeInterval = 60 * 30 // 30 minutes
     
     func getMerchantTokens(merchantId: String) async throws -> SquareCredentials {
         print("🔐 TokenService: Fetching tokens for merchantId: \(merchantId)")
-        // Serve from in-memory cache if fresh
-        if let creds = Self.memoryCache[merchantId], let ts = Self.cacheTimestamps[merchantId] {
+        
+        // Check cache safely using concurrent queue
+        let cachedCredentials: SquareCredentials? = Self.cacheQueue.sync {
+            guard let creds = Self.memoryCache[merchantId], 
+                  let ts = Self.cacheTimestamps[merchantId] else {
+                return nil
+            }
+            
             if Date().timeIntervalSince1970 - ts < cacheTTL {
                 return creds
+            } else {
+                // Remove expired cache entry
+                Self.memoryCache.removeValue(forKey: merchantId)
+                Self.cacheTimestamps.removeValue(forKey: merchantId)
+                return nil
             }
+        }
+        
+        if let cachedCredentials = cachedCredentials {
+            print("🔐 TokenService: Returning cached credentials for merchantId: \(merchantId)")
+            return cachedCredentials
         }
         
         guard let url = URL(string: "\(baseURL)/getMerchantTokens") else {
@@ -77,9 +94,13 @@ class TokenService {
                 merchantId: merchantIdFromTokens,
                 refreshToken: refreshToken
             )
-            // cache
-            Self.memoryCache[merchantId] = creds
-            Self.cacheTimestamps[merchantId] = Date().timeIntervalSince1970
+            
+            // Cache safely using barrier to ensure exclusive write access
+            Self.cacheQueue.async(flags: .barrier) {
+                Self.memoryCache[merchantId] = creds
+                Self.cacheTimestamps[merchantId] = Date().timeIntervalSince1970
+            }
+            
             return creds
         } catch {
             print("❌ TokenService: Error fetching merchant tokens: \(error)")
