@@ -1,6 +1,7 @@
 import Foundation
 import FirebaseFunctions
 import Stripe
+import PassKit
 
 // A simple struct to represent a successful transaction
 struct TransactionResult {
@@ -276,6 +277,91 @@ class PaymentService {
             }
         } catch {
             print("Error completing Stripe payment: \(error)")
+            return .failure(.serverError(error.localizedDescription))
+        }
+    }
+    
+    // Process Apple Pay payment through Stripe
+    func processApplePayPayment(tokenId: String, amount: Int, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<TransactionResult, PaymentError> {
+        
+        print("🍎💳 PaymentService: Processing Apple Pay payment through Stripe")
+        print("🍎💳 PaymentService: Amount: \(amount) cents")
+        print("🍎💳 PaymentService: MerchantId: \(merchantId)")
+        print("🍎💳 PaymentService: OAuth token: \(oauthToken.prefix(10))...")
+        print("🍎💳 PaymentService: Token ID: \(tokenId)")
+        print("🍎💳 PaymentService: Customer: \(customerName) (\(customerEmail))")
+        print("🍎💳 PaymentService: Coffee shop: \(coffeeShop.name)")
+        
+        // Prepare cart items for backend
+        let itemsForBackend = cartItems.map { item in
+            return [
+                "id": item.menuItemId,
+                "name": item.menuItem.name,
+                "quantity": item.quantity,
+                "price": Int(item.itemPriceWithModifiers * 100),
+                "customizations": item.customizations ?? "",
+                "selectedSizeId": item.selectedSizeId ?? NSNull(),
+                "selectedModifierIdsByList": item.selectedModifierIdsByList ?? NSNull()
+            ] as [String : Any]
+        }
+        
+        var callData: [String: Any] = [
+            "amount": amount, // Already in cents
+            "merchantId": merchantId,
+            "oauth_token": oauthToken,
+            "items": itemsForBackend,
+            "customerName": customerName,
+            "customerEmail": customerEmail,
+            "userId": userId,
+            "coffeeShopData": coffeeShop.toDictionary(),
+            "paymentMethod": "apple_pay",
+            "tokenId": tokenId // Send Stripe Token ID instead of raw data
+        ]
+        
+        // Add pickup time if provided
+        if let pickupTime = pickupTime {
+            let formatter = ISO8601DateFormatter()
+            callData["pickupTime"] = formatter.string(from: pickupTime)
+        }
+        
+        print("🍎💳 PaymentService: Calling Firebase function for Apple Pay payment")
+        print("🍎💳 PaymentService: Call data prepared with \(callData.keys.count) keys")
+        
+        do {
+            // Call the Firebase function for Apple Pay payment processing
+            print("🍎💳 PaymentService: Invoking processApplePayPayment Firebase function...")
+            let result = try await functions.httpsCallable("processApplePayPayment").call(callData)
+            
+            print("🍎💳 PaymentService: Firebase function response received")
+            print("🍎💳 PaymentService: Response data: \(result.data)")
+            
+            // Parse the response
+            if let data = result.data as? [String: Any],
+               let success = data["success"] as? Bool,
+               success == true,
+               let transactionId = data["transactionId"] as? String {
+                let receiptUrl = data["receiptUrl"] as? String
+                let orderId = data["orderId"] as? String
+                let transactionResult = TransactionResult(
+                    transactionId: transactionId,
+                    message: "Apple Pay payment successful!",
+                    receiptUrl: receiptUrl,
+                    orderId: orderId
+                )
+                print("✅ PaymentService: Firebase function returned success for Apple Pay payment: \(transactionId)")
+                return .success(transactionResult)
+            } else {
+                print("❌ PaymentService: Firebase function returned unexpected response: \(result.data)")
+                return .failure(.serverError("Unexpected response from server"))
+            }
+            
+        } catch {
+            print("❌ PaymentService: Firebase function call failed for Apple Pay payment: \(error)")
+            if let error = error as NSError? {
+                print("❌ PaymentService: Error domain: \(error.domain)")
+                print("❌ PaymentService: Error code: \(error.code)")
+                print("❌ PaymentService: Error userInfo: \(error.userInfo)")
+            }
             return .failure(.serverError(error.localizedDescription))
         }
     }
