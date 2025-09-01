@@ -5,6 +5,7 @@ import {SquareClient, SquareEnvironment, Square} from "square";
 import * as dotenv from "dotenv";
 import * as OneSignal from "onesignal-node";
 import Stripe from "stripe";
+import axios from "axios";
 // import * as crypto from "crypto";
 
 // Load environment variables
@@ -149,6 +150,49 @@ interface ExternalPaymentData {
     stampName: string;
   };
   externalPayment?: boolean; // Flag to indicate external payment
+  posType?: string; // POS type: "square" or "clover"
+}
+
+// Clover credentials interface
+interface CloverCredentials {
+  accessToken: string;
+  merchantId: string;
+}
+
+// Clover order interfaces
+interface CloverOrderRequest {
+  items: Array<{
+    item: { id: string };
+    name: string;
+    price: number;
+    unitQty?: number;
+    note?: string;
+    printed: boolean;
+    exchanged: boolean;
+    refunded: boolean;
+    isRevenue: boolean;
+  }>;
+  state: string;
+  note?: string;
+  manualTransaction: boolean;
+  groupLineItems: boolean;
+  testMode: boolean;
+}
+
+interface CloverOrderResponse {
+  id: string;
+  currency?: string;
+  total?: number;
+  paymentState?: string;
+  title?: string;
+  note?: string;
+  state?: string;
+  manualTransaction?: boolean;
+  groupLineItems?: boolean;
+  testMode?: boolean;
+  createdTime?: number;
+  clientCreatedTime?: number;
+  modifiedTime?: number;
 }
 
 
@@ -197,6 +241,54 @@ export const getMerchantTokens = functions.https.onRequest(async (req, res) => {
   } catch (error: any) {
     functions.logger.error("Failed to get merchant tokens:", error);
     res.status(500).json({ error: "Failed to retrieve merchant tokens" });
+  }
+});
+
+// Function to get Clover credentials from Firestore (HTTP trigger)
+export const getCloverCredentials = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  functions.logger.info("getCloverCredentials called with body:", req.body);
+  functions.logger.info("getCloverCredentials called with query:", req.query);
+  
+  const merchantId = req.body?.merchantId || req.query?.merchantId;
+  
+  if (!merchantId) {
+    functions.logger.error("merchantId is missing from request");
+    res.status(400).json({ error: "merchantId is required" });
+    return;
+  }
+  
+  functions.logger.info("Looking up Clover credentials for merchantId:", merchantId);
+
+  try {
+    const doc = await admin.firestore()
+      .collection("clover_credentials")
+      .doc(merchantId)
+      .get();
+    
+    if (!doc.exists) {
+      functions.logger.error("Clover credentials not found for merchantId:", merchantId);
+      res.status(404).json({ error: "Clover credentials not found" });
+      return;
+    }
+    
+    const credentialData = doc.data() as CloverCredentials;
+    functions.logger.info("Successfully retrieved Clover credentials for merchantId:", merchantId);
+    functions.logger.info("Credential data keys:", Object.keys(credentialData || {}));
+    
+    res.status(200).json({ credentials: credentialData });
+  } catch (error: any) {
+    functions.logger.error("Failed to get Clover credentials:", error);
+    res.status(500).json({ error: "Failed to retrieve Clover credentials" });
   }
 });
 
@@ -3009,3 +3101,201 @@ async function handleOrderFulfillmentUpdated(webhookData: any) {
     functions.logger.error("Error handling order.fulfillment.updated webhook:", error);
   }
 }
+
+// Function to submit orders to Clover without payment processing
+export const submitCloverOrderWithExternalPayment = functions.https.onCall(async (data, context) => {
+  functions.logger.info("=== CLOVER ORDER SUBMISSION FUNCTION ===");
+  functions.logger.info("Raw external payment data received:", data);
+  functions.logger.info("Data type:", typeof data);
+  functions.logger.info("Data keys:", Object.keys(data || {}));
+  functions.logger.info("Context:", context);
+  
+  // Extract order data - check if data is nested in data property
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    // Data is nested (some clients send it this way)
+    requestData = data.data;
+    functions.logger.info("Using nested data.data structure");
+  } else {
+    // Data is direct (most clients send it this way)
+    requestData = data;
+    functions.logger.info("Using direct data structure");
+  }
+  
+  functions.logger.info("Extracted requestData:", {
+    hasAmount: !!requestData?.amount,
+    hasMerchantId: !!requestData?.merchantId,
+    hasOauthToken: !!requestData?.oauth_token,
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    oauth_token: requestData?.oauth_token ? requestData.oauth_token.substring(0, 10) + "..." : "MISSING"
+  });
+  
+  const orderData: ExternalPaymentData = {
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    oauth_token: requestData?.oauth_token,
+    items: requestData?.items || [],
+    customerName: requestData?.customerName,
+    customerEmail: requestData?.customerEmail,
+    pickupTime: requestData?.pickupTime,
+    userId: requestData?.userId,
+    coffeeShopData: requestData?.coffeeShopData,
+    externalPayment: true,
+    posType: "clover"
+  };
+
+  functions.logger.info("Clover external payment order request received:", {
+    amount: orderData.amount,
+    merchantId: orderData.merchantId,
+    hasOauthToken: !!orderData.oauth_token,
+    externalPayment: orderData.externalPayment,
+    posType: orderData.posType
+  });
+
+  // Validate the request data
+  if (!orderData.amount || !orderData.merchantId || !orderData.oauth_token) {
+    functions.logger.error("Request validation failed", {
+      orderData,
+      hasAmount: !!orderData.amount,
+      hasMerchantId: !!orderData.merchantId,
+      hasOauthToken: !!orderData.oauth_token
+    });
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "The function must be called with 'amount', 'merchantId', and 'oauth_token' arguments."
+    );
+  }
+
+  const {amount, merchantId, oauth_token, items} = orderData;
+  const transactionId = uuidv4(); // Generate a unique transaction ID for external payment order
+
+  // Use the oauth_token as the Clover access token
+  const accessToken = oauth_token;
+  
+  if (!accessToken) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Clover access token not provided"
+    );
+  }
+
+  functions.logger.info("Creating Clover order with external payment:", {
+    merchantId,
+    hasAccessToken: !!accessToken,
+    amount,
+    itemCount: items?.length || 0
+  });
+
+  let orderId: string | undefined = undefined;
+  
+  try {
+    if (items && items.length > 0) {
+      // Build line items for Clover order
+      const cloverItems = items.map(item => ({
+        item: { id: item.id || "default-item-id" },
+        name: item.name,
+        price: item.price, // Price already in cents
+        unitQty: item.quantity,
+        note: item.customizations || undefined,
+        printed: false,
+        exchanged: false,
+        refunded: false,
+        isRevenue: true
+      }));
+
+      // Create the Clover order
+      const cloverOrderRequest: CloverOrderRequest = {
+        items: cloverItems,
+        state: "open", // Order is open and ready for processing
+        note: `Order placed via mobile app - Customer: ${orderData.customerName || "Customer"}`,
+        manualTransaction: true, // External payment
+        groupLineItems: true,
+        testMode: false
+      };
+
+      functions.logger.info("Clover order request:", {
+        hasItems: !!cloverOrderRequest.items?.length,
+        itemCount: cloverOrderRequest.items?.length,
+        state: cloverOrderRequest.state,
+        manualTransaction: cloverOrderRequest.manualTransaction
+      });
+
+      // Make API call to Clover
+      const cloverApiUrl = `https://api.clover.com/v3/merchants/${merchantId}/orders`;
+      
+      try {
+        const response = await axios.post<CloverOrderResponse>(cloverApiUrl, cloverOrderRequest, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        functions.logger.info('Clover createOrder API response:', {
+          status: response.status,
+          hasData: !!response.data,
+          orderId: response.data?.id,
+          orderState: response.data?.state
+        });
+
+        if (response.status === 200 || response.status === 201) {
+          orderId = response.data?.id;
+          functions.logger.info('Clover order created successfully for external payment:', orderId);
+        } else {
+          functions.logger.error("Clover API returned unexpected status:", response.status);
+          throw new Error(`Clover API returned status ${response.status}`);
+        }
+
+      } catch (cloverError: any) {
+        functions.logger.error("Failed to create Clover order:", {
+          error: cloverError.message,
+          response: cloverError.response?.data,
+          status: cloverError.response?.status
+        });
+        throw new Error(`Failed to create Clover order: ${cloverError.message}`);
+      }
+    }
+
+    // Save order to Firestore
+    const orderDoc = {
+      transactionId,
+      orderId,
+      merchantId,
+      amount,
+      items: items || [],
+      customerName: orderData.customerName,
+      customerEmail: orderData.customerEmail,
+      userId: orderData.userId,
+      coffeeShopData: orderData.coffeeShopData,
+      status: "SUBMITTED",
+      externalPayment: true,
+      posType: "clover",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      pickupTime: orderData.pickupTime
+    };
+
+    await admin.firestore().collection("orders").doc(transactionId).set(orderDoc);
+    functions.logger.info("Order saved to Firestore with transactionId:", transactionId);
+
+    return {
+      success: true,
+      transactionId,
+      orderId,
+      message: "Clover order submitted successfully with external payment",
+      status: "SUBMITTED"
+    };
+
+  } catch (error: any) {
+    functions.logger.error("Error in submitCloverOrderWithExternalPayment:", {
+      error: error.message,
+      stack: error.stack,
+      transactionId
+    });
+
+    throw new functions.https.HttpsError(
+      "internal",
+      error.message
+    );
+  }
+});

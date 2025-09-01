@@ -515,7 +515,8 @@ struct FirestoreOrder: Codable {
                 description: coffeeShopData.description,
                 imageName: coffeeShopData.imageName,
                 stampName: coffeeShopData.stampName,
-                merchantId: coffeeShopData.merchantId
+                merchantId: coffeeShopData.merchantId,
+                posType: .square // Default to square for legacy data
             )
         } else {
             // Fallback coffee shop for orders without coffeeShopData
@@ -530,7 +531,8 @@ struct FirestoreOrder: Codable {
                 description: "Unknown coffee shop",
                 imageName: "qisa", // Default image
                 stampName: "qisa_stamp",
-                merchantId: merchantId ?? "unknown"
+                merchantId: merchantId ?? "unknown",
+                posType: .square // Default to square for unknown shops
             )
         }
         

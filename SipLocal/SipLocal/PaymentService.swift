@@ -103,7 +103,7 @@ class PaymentService {
         }
     }
     
-    // Submit order to Square without processing payment
+    // Submit order without processing payment (supports both Square and Clover)
     func submitOrderWithExternalPayment(amount: Double, merchantId: String, oauthToken: String, cartItems: [CartItem], customerName: String, customerEmail: String, userId: String, coffeeShop: CoffeeShop, pickupTime: Date? = nil) async -> Result<TransactionResult, PaymentError> {
         // Convert dollars to cents for Square API (multiply by 100)
         let amountInCents = Int(amount * 100)
@@ -135,7 +135,8 @@ class PaymentService {
             "customerEmail": customerEmail,
             "userId": userId,
             "coffeeShopData": coffeeShop.toDictionary(),
-            "externalPayment": true // Flag to indicate external payment handling
+            "externalPayment": true, // Flag to indicate external payment handling
+            "posType": coffeeShop.posType.rawValue // Add POS type to determine which API to use
         ]
         
         // Add pickup time if provided
@@ -146,9 +147,12 @@ class PaymentService {
         
         print("Calling Firebase function with external payment data: \(callData)")
         
+        // Determine which function to call based on POS type
+        let functionName = coffeeShop.posType == .clover ? "submitCloverOrderWithExternalPayment" : "submitOrderWithExternalPayment"
+        
         do {
-            // Call the Firebase function for external payment orders
-            let result = try await functions.httpsCallable("submitOrderWithExternalPayment").call(callData)
+            // Call the appropriate Firebase function for external payment orders
+            let result = try await functions.httpsCallable(functionName).call(callData)
             
             // Parse the response
             if let data = result.data as? [String: Any],
