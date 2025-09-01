@@ -9,7 +9,7 @@ class MenuDataManager: ObservableObject {
     @Published var loadingStates: [String: Bool] = [:]
     @Published var errorMessages: [String: String] = [:]
     
-    private let squareService = SquareAPIService.shared
+    // Remove direct service dependency - will use POSServiceFactory instead
     private let fileManager = FileManager.default
     private let cacheTTLSeconds: TimeInterval = 60 * 30 // 30 minutes
     
@@ -55,7 +55,8 @@ class MenuDataManager: ObservableObject {
         errorMessages[shop.id] = nil
         
         do {
-            let categories = try await squareService.fetchMenuData(for: shop)
+            let posService = POSServiceFactory.createService(for: shop)
+            let categories = try await posService.fetchMenuData(for: shop)
             menuData[shop.id] = categories
             loadingStates[shop.id] = false
             // Save to disk cache
@@ -91,7 +92,8 @@ class MenuDataManager: ObservableObject {
     
     private func refreshSilently(for shop: CoffeeShop) async {
         do {
-            let categories = try await squareService.fetchMenuData(for: shop)
+            let posService = POSServiceFactory.createService(for: shop)
+            let categories = try await posService.fetchMenuData(for: shop)
             await MainActor.run {
                 self.menuData[shop.id] = categories
                 self.loadingStates[shop.id] = false

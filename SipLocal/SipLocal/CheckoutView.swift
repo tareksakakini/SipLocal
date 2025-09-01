@@ -2,6 +2,8 @@ import SwiftUI
 import SquareInAppPaymentsSDK
 import Combine
 import StripePaymentSheet
+import PassKit
+import Stripe
 
 struct CheckoutView: View {
     @EnvironmentObject var cartManager: CartManager
@@ -28,6 +30,11 @@ struct CheckoutView: View {
     
     // Store client secret for payment capture
     @State private var pendingClientSecret: String?
+    
+    // Apple Pay state
+    @State private var applePayController: PKPaymentAuthorizationController?
+    @State private var isProcessingApplePay = false
+    @StateObject private var applePayDelegate = ApplePayDelegate()
     
     // Use @StateObject to create and manage the delegate
     @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
@@ -171,7 +178,7 @@ struct CheckoutView: View {
                                 Text("Processing...")
                             } else {
                                 Image(systemName: "creditcard")
-                                Text("Pay")
+                                Text("Pay with Card")
                                     .fontWeight(.semibold)
                             }
                         }
@@ -181,9 +188,46 @@ struct CheckoutView: View {
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
-                    .disabled(isProcessingPayment)
+                    .disabled(isProcessingPayment || isProcessingApplePay)
                     .padding(.horizontal)
-                    .padding(.bottom)
+                    
+                    // Apple Pay Button
+                    if PKPaymentAuthorizationController.canMakePayments(usingNetworks: [.visa, .masterCard, .amex, .discover]) {
+                        Button(action: {
+                            // Check if shop is closed before allowing checkout
+                            if let firstItem = cartManager.items.first,
+                               let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
+                               !isOpen {
+                                showingClosedShopAlert = true
+                                return
+                            }
+                            
+                            // Process payment with Apple Pay
+                            processApplePayment()
+                        }) {
+                            HStack {
+                                if isProcessingApplePay {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("Processing...")
+                                } else {
+                                    Image(systemName: "apple.logo")
+                                    Text("Pay")
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(isProcessingApplePay ? Color.gray : Color.black)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        .disabled(isProcessingPayment || isProcessingApplePay)
+                        .padding(.horizontal)
+                    }
+                    
+                    Spacer(minLength: 16)
                     
                 }
                 .background(Color(.systemGray6))
@@ -622,6 +666,326 @@ struct CheckoutView: View {
         let formatter = DateFormatter()
         formatter.timeStyle = .short
         return formatter.string(from: date)
+    }
+    
+    // MARK: - Apple Pay Methods
+    
+    private func processApplePayment() {
+        print("🍎 Apple Pay: Starting processApplePayment()")
+        
+        guard let firstItem = cartManager.items.first else {
+            print("❌ Apple Pay: No items in cart")
+            paymentResult = "No items in cart"
+            return
+        }
+        
+        print("🍎 Apple Pay: First item found - \(firstItem.menuItem.name)")
+        print("🍎 Apple Pay: Total price - $\(cartManager.totalPrice)")
+        print("🍎 Apple Pay: Cart items count - \(cartManager.items.count)")
+        
+        let merchantId = "merchant.com.siplocal.app"
+        let request = PKPaymentRequest()
+        
+        request.merchantIdentifier = merchantId
+        request.supportedNetworks = [.visa, .masterCard, .amex, .discover]
+        request.merchantCapabilities = .capability3DS
+        request.countryCode = "US"
+        request.currencyCode = "USD"
+        
+        print("🍎 Apple Pay: Payment request configured with merchant ID: \(merchantId)")
+        
+        // Create payment summary items
+        var paymentItems: [PKPaymentSummaryItem] = []
+        
+        // Add individual cart items
+        for item in cartManager.items {
+            let itemTotal = item.totalPrice
+            let paymentItem = PKPaymentSummaryItem(
+                label: "\(item.menuItem.name) x\(item.quantity)",
+                amount: NSDecimalNumber(value: itemTotal),
+                type: .final
+            )
+            paymentItems.append(paymentItem)
+            print("🍎 Apple Pay: Added item - \(item.menuItem.name) x\(item.quantity) = $\(itemTotal)")
+        }
+        
+        // Add total
+        let totalItem = PKPaymentSummaryItem(
+            label: firstItem.shop.name,
+            amount: NSDecimalNumber(value: cartManager.totalPrice),
+            type: .final
+        )
+        paymentItems.append(totalItem)
+        
+        request.paymentSummaryItems = paymentItems
+        print("🍎 Apple Pay: Payment summary items created - Total: $\(cartManager.totalPrice)")
+        
+        // Configure the delegate with necessary data
+        print("🍎 Apple Pay: Configuring delegate...")
+        applePayDelegate.configure(
+            cartManager: cartManager,
+            authManager: authManager,
+            tokenService: tokenService,
+            paymentService: paymentService,
+            orderManager: orderManager,
+            selectedPickupTime: selectedPickupTime,
+            onPaymentResult: { [self] success, message, transactionId, orderItems, orderTotal, orderShop in
+                print("🍎 Apple Pay: Payment result callback - Success: \(success), Message: \(message)")
+                DispatchQueue.main.async {
+                    self.paymentSuccess = success
+                    self.paymentResult = message
+                    self.transactionId = transactionId
+                    if success {
+                        print("🍎 Apple Pay: Payment successful, clearing cart")
+                        self.completedOrderItems = orderItems
+                        self.completedOrderTotal = orderTotal
+                        self.completedOrderShop = orderShop
+                        self.cartManager.clearCart()
+                    } else {
+                        print("❌ Apple Pay: Payment failed - \(message)")
+                    }
+                    self.isProcessingApplePay = false
+                    self.showingPaymentResult = true
+                }
+            }
+        )
+        
+        // Present Apple Pay sheet
+        print("🍎 Apple Pay: Creating payment authorization controller...")
+        let controller = PKPaymentAuthorizationController(paymentRequest: request)
+        controller.delegate = applePayDelegate
+        applePayController = controller
+        
+        print("🍎 Apple Pay: Presenting Apple Pay sheet...")
+        controller.present { presented in
+            if !presented {
+                print("❌ Apple Pay: Failed to present Apple Pay sheet")
+                self.paymentResult = "Unable to present Apple Pay"
+                self.showingPaymentResult = true
+            } else {
+                print("✅ Apple Pay: Apple Pay sheet presented successfully")
+            }
+        }
+    }
+}
+
+// MARK: - Apple Pay Delegate Class
+
+class ApplePayDelegate: NSObject, ObservableObject, PKPaymentAuthorizationControllerDelegate {
+    private var cartManager: CartManager?
+    private var authManager: AuthenticationManager?
+    private var tokenService: TokenService?
+    private var paymentService: PaymentService?
+    private var orderManager: OrderManager?
+    private var selectedPickupTime: Date?
+    private var onPaymentResult: ((Bool, String, String?, [CartItem], Double, CoffeeShop?) -> Void)?
+    
+    func configure(
+        cartManager: CartManager,
+        authManager: AuthenticationManager,
+        tokenService: TokenService,
+        paymentService: PaymentService,
+        orderManager: OrderManager,
+        selectedPickupTime: Date,
+        onPaymentResult: @escaping (Bool, String, String?, [CartItem], Double, CoffeeShop?) -> Void
+    ) {
+        print("🍎 ApplePayDelegate: Configuring with dependencies")
+        self.cartManager = cartManager
+        self.authManager = authManager
+        self.tokenService = tokenService
+        self.paymentService = paymentService
+        self.orderManager = orderManager
+        self.selectedPickupTime = selectedPickupTime
+        self.onPaymentResult = onPaymentResult
+        print("🍎 ApplePayDelegate: Configuration complete")
+    }
+    
+    func paymentAuthorizationController(_ controller: PKPaymentAuthorizationController, didAuthorizePayment payment: PKPayment, handler completion: @escaping (PKPaymentAuthorizationResult) -> Void) {
+        
+        print("🍎 ApplePayDelegate: Payment authorization received")
+        print("🍎 ApplePayDelegate: Payment token data size: \(payment.token.paymentData.count) bytes")
+        
+        guard let cartManager = cartManager,
+              let authManager = authManager,
+              let tokenService = tokenService,
+              let paymentService = paymentService,
+              let orderManager = orderManager,
+              let selectedPickupTime = selectedPickupTime,
+              let onPaymentResult = onPaymentResult else {
+            print("❌ ApplePayDelegate: Missing required dependencies")
+            completion(PKPaymentAuthorizationResult(status: .failure, errors: []))
+            return
+        }
+        
+        guard let firstItem = cartManager.items.first else {
+            print("❌ ApplePayDelegate: No items in cart")
+            completion(PKPaymentAuthorizationResult(status: .failure, errors: []))
+            return
+        }
+        
+        let merchantId = firstItem.shop.merchantId
+        print("🍎 ApplePayDelegate: Processing payment for merchant: \(merchantId)")
+        
+        // Fetch user data before payment
+        guard let userId = authManager.currentUser?.uid else {
+            print("❌ ApplePayDelegate: User not logged in")
+            completion(PKPaymentAuthorizationResult(status: .failure, errors: []))
+            return
+        }
+        
+        print("🍎 ApplePayDelegate: Fetching user data for userId: \(userId)")
+        authManager.getUserData(userId: userId) { userData, error in
+            guard let userData = userData else {
+                print("❌ ApplePayDelegate: Failed to fetch user data - \(error ?? "Unknown error")")
+                DispatchQueue.main.async {
+                    completion(PKPaymentAuthorizationResult(status: .failure, errors: []))
+                }
+                return
+            }
+            
+            print("🍎 ApplePayDelegate: User data retrieved - \(userData.fullName) (\(userData.email))")
+            
+            Task {
+                do {
+                    print("🍎 ApplePayDelegate: Fetching merchant tokens for: \(merchantId)")
+                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+                    print("🍎 ApplePayDelegate: Merchant tokens retrieved successfully")
+                    
+                    // Create Stripe Token from Apple Pay
+                    print("🍎 ApplePayDelegate: Creating Stripe Token from Apple Pay...")
+                    
+                    // Convert amount to cents (avoiding floating point issues)
+                    let amountDecimal = NSDecimalNumber(value: cartManager.totalPrice)
+                    let amountInCents = amountDecimal.multiplying(by: NSDecimalNumber(value: 100)).intValue
+                    
+                    print("🍎 ApplePayDelegate: Amount: $\(cartManager.totalPrice) = \(amountInCents) cents")
+                    
+                    // Create Stripe Token from Apple Pay payment
+                    let tokenResult = await withCheckedContinuation { continuation in
+                        STPAPIClient.shared.createToken(with: payment) { token, error in
+                            if let error = error {
+                                print("❌ ApplePayDelegate: Failed to create Stripe Token: \(error.localizedDescription)")
+                                continuation.resume(returning: Result<STPToken, Error>.failure(error))
+                            } else if let token = token {
+                                print("✅ ApplePayDelegate: Stripe Token created: \(token.tokenId)")
+                                continuation.resume(returning: Result<STPToken, Error>.success(token))
+                            } else {
+                                let unknownError = NSError(domain: "ApplePayError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Unknown error creating Token"])
+                                continuation.resume(returning: Result<STPToken, Error>.failure(unknownError))
+                            }
+                        }
+                    }
+                    
+                    let stripeToken: STPToken
+                    switch tokenResult {
+                    case .success(let token):
+                        stripeToken = token
+                    case .failure(let error):
+                        onPaymentResult(
+                            false,
+                            "Failed to create payment token: \(error.localizedDescription)",
+                            nil,
+                            [],
+                            0.0,
+                            nil
+                        )
+                        completion(PKPaymentAuthorizationResult(status: .failure, errors: []))
+                        return
+                    }
+                    
+                    print("🍎 ApplePayDelegate: Calling processApplePayPayment with:")
+                    print("  - Amount: \(amountInCents) cents")
+                    print("  - Merchant ID: \(merchantId)")
+                    print("  - Customer: \(userData.fullName) (\(userData.email))")
+                    print("  - Items count: \(cartManager.items.count)")
+                    print("  - Token ID: \(stripeToken.tokenId)")
+                    
+                    let result = await paymentService.processApplePayPayment(
+                        tokenId: stripeToken.tokenId,
+                        amount: amountInCents,
+                        merchantId: merchantId,
+                        oauthToken: credentials.oauth_token,
+                        cartItems: cartManager.items,
+                        customerName: userData.fullName,
+                        customerEmail: userData.email,
+                        userId: userId,
+                        coffeeShop: cartManager.items.first!.shop,
+                        pickupTime: selectedPickupTime
+                    )
+                    
+                    await MainActor.run {
+                        switch result {
+                        case .success(let transaction):
+                            print("✅ ApplePayDelegate: Payment authorized!")
+                            print("  - Transaction ID: \(transaction.transactionId)")
+                            print("  - Status: \(transaction.status ?? "AUTHORIZED")")
+                            print("  - Message: \(transaction.message)")
+                            
+                            // Start the 30-second capture timer for Apple Pay
+                            // For Apple Pay, we always start the capture timer since it's always authorized first
+                            print("🕒 Starting Apple Pay capture timer for transaction: \(transaction.transactionId)")
+                            orderManager.startApplePayCaptureTimer(
+                                transactionId: transaction.transactionId,
+                                paymentService: paymentService
+                            )
+                            
+                            // Refresh orders to show the new order
+                            Task {
+                                await orderManager.refreshOrders()
+                            }
+                            
+                            onPaymentResult(
+                                true,
+                                transaction.message,
+                                transaction.transactionId,
+                                cartManager.items,
+                                cartManager.totalPrice,
+                                cartManager.items.first?.shop
+                            )
+                            
+                            completion(PKPaymentAuthorizationResult(status: .success, errors: []))
+                            
+                        case .failure(let error):
+                            print("❌ ApplePayDelegate: Payment failed with error:")
+                            print("  - Error: \(error.localizedDescription)")
+                            
+                            onPaymentResult(
+                                false,
+                                error.localizedDescription,
+                                nil,
+                                [],
+                                0.0,
+                                nil
+                            )
+                            completion(PKPaymentAuthorizationResult(status: .failure, errors: []))
+                        }
+                    }
+                } catch {
+                    print("❌ ApplePayDelegate: Exception during payment processing:")
+                    print("  - Error: \(error.localizedDescription)")
+                    
+                    await MainActor.run {
+                        onPaymentResult(
+                            false,
+                            "Failed to retrieve payment credentials: \(error.localizedDescription)",
+                            nil,
+                            [],
+                            0.0,
+                            nil
+                        )
+                        completion(PKPaymentAuthorizationResult(status: .failure, errors: []))
+                    }
+                }
+            }
+        }
+    }
+    
+    func paymentAuthorizationControllerDidFinish(_ controller: PKPaymentAuthorizationController) {
+        print("🍎 ApplePayDelegate: Payment authorization finished")
+        controller.dismiss {
+            print("🍎 ApplePayDelegate: Apple Pay sheet dismissed")
+            // The completion will be handled by the callback
+        }
     }
 }
 

@@ -274,7 +274,8 @@ struct PaymentResultView_Previews: PreviewProvider {
                     description: "Sample description",
                     imageName: "sample",
                     stampName: "sample",
-                    merchantId: "SAMPLE_MERCHANT_ID"
+                    merchantId: "SAMPLE_MERCHANT_ID",
+                    posType: .square
                 ),
                 orderItems: [
                     CartItem(
@@ -289,7 +290,8 @@ struct PaymentResultView_Previews: PreviewProvider {
                             description: "Sample description",
                             imageName: "sample",
                             stampName: "sample",
-                            merchantId: "SAMPLE_MERCHANT_ID"
+                            merchantId: "SAMPLE_MERCHANT_ID",
+                            posType: .square
                         ),
                         menuItem: MenuItem(id: "item_cappuccino", name: "Cappuccino", price: 4.50, variations: nil, customizations: nil, imageURL: nil, modifierLists: nil),
                         category: "Coffee",
@@ -308,7 +310,8 @@ struct PaymentResultView_Previews: PreviewProvider {
                             description: "Sample description",
                             imageName: "sample",
                             stampName: "sample",
-                            merchantId: "SAMPLE_MERCHANT_ID"
+                            merchantId: "SAMPLE_MERCHANT_ID",
+                            posType: .square
                         ),
                         menuItem: MenuItem(id: "item_blueberry_muffin", name: "Blueberry Muffin", price: 3.25, variations: nil, customizations: nil, imageURL: nil, modifierLists: nil),
                         category: "Pastries",

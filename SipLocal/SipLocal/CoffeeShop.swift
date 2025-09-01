@@ -57,6 +57,11 @@ struct SquareCredentials: Codable {
     let refreshToken: String
 }
 
+enum POSType: String, Codable, CaseIterable {
+    case square = "square"
+    case clover = "clover"
+}
+
 struct CoffeeShop: Codable, Identifiable {
     let id: String
     let name: String
@@ -69,6 +74,7 @@ struct CoffeeShop: Codable, Identifiable {
     let imageName: String
     let stampName: String
     let merchantId: String
+    let posType: POSType
     
     var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
@@ -87,7 +93,8 @@ struct CoffeeShop: Codable, Identifiable {
             "description": description,
             "imageName": imageName,
             "stampName": stampName,
-            "merchantId": merchantId
+            "merchantId": merchantId,
+            "posType": posType.rawValue
         ]
     }
 }

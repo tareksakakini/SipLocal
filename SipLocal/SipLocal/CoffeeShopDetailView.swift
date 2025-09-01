@@ -195,7 +195,8 @@ struct CoffeeShopDetailView: View {
         Task {
             do {
                 print("🔍 CoffeeShopDetailView: Fetching business hours for \(shop.name)")
-                let hoursInfo = try await SquareAPIService.shared.fetchBusinessHours(for: shop)
+                let posService = POSServiceFactory.createService(for: shop)
+                let hoursInfo = try await posService.fetchBusinessHours(for: shop)
                 await MainActor.run {
                     if let hoursInfo = hoursInfo {
                         print("✅ CoffeeShopDetailView: Successfully got business hours for \(shop.name)")

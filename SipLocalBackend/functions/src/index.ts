@@ -5,6 +5,7 @@ import {SquareClient, SquareEnvironment, Square} from "square";
 import * as dotenv from "dotenv";
 import * as OneSignal from "onesignal-node";
 import Stripe from "stripe";
+import axios from "axios";
 // import * as crypto from "crypto";
 
 // Load environment variables
@@ -149,6 +150,49 @@ interface ExternalPaymentData {
     stampName: string;
   };
   externalPayment?: boolean; // Flag to indicate external payment
+  posType?: string; // POS type: "square" or "clover"
+}
+
+// Clover credentials interface
+interface CloverCredentials {
+  accessToken: string;
+  merchantId: string;
+}
+
+// Clover order interfaces
+interface CloverOrderRequest {
+  items: Array<{
+    item: { id: string };
+    name: string;
+    price: number;
+    unitQty?: number;
+    note?: string;
+    printed: boolean;
+    exchanged: boolean;
+    refunded: boolean;
+    isRevenue: boolean;
+  }>;
+  state: string;
+  note?: string;
+  manualTransaction: boolean;
+  groupLineItems: boolean;
+  testMode: boolean;
+}
+
+interface CloverOrderResponse {
+  id: string;
+  currency?: string;
+  total?: number;
+  paymentState?: string;
+  title?: string;
+  note?: string;
+  state?: string;
+  manualTransaction?: boolean;
+  groupLineItems?: boolean;
+  testMode?: boolean;
+  createdTime?: number;
+  clientCreatedTime?: number;
+  modifiedTime?: number;
 }
 
 
@@ -197,6 +241,54 @@ export const getMerchantTokens = functions.https.onRequest(async (req, res) => {
   } catch (error: any) {
     functions.logger.error("Failed to get merchant tokens:", error);
     res.status(500).json({ error: "Failed to retrieve merchant tokens" });
+  }
+});
+
+// Function to get Clover credentials from Firestore (HTTP trigger)
+export const getCloverCredentials = functions.https.onRequest(async (req, res) => {
+  // Enable CORS
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  functions.logger.info("getCloverCredentials called with body:", req.body);
+  functions.logger.info("getCloverCredentials called with query:", req.query);
+  
+  const merchantId = req.body?.merchantId || req.query?.merchantId;
+  
+  if (!merchantId) {
+    functions.logger.error("merchantId is missing from request");
+    res.status(400).json({ error: "merchantId is required" });
+    return;
+  }
+  
+  functions.logger.info("Looking up Clover credentials for merchantId:", merchantId);
+
+  try {
+    const doc = await admin.firestore()
+      .collection("clover_credentials")
+      .doc(merchantId)
+      .get();
+    
+    if (!doc.exists) {
+      functions.logger.error("Clover credentials not found for merchantId:", merchantId);
+      res.status(404).json({ error: "Clover credentials not found" });
+      return;
+    }
+    
+    const credentialData = doc.data() as CloverCredentials;
+    functions.logger.info("Successfully retrieved Clover credentials for merchantId:", merchantId);
+    functions.logger.info("Credential data keys:", Object.keys(credentialData || {}));
+    
+    res.status(200).json({ credentials: credentialData });
+  } catch (error: any) {
+    functions.logger.error("Failed to get Clover credentials:", error);
+    res.status(500).json({ error: "Failed to retrieve Clover credentials" });
   }
 });
 
@@ -814,6 +906,809 @@ export const processStripePayment = functions.https.onCall(async (data, context)
     throw new functions.https.HttpsError(
       "internal",
       "Failed to process Stripe payment.",
+      error.message,
+    );
+  }
+});
+
+// Function to process Apple Pay payment through Stripe
+// Helper function to capture Apple Pay payment after 30 seconds
+async function captureApplePayPayment(transactionId: string) {
+  functions.logger.info("=== CAPTURING APPLE PAY PAYMENT ===", { transactionId });
+
+  try {
+    // Get order from Firestore
+    const orderDoc = await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .get();
+
+    if (!orderDoc.exists) {
+      throw new Error(`Order not found: ${transactionId}`);
+    }
+
+    const orderData = orderDoc.data();
+    if (!orderData) {
+      throw new Error(`Order data is empty: ${transactionId}`);
+    }
+
+    // Check if already captured
+    if (orderData.paymentStatus === "CAPTURED" || orderData.status === "SUBMITTED") {
+      functions.logger.info("Payment already captured", { transactionId });
+      return;
+    }
+
+    const stripeChargeId = orderData.stripeChargeId;
+    const oauth_token = orderData.oauthToken;
+    const locationId = orderData.locationId;
+    const merchantId = orderData.merchantId;
+
+    if (!stripeChargeId) {
+      throw new Error("Stripe charge ID not found in order");
+    }
+
+    // Initialize Stripe
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      throw new Error("Stripe secret key not configured");
+    }
+    const stripe = new Stripe(stripeSecretKey);
+
+    // Capture the charge
+    functions.logger.info("Capturing Stripe charge:", { chargeId: stripeChargeId });
+    const capturedCharge = await stripe.charges.capture(stripeChargeId);
+    
+    functions.logger.info("Charge captured successfully:", {
+      chargeId: capturedCharge.id,
+      status: capturedCharge.status,
+      captured: capturedCharge.captured
+    });
+
+    // Create Square order now that payment is captured
+    let squareOrderId: string | undefined = undefined;
+    
+    if (orderData.items && orderData.items.length > 0 && oauth_token) {
+      try {
+        // Initialize Square client
+        const squareClient = new SquareClient({
+          token: oauth_token,
+          environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+            SquareEnvironment.Production : SquareEnvironment.Sandbox,
+        });
+
+        const lineItems = orderData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity.toString(),
+          basePriceMoney: {
+            amount: BigInt(item.price),
+            currency: "USD" as any,
+          },
+          note: item.customizations || undefined,
+        }));
+
+        const orderRequest: any = {
+          order: {
+            locationId: locationId,
+            lineItems,
+            state: "OPEN",
+            source: {
+              name: "SipLocal App - Apple Pay (Captured)"
+            },
+            fulfillments: [
+              {
+                type: "PICKUP",
+                state: "PROPOSED",
+                pickupDetails: {
+                  recipient: {
+                    displayName: orderData.customerName || "Customer",
+                    emailAddress: orderData.customerEmail || undefined
+                  },
+                  pickupAt: orderData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                  note: "Order placed via mobile app - Paid with Apple Pay (Payment Captured)"
+                }
+              }
+            ]
+          },
+          idempotencyKey: uuidv4(),
+        };
+
+        functions.logger.info('Creating Square order after Apple Pay capture...');
+        const orderResponse = await squareClient.orders.create(orderRequest);
+        squareOrderId = orderResponse.order?.id;
+        
+        functions.logger.info('Square order created after capture:', {
+          orderId: squareOrderId,
+          merchantId: merchantId
+        });
+
+        // Create external payment record in Square
+        if (squareOrderId) {
+          try {
+            await squareClient.payments.create({
+              idempotencyKey: uuidv4(),
+              sourceId: 'EXTERNAL',
+              externalDetails: {
+                type: 'CARD',
+                source: 'Stripe Apple Pay'
+              },
+              amountMoney: {
+                amount: BigInt(orderData.amount),
+                currency: 'USD'
+              },
+              orderId: squareOrderId,
+              locationId: locationId
+            });
+            functions.logger.info('External payment record created in Square');
+          } catch (paymentError) {
+            functions.logger.error('Failed to create external payment record:', paymentError);
+          }
+        }
+      } catch (squareError) {
+        functions.logger.error('Failed to create Square order during capture:', squareError);
+      }
+    }
+
+    // Update order in Firestore
+    await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .update({
+        paymentStatus: "CAPTURED",
+        status: "SUBMITTED",
+        orderId: squareOrderId,
+        receiptUrl: capturedCharge.receipt_url,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    functions.logger.info("Apple Pay payment captured and order updated", {
+      transactionId,
+      squareOrderId,
+      status: "SUBMITTED"
+    });
+
+  } catch (error) {
+    functions.logger.error("Error capturing Apple Pay payment:", error);
+    
+    // Update order status to failed
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .update({
+          paymentStatus: "CAPTURE_FAILED",
+          error: (error as Error).message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (updateError) {
+      functions.logger.error("Failed to update order status:", updateError);
+    }
+    
+    throw error;
+  }
+}
+
+// Function to cancel an Apple Pay authorization
+export const cancelApplePayPayment = functions.https.onCall(async (data, context) => {
+  // Extract data - check if data is nested
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    requestData = (data as any).data;
+  } else {
+    requestData = data;
+  }
+  
+  const transactionId = requestData?.transactionId;
+  
+  if (!transactionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Transaction ID is required"
+    );
+  }
+  
+  functions.logger.info("Apple Pay cancellation requested:", { transactionId });
+  
+  try {
+    // Get order from Firestore
+    const orderDoc = await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .get();
+
+    if (!orderDoc.exists) {
+      throw new functions.https.HttpsError("not-found", "Order not found");
+    }
+
+    const orderData = orderDoc.data();
+    if (!orderData) {
+      throw new functions.https.HttpsError("not-found", "Order data is empty");
+    }
+
+    // Check if already captured
+    if (orderData.paymentStatus === "CAPTURED" || orderData.status === "SUBMITTED") {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Payment already captured and cannot be cancelled"
+      );
+    }
+
+    const stripeChargeId = orderData.stripeChargeId;
+    if (!stripeChargeId) {
+      throw new functions.https.HttpsError("not-found", "Stripe charge ID not found");
+    }
+
+    // Initialize Stripe
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Stripe secret key not configured"
+      );
+    }
+    const stripe = new Stripe(stripeSecretKey);
+
+    // Refund the uncaptured charge (this cancels the authorization)
+    functions.logger.info("Refunding uncaptured charge:", { chargeId: stripeChargeId });
+    const refund = await stripe.refunds.create({
+      charge: stripeChargeId,
+    });
+    
+    functions.logger.info("Charge refunded/cancelled successfully:", {
+      refundId: refund.id,
+      status: refund.status
+    });
+
+    // Update order in Firestore
+    await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .update({
+        paymentStatus: "CANCELLED",
+        status: "CANCELLED",
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    functions.logger.info("Apple Pay payment cancelled", { transactionId });
+    
+    return { 
+      success: true, 
+      message: "Payment cancelled successfully",
+      refundId: refund.id 
+    };
+    
+  } catch (error) {
+    functions.logger.error("Apple Pay cancellation failed:", error);
+    
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    
+    throw new functions.https.HttpsError(
+      "internal",
+      `Failed to cancel payment: ${(error as Error).message}`
+    );
+  }
+});
+
+// Callable function to capture Apple Pay payment manually (for cancellation support)
+export const captureApplePayPaymentManual = functions.https.onCall(async (data, context) => {
+  // Extract data - check if data is nested
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    requestData = (data as any).data;
+  } else {
+    requestData = data;
+  }
+  
+  const transactionId = requestData?.transactionId;
+  
+  if (!transactionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Transaction ID is required"
+    );
+  }
+  
+  functions.logger.info("Manual Apple Pay capture requested:", { transactionId });
+  
+  try {
+    await captureApplePayPayment(transactionId);
+    return { success: true, message: "Payment captured successfully" };
+  } catch (error) {
+    functions.logger.error("Manual Apple Pay capture failed:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      `Failed to capture payment: ${(error as Error).message}`
+    );
+  }
+});
+
+export const processApplePayPayment = functions.https.onCall(async (data, context) => {
+  functions.logger.info("=== APPLE PAY PAYMENT PROCESSING FUNCTION ===");
+  functions.logger.info("Raw Apple Pay payment data received:", data);
+  functions.logger.info("Data type:", typeof data);
+  functions.logger.info("Data keys:", Object.keys(data || {}));
+  
+  // Extract payment data - check if data is nested in data property
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    requestData = data.data;
+    functions.logger.info("Using nested data.data structure");
+  } else {
+    requestData = data;
+    functions.logger.info("Using direct data structure");
+  }
+  
+  functions.logger.info("Extracted requestData:", {
+    hasAmount: !!requestData?.amount,
+    hasMerchantId: !!requestData?.merchantId,
+    hasOauthToken: !!requestData?.oauth_token,
+    hasPaymentMethod: !!requestData?.paymentMethod,
+    hasApplePayData: !!requestData?.applePayData,
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    paymentMethod: requestData?.paymentMethod
+  });
+  
+  const paymentData = {
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    oauth_token: requestData?.oauth_token,
+    items: requestData?.items || [],
+    customerName: requestData?.customerName,
+    customerEmail: requestData?.customerEmail,
+    pickupTime: requestData?.pickupTime,
+    userId: requestData?.userId,
+    coffeeShopData: requestData?.coffeeShopData,
+    paymentMethod: requestData?.paymentMethod || "apple_pay",
+    tokenId: requestData?.tokenId
+  };
+
+  functions.logger.info("Apple Pay payment request received:", {
+    amount: paymentData.amount,
+    merchantId: paymentData.merchantId,
+    hasOauthToken: !!paymentData.oauth_token,
+    paymentMethod: paymentData.paymentMethod,
+    tokenId: paymentData.tokenId
+  });
+
+  // Validate the request data
+  if (!paymentData.amount || !paymentData.merchantId || !paymentData.oauth_token || !paymentData.tokenId) {
+    functions.logger.error("Request validation failed", {
+      paymentData,
+      hasAmount: !!paymentData.amount,
+      hasMerchantId: !!paymentData.merchantId,
+      hasOauthToken: !!paymentData.oauth_token,
+      hasTokenId: !!paymentData.tokenId
+    });
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "The function must be called with 'amount', 'merchantId', 'oauth_token', and 'tokenId' arguments."
+    );
+  }
+
+  const {amount, merchantId, oauth_token} = paymentData;
+  const transactionId = uuidv4(); // Generate unique transaction ID
+
+  // Initialize Stripe client
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecretKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Stripe secret key not configured"
+    );
+  }
+
+  const stripe = new Stripe(stripeSecretKey);
+
+  // Initialize Square client for order creation
+  const squareClient = new SquareClient({
+    token: oauth_token,
+    environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+      SquareEnvironment.Production : SquareEnvironment.Sandbox,
+  });
+
+  // Fetch locationId from Firestore or Square API
+  let locationId = "";
+  try {
+    const doc = await admin.firestore()
+      .collection("merchant_tokens")
+      .doc(merchantId)
+      .get();
+    if (!doc.exists) {
+      throw new functions.https.HttpsError("not-found", "Merchant tokens not found");
+    }
+    const tokenData = doc.data();
+    locationId = tokenData?.locationId || "";
+    if (!locationId) {
+      const locationsResponse = await squareClient.locations.list();
+      if (!locationsResponse.locations || locationsResponse.locations.length === 0) {
+        throw new functions.https.HttpsError("not-found", "No locations found for merchant");
+      }
+      locationId = locationsResponse.locations[0].id || "";
+      await admin.firestore()
+        .collection("merchant_tokens")
+        .doc(merchantId)
+        .update({ locationId });
+    }
+    if (!locationId) {
+      throw new functions.https.HttpsError("internal", "locationId could not be determined");
+    }
+  } catch (locError) {
+    functions.logger.error("Failed to fetch locationId:", locError);
+    throw new functions.https.HttpsError("internal", "Failed to fetch locationId");
+  }
+
+  try {
+    // 1. Process Apple Pay payment with Stripe
+    functions.logger.info("Processing Apple Pay payment with Stripe...", {
+      amount: amount,
+      merchantId: merchantId
+    });
+
+    // Use the Stripe Token created on the client side (legacy Charges API approach)
+    functions.logger.info("Using Stripe Token created on client:", {
+      tokenId: paymentData.tokenId
+    });
+
+    // Create charge using the token with capture=false for authorization only
+    functions.logger.info("Creating Stripe charge with capture=false for Apple Pay authorization", {
+      amount: amount,
+      tokenId: paymentData.tokenId,
+      capture: false
+    });
+    
+    const charge = await stripe.charges.create({
+      amount: amount, // amount in cents
+      currency: 'usd',
+      source: paymentData.tokenId, // Use the token ID
+      capture: false, // IMPORTANT: Authorize only, don't capture yet
+      description: `Apple Pay order from ${paymentData.coffeeShopData?.name || 'Coffee Shop'}`,
+      receipt_email: paymentData.customerEmail,
+      metadata: {
+        merchantId: merchantId,
+        transactionId: transactionId,
+        userId: paymentData.userId || '',
+        coffeeShop: paymentData.coffeeShopData?.name || '',
+        customerEmail: paymentData.customerEmail || '',
+        customerName: paymentData.customerName || '',
+        paymentMethod: 'apple_pay'
+      },
+    });
+    
+    functions.logger.info("Raw Stripe charge response:", {
+      id: charge.id,
+      status: charge.status,
+      captured: charge.captured,
+      amount: charge.amount,
+      amount_captured: charge.amount_captured,
+      amount_refunded: charge.amount_refunded,
+      source: {
+        id: charge.source?.id,
+        type: (charge.source as any)?.type
+      }
+    });
+
+    functions.logger.info("Stripe Charge created (AUTHORIZED ONLY):", {
+      chargeId: charge.id,
+      status: charge.status,
+      captured: charge.captured,
+      amount: charge.amount,
+      captureMethod: "manual (capture=false)"
+    });
+
+    // Check if payment was successfully authorized (status should be 'succeeded' but not captured)
+    if (charge.status !== 'succeeded') {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Apple Pay payment authorization failed with status: ${charge.status}`
+      );
+    }
+    
+    // Verify that the charge is authorized but not captured
+    if (charge.captured === true) {
+      functions.logger.error("CRITICAL: Charge was unexpectedly captured immediately! This breaks the authorize-then-capture flow:", {
+        chargeId: charge.id,
+        captured: charge.captured,
+        amount_captured: charge.amount_captured,
+        tokenType: (charge.source as any)?.type
+      });
+      
+      // If charge was captured immediately, we need to handle it differently
+      // The order should go straight to SUBMITTED status since payment is complete
+      const firestoreOrderDataCaptured = {
+        transactionId: transactionId,
+        stripeChargeId: charge.id,
+        paymentStatus: "CAPTURED", // Payment was captured immediately
+        amount: amount.toString(),
+        currency: "USD",
+        merchantId: merchantId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentMethod: "apple_pay",
+        receiptNumber: null,
+        receiptUrl: charge.receipt_url,
+        userId: paymentData.userId,
+        coffeeShopData: paymentData.coffeeShopData,
+        items: paymentData.items || [],
+        customerName: paymentData.customerName,
+        customerEmail: paymentData.customerEmail,
+        pickupTime: paymentData.pickupTime,
+        orderId: null, // Square order will be created immediately
+        status: "SUBMITTED", // Order is submitted since payment is complete
+        oauthToken: oauth_token,
+        locationId: locationId,
+        immediateCapture: true // Flag to indicate this was captured immediately
+      };
+      
+      // Create Square order immediately since payment is complete
+      let squareOrderIdImmediate: string | undefined = undefined;
+      if (paymentData.items && paymentData.items.length > 0) {
+        try {
+          const lineItems = paymentData.items.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity.toString(),
+            basePriceMoney: {
+              amount: BigInt(item.price),
+              currency: "USD" as any,
+            },
+            note: item.customizations || undefined,
+          }));
+
+          const orderRequest: any = {
+            order: {
+              locationId: locationId,
+              lineItems,
+              state: "OPEN",
+              source: {
+                name: "SipLocal App - Apple Pay (Immediate Capture)"
+              },
+              fulfillments: [
+                {
+                  type: "PICKUP",
+                  state: "PROPOSED",
+                  pickupDetails: {
+                    recipient: {
+                      displayName: paymentData.customerName || "Customer",
+                      emailAddress: paymentData.customerEmail || undefined
+                    },
+                    pickupAt: paymentData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                    note: "Order placed via mobile app - Apple Pay (Immediate Capture)"
+                  }
+                }
+              ]
+            },
+            idempotencyKey: uuidv4(),
+          };
+
+          const orderResponse = await squareClient.orders.create(orderRequest);
+          squareOrderIdImmediate = orderResponse.order?.id;
+          (firestoreOrderDataCaptured as any).orderId = squareOrderIdImmediate;
+          
+          functions.logger.info('Square order created immediately due to immediate capture:', {
+            orderId: squareOrderIdImmediate
+          });
+        } catch (squareError) {
+          functions.logger.error('Failed to create Square order for immediate capture:', squareError);
+        }
+      }
+      
+      // Save order with SUBMITTED status
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .set(firestoreOrderDataCaptured);
+      
+      return {
+        success: true,
+        transactionId: transactionId,
+        orderId: squareOrderIdImmediate,
+        status: "SUBMITTED", // Immediate capture means submitted
+        amount: amount.toString(),
+        currency: "USD",
+        stripeChargeId: charge.id,
+        receiptNumber: null,
+        receiptUrl: charge.receipt_url,
+        immediateCapture: true
+      };
+    }
+
+    // Receipt URL will be available after capture
+    const receiptUrl = null; // Will be set during capture
+
+    // 2. Skip Square order creation during authorization phase
+    // Square order will be created after payment capture (30 seconds later)
+    let squareOrderId: string | undefined = undefined;
+    
+    functions.logger.info('Skipping Square order creation during Apple Pay authorization phase');
+    functions.logger.info('Square order will be created after payment capture in 30 seconds');
+    
+    // Comment out Square order creation for now
+    if (false && paymentData.items && paymentData.items.length > 0) {
+      try {
+        const lineItems = paymentData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity.toString(),
+          basePriceMoney: {
+            amount: BigInt(item.price),
+            currency: "USD" as any,
+          },
+          note: item.customizations || undefined,
+        }));
+
+        const orderRequest: any = {
+          order: {
+            locationId: locationId,
+            lineItems,
+            state: "OPEN",
+            source: {
+              name: "SipLocal App - Apple Pay (Completed)"
+            },
+            fulfillments: [
+              {
+                type: "PICKUP",
+                state: "PROPOSED",
+                pickupDetails: {
+                  recipient: {
+                    displayName: paymentData.customerName || "Customer",
+                    emailAddress: paymentData.customerEmail || undefined
+                  },
+                  pickupAt: paymentData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                  note: "Order placed via mobile app - Paid with Apple Pay (Payment Completed)"
+                }
+              }
+            ]
+          },
+          idempotencyKey: uuidv4(),
+        };
+
+        functions.logger.info('Creating Square order after Apple Pay payment...');
+        const orderResponse = await squareClient.orders.create(orderRequest);
+        squareOrderId = orderResponse.order?.id;
+        functions.logger.info('Square order created successfully after Apple Pay payment', { 
+          orderId: squareOrderId,
+          orderState: orderResponse.order?.state,
+          transactionId: transactionId
+        });
+
+        // Create external payment record in Square to link with order
+        if (squareOrderId) {
+          try {
+            await squareClient.payments.create({
+              idempotencyKey: uuidv4(),
+              sourceId: 'EXTERNAL',
+              externalDetails: {
+                type: 'OTHER',
+                source: 'Apple Pay via Stripe (Completed)'
+              },
+              amountMoney: {
+                amount: BigInt(amount),
+                currency: 'USD'
+              },
+              orderId: squareOrderId,
+              locationId: locationId
+            });
+            functions.logger.info('External payment record created in Square for Apple Pay');
+          } catch (paymentError: any) {
+            functions.logger.error('Failed to create external payment record for Apple Pay (order still created):', paymentError);
+          }
+        }
+      } catch (orderError: any) {
+        functions.logger.error('Failed to create Square order after Apple Pay payment:', orderError);
+        // Don't fail the entire operation - payment was successful
+      }
+    }
+
+    // 3. Save order to Firestore with AUTHORIZED status
+    const firestoreOrderData = {
+      transactionId: transactionId,
+      stripeChargeId: charge.id,
+      paymentStatus: "AUTHORIZED", // Payment authorized but not captured yet
+      amount: amount.toString(),
+      currency: "USD",
+      merchantId: merchantId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentMethod: "apple_pay",
+      receiptNumber: null,
+      receiptUrl: receiptUrl || null, // Will be null until capture
+      userId: paymentData.userId,
+      coffeeShopData: paymentData.coffeeShopData,
+      items: paymentData.items || [],
+      customerName: paymentData.customerName,
+      customerEmail: paymentData.customerEmail,
+      pickupTime: paymentData.pickupTime,
+      orderId: squareOrderId || null, // Will be null until capture
+      status: "AUTHORIZED", // Order authorized but not submitted yet
+      oauthToken: oauth_token, // Store for completion later
+      locationId: locationId, // Store for Square order creation later
+    };
+
+    functions.logger.info("Saving Apple Pay order to Firestore with AUTHORIZED status:", {
+      transactionId: transactionId,
+      paymentStatus: "AUTHORIZED",
+      status: "AUTHORIZED",
+      stripeChargeId: charge.id,
+      captured: charge.captured
+    });
+
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .set(firestoreOrderData);
+      
+      functions.logger.info("Apple Pay payment order saved to Firestore", {
+        transactionId: transactionId,
+      });
+    } catch (firestoreError) {
+      functions.logger.error("Failed to save Apple Pay payment order to Firestore:", firestoreError);
+      // Continue anyway since payment was successful
+    }
+
+    // 4. Schedule payment capture after 30 seconds (backup mechanism)
+    // Note: The iOS app will also trigger capture after 30 seconds as the primary mechanism
+    setTimeout(async () => {
+      try {
+        functions.logger.info("Server timeout: Attempting to capture Apple Pay payment:", transactionId);
+        
+        // Check if payment is still in AUTHORIZED state before capturing
+        const orderDoc = await admin.firestore()
+          .collection("orders")
+          .doc(transactionId)
+          .get();
+          
+        if (orderDoc.exists) {
+          const orderData = orderDoc.data();
+          if (orderData?.paymentStatus === "AUTHORIZED") {
+            functions.logger.info("Payment still authorized, proceeding with server-side capture");
+            await captureApplePayPayment(transactionId);
+          } else {
+            functions.logger.info("Payment already processed, skipping server-side capture", {
+              currentStatus: orderData?.paymentStatus
+            });
+          }
+        }
+      } catch (error) {
+        functions.logger.error("Failed to capture Apple Pay payment via server timeout:", error);
+      }
+    }, 32000); // Slightly longer than iOS timer to serve as backup
+
+    // 5. Return success response with AUTHORIZED status
+    return {
+      success: true,
+      transactionId: transactionId,
+      orderId: squareOrderId || null, // Will be null for now
+      status: "AUTHORIZED", // Payment authorized, will be captured in 30 seconds
+      amount: amount.toString(),
+      currency: "USD",
+      stripeChargeId: charge.id,
+      receiptNumber: null,
+      receiptUrl: receiptUrl || null, // Will be null until capture
+    };
+
+  } catch (error: any) {
+    functions.logger.error("Apple Pay payment failed:", error);
+
+    // Handle Stripe specific errors
+    if (error.type && error.type.startsWith('Stripe')) {
+      functions.logger.error("Stripe API Error:", {
+        type: error.type,
+        code: error.code,
+        message: error.message,
+      });
+      
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Apple Pay payment failed: " + error.message,
+        error.message,
+      );
+    }
+
+    throw new functions.https.HttpsError(
+      "internal",
+      "Failed to process Apple Pay payment.",
       error.message,
     );
   }
@@ -2206,3 +3101,201 @@ async function handleOrderFulfillmentUpdated(webhookData: any) {
     functions.logger.error("Error handling order.fulfillment.updated webhook:", error);
   }
 }
+
+// Function to submit orders to Clover without payment processing
+export const submitCloverOrderWithExternalPayment = functions.https.onCall(async (data, context) => {
+  functions.logger.info("=== CLOVER ORDER SUBMISSION FUNCTION ===");
+  functions.logger.info("Raw external payment data received:", data);
+  functions.logger.info("Data type:", typeof data);
+  functions.logger.info("Data keys:", Object.keys(data || {}));
+  functions.logger.info("Context:", context);
+  
+  // Extract order data - check if data is nested in data property
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    // Data is nested (some clients send it this way)
+    requestData = data.data;
+    functions.logger.info("Using nested data.data structure");
+  } else {
+    // Data is direct (most clients send it this way)
+    requestData = data;
+    functions.logger.info("Using direct data structure");
+  }
+  
+  functions.logger.info("Extracted requestData:", {
+    hasAmount: !!requestData?.amount,
+    hasMerchantId: !!requestData?.merchantId,
+    hasOauthToken: !!requestData?.oauth_token,
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    oauth_token: requestData?.oauth_token ? requestData.oauth_token.substring(0, 10) + "..." : "MISSING"
+  });
+  
+  const orderData: ExternalPaymentData = {
+    amount: requestData?.amount,
+    merchantId: requestData?.merchantId,
+    oauth_token: requestData?.oauth_token,
+    items: requestData?.items || [],
+    customerName: requestData?.customerName,
+    customerEmail: requestData?.customerEmail,
+    pickupTime: requestData?.pickupTime,
+    userId: requestData?.userId,
+    coffeeShopData: requestData?.coffeeShopData,
+    externalPayment: true,
+    posType: "clover"
+  };
+
+  functions.logger.info("Clover external payment order request received:", {
+    amount: orderData.amount,
+    merchantId: orderData.merchantId,
+    hasOauthToken: !!orderData.oauth_token,
+    externalPayment: orderData.externalPayment,
+    posType: orderData.posType
+  });
+
+  // Validate the request data
+  if (!orderData.amount || !orderData.merchantId || !orderData.oauth_token) {
+    functions.logger.error("Request validation failed", {
+      orderData,
+      hasAmount: !!orderData.amount,
+      hasMerchantId: !!orderData.merchantId,
+      hasOauthToken: !!orderData.oauth_token
+    });
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "The function must be called with 'amount', 'merchantId', and 'oauth_token' arguments."
+    );
+  }
+
+  const {amount, merchantId, oauth_token, items} = orderData;
+  const transactionId = uuidv4(); // Generate a unique transaction ID for external payment order
+
+  // Use the oauth_token as the Clover access token
+  const accessToken = oauth_token;
+  
+  if (!accessToken) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Clover access token not provided"
+    );
+  }
+
+  functions.logger.info("Creating Clover order with external payment:", {
+    merchantId,
+    hasAccessToken: !!accessToken,
+    amount,
+    itemCount: items?.length || 0
+  });
+
+  let orderId: string | undefined = undefined;
+  
+  try {
+    if (items && items.length > 0) {
+      // Build line items for Clover order
+      const cloverItems = items.map(item => ({
+        item: { id: item.id || "default-item-id" },
+        name: item.name,
+        price: item.price, // Price already in cents
+        unitQty: item.quantity,
+        note: item.customizations || undefined,
+        printed: false,
+        exchanged: false,
+        refunded: false,
+        isRevenue: true
+      }));
+
+      // Create the Clover order
+      const cloverOrderRequest: CloverOrderRequest = {
+        items: cloverItems,
+        state: "open", // Order is open and ready for processing
+        note: `Order placed via mobile app - Customer: ${orderData.customerName || "Customer"}`,
+        manualTransaction: true, // External payment
+        groupLineItems: true,
+        testMode: false
+      };
+
+      functions.logger.info("Clover order request:", {
+        hasItems: !!cloverOrderRequest.items?.length,
+        itemCount: cloverOrderRequest.items?.length,
+        state: cloverOrderRequest.state,
+        manualTransaction: cloverOrderRequest.manualTransaction
+      });
+
+      // Make API call to Clover
+      const cloverApiUrl = `https://api.clover.com/v3/merchants/${merchantId}/orders`;
+      
+      try {
+        const response = await axios.post<CloverOrderResponse>(cloverApiUrl, cloverOrderRequest, {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        functions.logger.info('Clover createOrder API response:', {
+          status: response.status,
+          hasData: !!response.data,
+          orderId: response.data?.id,
+          orderState: response.data?.state
+        });
+
+        if (response.status === 200 || response.status === 201) {
+          orderId = response.data?.id;
+          functions.logger.info('Clover order created successfully for external payment:', orderId);
+        } else {
+          functions.logger.error("Clover API returned unexpected status:", response.status);
+          throw new Error(`Clover API returned status ${response.status}`);
+        }
+
+      } catch (cloverError: any) {
+        functions.logger.error("Failed to create Clover order:", {
+          error: cloverError.message,
+          response: cloverError.response?.data,
+          status: cloverError.response?.status
+        });
+        throw new Error(`Failed to create Clover order: ${cloverError.message}`);
+      }
+    }
+
+    // Save order to Firestore
+    const orderDoc = {
+      transactionId,
+      orderId,
+      merchantId,
+      amount,
+      items: items || [],
+      customerName: orderData.customerName,
+      customerEmail: orderData.customerEmail,
+      userId: orderData.userId,
+      coffeeShopData: orderData.coffeeShopData,
+      status: "SUBMITTED",
+      externalPayment: true,
+      posType: "clover",
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      pickupTime: orderData.pickupTime
+    };
+
+    await admin.firestore().collection("orders").doc(transactionId).set(orderDoc);
+    functions.logger.info("Order saved to Firestore with transactionId:", transactionId);
+
+    return {
+      success: true,
+      transactionId,
+      orderId,
+      message: "Clover order submitted successfully with external payment",
+      status: "SUBMITTED"
+    };
+
+  } catch (error: any) {
+    functions.logger.error("Error in submitCloverOrderWithExternalPayment:", {
+      error: error.message,
+      stack: error.stack,
+      transactionId
+    });
+
+    throw new functions.https.HttpsError(
+      "internal",
+      error.message
+    );
+  }
+});

@@ -72,7 +72,8 @@ class CartManager: ObservableObject {
         }
         
         do {
-            let hoursInfo = try await SquareAPIService.shared.fetchBusinessHours(for: shop)
+            let posService = POSServiceFactory.createService(for: shop)
+            let hoursInfo = try await posService.fetchBusinessHours(for: shop)
             await MainActor.run {
                 if let hoursInfo = hoursInfo {
                     self.shopBusinessHours[shop.id] = hoursInfo
