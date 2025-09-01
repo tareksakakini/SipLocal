@@ -162,15 +162,30 @@ struct CloverAddress: Codable {
 
 // MARK: - Clover Business Hours Models
 
-struct CloverHoursResponse: Codable {
-    let elements: [CloverHours]?
+struct CloverOpeningHoursResponse: Codable {
+    let elements: [CloverOpeningHours]?
+    let href: String?
 }
 
-struct CloverHours: Codable, Identifiable {
+struct CloverOpeningHours: Codable, Identifiable {
     let id: String
-    let dayOfTheWeek: String // "MONDAY", "TUESDAY", etc.
-    let startTime: Int64? // Time in milliseconds since midnight
-    let endTime: Int64? // Time in milliseconds since midnight
+    let name: String?
+    let sunday: CloverDayHours?
+    let monday: CloverDayHours?
+    let tuesday: CloverDayHours?
+    let wednesday: CloverDayHours?
+    let thursday: CloverDayHours?
+    let friday: CloverDayHours?
+    let saturday: CloverDayHours?
+}
+
+struct CloverDayHours: Codable {
+    let elements: [CloverTimeSlot]?
+}
+
+struct CloverTimeSlot: Codable {
+    let start: Int // Time in minutes since midnight (e.g., 900 = 9:00 AM)
+    let end: Int   // Time in minutes since midnight (e.g., 1700 = 5:00 PM)
 }
 
 // MARK: - Error Response Models

@@ -61,11 +61,6 @@ class CloverAPIService: POSServiceProtocol {
     func fetchBusinessHours(for shop: CoffeeShop) async throws -> BusinessHoursInfo? {
         print("🔍 CloverAPIService: Starting business hours fetch for shop: \(shop.name) (merchantId: \(shop.merchantId))")
         
-        // Temporarily return nil to focus on fixing menu API first
-        print("⚠️ CloverAPIService: Business hours temporarily disabled for Clover merchants")
-        return nil
-        
-        /*
         do {
             // First, fetch the merchant tokens from the backend
             let credentials = try await tokenService.getCloverCredentials(merchantId: shop.merchantId)
@@ -74,7 +69,7 @@ class CloverAPIService: POSServiceProtocol {
             let cloverHours = try await fetchCloverBusinessHours(credentials: credentials)
             print("🔍 CloverAPIService: Found \(cloverHours.count) business hour entries for \(shop.name)")
             
-            let businessHoursInfo = processCloverBusinessHours(cloverHours)
+            let businessHoursInfo = processCloverOpeningHours(cloverHours)
             print("🔍 CloverAPIService: Successfully processed business hours for \(shop.name)")
             
             return businessHoursInfo
@@ -83,7 +78,6 @@ class CloverAPIService: POSServiceProtocol {
             print("❌ CloverAPIService: Error fetching business hours for \(shop.name): \(error)")
             throw error
         }
-        */
     }
     
     // MARK: - Private Functions
@@ -393,9 +387,9 @@ class CloverAPIService: POSServiceProtocol {
         }
     }
     
-    private func fetchCloverBusinessHours(credentials: CloverCredentials) async throws -> [CloverHours] {
-        // Try the merchant info endpoint first, which might contain business hours
-        let baseURL = "https://api.clover.com/v3/merchants/\(credentials.merchantId)"
+    private func fetchCloverBusinessHours(credentials: CloverCredentials) async throws -> [CloverOpeningHours] {
+        // Use the correct opening_hours endpoint
+        let baseURL = "https://sandbox.dev.clover.com/v3/merchants/\(credentials.merchantId)/opening_hours"
         
         guard let url = URL(string: baseURL) else {
             throw CloverAPIError.invalidURL
@@ -416,6 +410,10 @@ class CloverAPIService: POSServiceProtocol {
             print("🔍 CloverAPIService: Business hours API response status: \(httpResponse.statusCode)")
             
             guard httpResponse.statusCode == 200 else {
+                // Log the actual response for debugging
+                if let responseString = String(data: data, encoding: .utf8) {
+                    print("❌ CloverAPIService: Business hours API error response: \(responseString)")
+                }
                 if let errorResponse = try? JSONDecoder().decode(CloverErrorResponse.self, from: data) {
                     let errorMessage = errorResponse.message
                     print("❌ CloverAPIService: Business hours API error: \(errorMessage)")
@@ -425,15 +423,27 @@ class CloverAPIService: POSServiceProtocol {
                 throw CloverAPIError.httpError(httpResponse.statusCode)
             }
             
-            let hoursResponse = try JSONDecoder().decode(CloverHoursResponse.self, from: data)
-            let hours = hoursResponse.elements ?? []
-            
-            print("🔍 CloverAPIService: Found \(hours.count) business hour entries")
-            for hour in hours {
-                print("🔍 CloverAPIService: Day: \(hour.dayOfTheWeek), Start: \(hour.startTime ?? 0), End: \(hour.endTime ?? 0)")
+            // First, let's see what the opening_hours endpoint actually returns
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("🔍 CloverAPIService: Opening hours response: \(responseString)")
             }
             
-            return hours
+            // Decode using the correct Clover opening hours structure
+            do {
+                let hoursResponse = try JSONDecoder().decode(CloverOpeningHoursResponse.self, from: data)
+                let hours = hoursResponse.elements ?? []
+                
+                print("🔍 CloverAPIService: Found \(hours.count) opening hours entries")
+                for hour in hours {
+                    print("🔍 CloverAPIService: Opening hours entry - ID: \(hour.id), Name: \(hour.name ?? "N/A")")
+                }
+                
+                return hours
+            } catch {
+                print("⚠️ CloverAPIService: Could not decode business hours from opening_hours endpoint")
+                print("⚠️ CloverAPIService: Decode error: \(error)")
+                return [] // Return empty array if parsing fails
+            }
             
         } catch {
             if error is CloverAPIError {
@@ -443,25 +453,21 @@ class CloverAPIService: POSServiceProtocol {
         }
     }
     
-    private func processCloverBusinessHours(_ cloverHours: [CloverHours]) -> BusinessHoursInfo {
+    private func processCloverOpeningHours(_ cloverHours: [CloverOpeningHours]) -> BusinessHoursInfo {
         var weeklyHours: [String: [BusinessHoursPeriod]] = [:]
         
-        for hour in cloverHours {
-            let dayOfWeek = convertCloverDayToSquareFormat(hour.dayOfTheWeek)
+        // Process each opening hours entry (usually just one)
+        for openingHours in cloverHours {
+            print("🔍 CloverAPIService: Processing opening hours entry: \(openingHours.name ?? "N/A")")
             
-            // Convert milliseconds since midnight to HH:mm format
-            let startTime = convertMillisecondsToTimeString(hour.startTime ?? 0)
-            let endTime = convertMillisecondsToTimeString(hour.endTime ?? 0)
-            
-            let periodInfo = BusinessHoursPeriod(
-                startTime: startTime,
-                endTime: endTime
-            )
-            
-            if weeklyHours[dayOfWeek] == nil {
-                weeklyHours[dayOfWeek] = []
-            }
-            weeklyHours[dayOfWeek]?.append(periodInfo)
+            // Process each day of the week
+            processCloverDay(openingHours.sunday, dayKey: "SUN", weeklyHours: &weeklyHours)
+            processCloverDay(openingHours.monday, dayKey: "MON", weeklyHours: &weeklyHours)
+            processCloverDay(openingHours.tuesday, dayKey: "TUE", weeklyHours: &weeklyHours)
+            processCloverDay(openingHours.wednesday, dayKey: "WED", weeklyHours: &weeklyHours)
+            processCloverDay(openingHours.thursday, dayKey: "THU", weeklyHours: &weeklyHours)
+            processCloverDay(openingHours.friday, dayKey: "FRI", weeklyHours: &weeklyHours)
+            processCloverDay(openingHours.saturday, dayKey: "SAT", weeklyHours: &weeklyHours)
         }
         
         // Determine if currently open
@@ -471,6 +477,33 @@ class CloverAPIService: POSServiceProtocol {
             weeklyHours: weeklyHours,
             isCurrentlyOpen: isCurrentlyOpen
         )
+    }
+    
+    private func processCloverDay(_ dayHours: CloverDayHours?, dayKey: String, weeklyHours: inout [String: [BusinessHoursPeriod]]) {
+        guard let dayHours = dayHours, let timeSlots = dayHours.elements else {
+            print("🔍 CloverAPIService: No hours for \(dayKey)")
+            return
+        }
+        
+        var periods: [BusinessHoursPeriod] = []
+        
+        for timeSlot in timeSlots {
+            // Convert minutes since midnight to HH:mm format
+            let startTime = convertMinutesToTimeString(timeSlot.start)
+            let endTime = convertMinutesToTimeString(timeSlot.end)
+            
+            print("🔍 CloverAPIService: \(dayKey): \(startTime) - \(endTime)")
+            
+            let period = BusinessHoursPeriod(
+                startTime: startTime,
+                endTime: endTime
+            )
+            periods.append(period)
+        }
+        
+        if !periods.isEmpty {
+            weeklyHours[dayKey] = periods
+        }
     }
     
     private func convertCloverDayToSquareFormat(_ cloverDay: String) -> String {
@@ -486,12 +519,11 @@ class CloverAPIService: POSServiceProtocol {
         }
     }
     
-    private func convertMillisecondsToTimeString(_ milliseconds: Int64) -> String {
-        let totalSeconds = milliseconds / 1000
-        let hours = totalSeconds / 3600
-        let minutes = (totalSeconds % 3600) / 60
+    private func convertMinutesToTimeString(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let mins = minutes % 60
         
-        return String(format: "%02d:%02d", hours, minutes)
+        return String(format: "%02d:%02d", hours, mins)
     }
     
     private func checkIfCurrentlyOpen(weeklyHours: [String: [BusinessHoursPeriod]]) -> Bool {
