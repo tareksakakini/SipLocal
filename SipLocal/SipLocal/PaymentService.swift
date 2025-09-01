@@ -9,6 +9,7 @@ struct TransactionResult {
     let message: String
     let receiptUrl: String? // Add receiptUrl to transaction result
     let orderId: String? // Square order ID for status fetching
+    let status: String? // Payment status (AUTHORIZED, SUBMITTED, etc.)
 }
 
 // A simple enum for our payment errors
@@ -86,7 +87,8 @@ class PaymentService {
                     transactionId: transactionId,
                     message: "Payment successful!",
                     receiptUrl: receiptUrl,
-                    orderId: orderId
+                    orderId: orderId,
+                    status: data["status"] as? String
                 )
                 print("Firebase function returned success: \(transactionId), receiptUrl: \(receiptUrl ?? "nil")")
                 return .success(transactionResult)
@@ -159,7 +161,8 @@ class PaymentService {
                     transactionId: transactionId,
                     message: "Order submitted successfully! Payment handled externally.",
                     receiptUrl: receiptUrl,
-                    orderId: orderId
+                    orderId: orderId,
+                    status: data["status"] as? String
                 )
                 print("Firebase function returned success for external payment order: \(transactionId)")
                 return .success(transactionResult)
@@ -233,7 +236,8 @@ class PaymentService {
                     transactionId: transactionId,
                     message: "Payment intent created. Complete payment to proceed.",
                     receiptUrl: receiptUrl,
-                    orderId: orderId
+                    orderId: orderId,
+                    status: data["status"] as? String
                 )
                 print("Firebase function returned success for Stripe payment: \(transactionId)")
                 print("Client secret received: \(clientSecret != nil ? "Yes" : "No")")
@@ -267,7 +271,8 @@ class PaymentService {
                     transactionId: transactionId,
                     message: "Payment completed successfully!",
                     receiptUrl: data["receiptUrl"] as? String,
-                    orderId: data["orderId"] as? String
+                    orderId: data["orderId"] as? String,
+                    status: data["status"] as? String
                 )
                 print("Stripe payment completed successfully: \(transactionId)")
                 return .success(transactionResult)
@@ -346,7 +351,8 @@ class PaymentService {
                     transactionId: transactionId,
                     message: "Apple Pay payment successful!",
                     receiptUrl: receiptUrl,
-                    orderId: orderId
+                    orderId: orderId,
+                    status: data["status"] as? String
                 )
                 print("✅ PaymentService: Firebase function returned success for Apple Pay payment: \(transactionId)")
                 return .success(transactionResult)
@@ -362,6 +368,34 @@ class PaymentService {
                 print("❌ PaymentService: Error code: \(error.code)")
                 print("❌ PaymentService: Error userInfo: \(error.userInfo)")
             }
+            return .failure(.serverError(error.localizedDescription))
+        }
+    }
+    
+    // MARK: - Apple Pay Capture
+    
+    func captureApplePayPayment(transactionId: String) async -> Result<String, PaymentError> {
+        print("🍎💳 PaymentService: Capturing Apple Pay payment")
+        print("  - Transaction ID: \(transactionId)")
+        
+        let functions = Functions.functions()
+        let data: [String: Any] = ["transactionId": transactionId]
+        
+        do {
+            let result = try await functions.httpsCallable("captureApplePayPaymentManual").call(data)
+            
+            if let resultData = result.data as? [String: Any],
+               let success = resultData["success"] as? Bool,
+               let message = resultData["message"] as? String,
+               success {
+                print("✅ PaymentService: Apple Pay payment captured successfully")
+                return .success(message)
+            } else {
+                print("❌ PaymentService: Apple Pay capture returned unexpected response")
+                return .failure(.serverError("Failed to capture Apple Pay payment"))
+            }
+        } catch {
+            print("❌ PaymentService: Apple Pay capture failed: \(error)")
             return .failure(.serverError(error.localizedDescription))
         }
     }

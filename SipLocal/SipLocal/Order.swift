@@ -304,6 +304,55 @@ class OrderManager: ObservableObject {
         }
     }
     
+    // MARK: - Apple Pay Capture Timer
+    
+    func startApplePayCaptureTimer(transactionId: String, paymentService: PaymentService) {
+        print("🍎🕒 Starting Apple Pay capture timer for transaction: \(transactionId)")
+        
+        // Cancel any existing timer for this transaction
+        paymentCaptureTimers[transactionId]?.invalidate()
+        
+        // Create a new timer
+        let timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: false) { _ in
+            print("🍎🔥 Apple Pay capture timer fired for transaction: \(transactionId)")
+            
+            Task {
+                await self.captureApplePayPayment(transactionId: transactionId, paymentService: paymentService)
+            }
+        }
+        
+        // Store the timer
+        paymentCaptureTimers[transactionId] = timer
+        
+        // Add to run loop to ensure it fires
+        RunLoop.main.add(timer, forMode: .common)
+        print("✅ Apple Pay capture timer scheduled successfully")
+    }
+    
+    private func captureApplePayPayment(transactionId: String, paymentService: PaymentService) async {
+        print("🍎💳 Capturing Apple Pay payment for transaction: \(transactionId)")
+        
+        let result = await paymentService.captureApplePayPayment(transactionId: transactionId)
+        
+        await MainActor.run {
+            // Clean up the timer
+            paymentCaptureTimers[transactionId]?.invalidate()
+            paymentCaptureTimers.removeValue(forKey: transactionId)
+            
+            switch result {
+            case .success(let message):
+                print("✅ Apple Pay payment captured successfully: \(message)")
+                // Refresh orders to show updated status
+                Task {
+                    await self.refreshOrders()
+                }
+            case .failure(let error):
+                print("❌ Apple Pay payment capture failed: \(error.localizedDescription)")
+                // Could implement retry logic or notification here
+            }
+        }
+    }
+    
     // MARK: - Order Cancellation
     
     func cancelOrder(paymentId: String) async throws {
@@ -318,16 +367,39 @@ class OrderManager: ObservableObject {
             paymentCaptureTimers.removeValue(forKey: paymentId)
         }
         
-        // Call Firebase Cloud Function to cancel the order
-        let functions = Functions.functions()
-        let data = ["paymentId": paymentId]
+        // Check if this is an Apple Pay order by looking at the order data
+        let orderDoc = try await firestore
+            .collection("orders")
+            .document(paymentId)
+            .getDocument()
         
-        do {
-            let result = try await functions.httpsCallable("cancelOrder").call(data)
-            print("OrderManager: Successfully cancelled order: \(paymentId)")
-        } catch {
-            print("OrderManager: Error cancelling order: \(error)")
-            throw OrderError.cancellationFailed(error.localizedDescription)
+        let functions = Functions.functions()
+        
+        if let orderData = orderDoc.data(),
+           let paymentMethod = orderData["paymentMethod"] as? String,
+           paymentMethod == "apple_pay" {
+            // Cancel Apple Pay authorization
+            print("🍎 Cancelling Apple Pay order: \(paymentId)")
+            let data = ["transactionId": paymentId]
+            
+            do {
+                let result = try await functions.httpsCallable("cancelApplePayPayment").call(data)
+                print("OrderManager: Successfully cancelled Apple Pay order: \(paymentId)")
+            } catch {
+                print("OrderManager: Error cancelling Apple Pay order: \(error)")
+                throw OrderError.cancellationFailed(error.localizedDescription)
+            }
+        } else {
+            // Cancel regular Stripe payment
+            let data = ["paymentId": paymentId]
+            
+            do {
+                let result = try await functions.httpsCallable("cancelOrder").call(data)
+                print("OrderManager: Successfully cancelled order: \(paymentId)")
+            } catch {
+                print("OrderManager: Error cancelling order: \(error)")
+                throw OrderError.cancellationFailed(error.localizedDescription)
+            }
         }
     }
     

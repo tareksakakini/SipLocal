@@ -916,9 +916,18 @@ class ApplePayDelegate: NSObject, ObservableObject, PKPaymentAuthorizationContro
                     await MainActor.run {
                         switch result {
                         case .success(let transaction):
-                            print("✅ ApplePayDelegate: Payment successful!")
+                            print("✅ ApplePayDelegate: Payment authorized!")
                             print("  - Transaction ID: \(transaction.transactionId)")
+                            print("  - Status: \(transaction.status ?? "AUTHORIZED")")
                             print("  - Message: \(transaction.message)")
+                            
+                            // Start the 30-second capture timer for Apple Pay
+                            // For Apple Pay, we always start the capture timer since it's always authorized first
+                            print("🕒 Starting Apple Pay capture timer for transaction: \(transaction.transactionId)")
+                            orderManager.startApplePayCaptureTimer(
+                                transactionId: transaction.transactionId,
+                                paymentService: paymentService
+                            )
                             
                             // Refresh orders to show the new order
                             Task {

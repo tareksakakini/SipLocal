@@ -820,6 +820,318 @@ export const processStripePayment = functions.https.onCall(async (data, context)
 });
 
 // Function to process Apple Pay payment through Stripe
+// Helper function to capture Apple Pay payment after 30 seconds
+async function captureApplePayPayment(transactionId: string) {
+  functions.logger.info("=== CAPTURING APPLE PAY PAYMENT ===", { transactionId });
+
+  try {
+    // Get order from Firestore
+    const orderDoc = await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .get();
+
+    if (!orderDoc.exists) {
+      throw new Error(`Order not found: ${transactionId}`);
+    }
+
+    const orderData = orderDoc.data();
+    if (!orderData) {
+      throw new Error(`Order data is empty: ${transactionId}`);
+    }
+
+    // Check if already captured
+    if (orderData.paymentStatus === "CAPTURED" || orderData.status === "SUBMITTED") {
+      functions.logger.info("Payment already captured", { transactionId });
+      return;
+    }
+
+    const stripeChargeId = orderData.stripeChargeId;
+    const oauth_token = orderData.oauthToken;
+    const locationId = orderData.locationId;
+    const merchantId = orderData.merchantId;
+
+    if (!stripeChargeId) {
+      throw new Error("Stripe charge ID not found in order");
+    }
+
+    // Initialize Stripe
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      throw new Error("Stripe secret key not configured");
+    }
+    const stripe = new Stripe(stripeSecretKey);
+
+    // Capture the charge
+    functions.logger.info("Capturing Stripe charge:", { chargeId: stripeChargeId });
+    const capturedCharge = await stripe.charges.capture(stripeChargeId);
+    
+    functions.logger.info("Charge captured successfully:", {
+      chargeId: capturedCharge.id,
+      status: capturedCharge.status,
+      captured: capturedCharge.captured
+    });
+
+    // Create Square order now that payment is captured
+    let squareOrderId: string | undefined = undefined;
+    
+    if (orderData.items && orderData.items.length > 0 && oauth_token) {
+      try {
+        // Initialize Square client
+        const squareClient = new SquareClient({
+          token: oauth_token,
+          environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
+            SquareEnvironment.Production : SquareEnvironment.Sandbox,
+        });
+
+        const lineItems = orderData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity.toString(),
+          basePriceMoney: {
+            amount: BigInt(item.price),
+            currency: "USD" as any,
+          },
+          note: item.customizations || undefined,
+        }));
+
+        const orderRequest: any = {
+          order: {
+            locationId: locationId,
+            lineItems,
+            state: "OPEN",
+            source: {
+              name: "SipLocal App - Apple Pay (Captured)"
+            },
+            fulfillments: [
+              {
+                type: "PICKUP",
+                state: "PROPOSED",
+                pickupDetails: {
+                  recipient: {
+                    displayName: orderData.customerName || "Customer",
+                    emailAddress: orderData.customerEmail || undefined
+                  },
+                  pickupAt: orderData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                  note: "Order placed via mobile app - Paid with Apple Pay (Payment Captured)"
+                }
+              }
+            ]
+          },
+          idempotencyKey: uuidv4(),
+        };
+
+        functions.logger.info('Creating Square order after Apple Pay capture...');
+        const orderResponse = await squareClient.orders.create(orderRequest);
+        squareOrderId = orderResponse.order?.id;
+        
+        functions.logger.info('Square order created after capture:', {
+          orderId: squareOrderId,
+          merchantId: merchantId
+        });
+
+        // Create external payment record in Square
+        if (squareOrderId) {
+          try {
+            await squareClient.payments.create({
+              idempotencyKey: uuidv4(),
+              sourceId: 'EXTERNAL',
+              externalDetails: {
+                type: 'CARD',
+                source: 'Stripe Apple Pay'
+              },
+              amountMoney: {
+                amount: BigInt(orderData.amount),
+                currency: 'USD'
+              },
+              orderId: squareOrderId,
+              locationId: locationId
+            });
+            functions.logger.info('External payment record created in Square');
+          } catch (paymentError) {
+            functions.logger.error('Failed to create external payment record:', paymentError);
+          }
+        }
+      } catch (squareError) {
+        functions.logger.error('Failed to create Square order during capture:', squareError);
+      }
+    }
+
+    // Update order in Firestore
+    await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .update({
+        paymentStatus: "CAPTURED",
+        status: "SUBMITTED",
+        orderId: squareOrderId,
+        receiptUrl: capturedCharge.receipt_url,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    functions.logger.info("Apple Pay payment captured and order updated", {
+      transactionId,
+      squareOrderId,
+      status: "SUBMITTED"
+    });
+
+  } catch (error) {
+    functions.logger.error("Error capturing Apple Pay payment:", error);
+    
+    // Update order status to failed
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .update({
+          paymentStatus: "CAPTURE_FAILED",
+          error: (error as Error).message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (updateError) {
+      functions.logger.error("Failed to update order status:", updateError);
+    }
+    
+    throw error;
+  }
+}
+
+// Function to cancel an Apple Pay authorization
+export const cancelApplePayPayment = functions.https.onCall(async (data, context) => {
+  // Extract data - check if data is nested
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    requestData = (data as any).data;
+  } else {
+    requestData = data;
+  }
+  
+  const transactionId = requestData?.transactionId;
+  
+  if (!transactionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Transaction ID is required"
+    );
+  }
+  
+  functions.logger.info("Apple Pay cancellation requested:", { transactionId });
+  
+  try {
+    // Get order from Firestore
+    const orderDoc = await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .get();
+
+    if (!orderDoc.exists) {
+      throw new functions.https.HttpsError("not-found", "Order not found");
+    }
+
+    const orderData = orderDoc.data();
+    if (!orderData) {
+      throw new functions.https.HttpsError("not-found", "Order data is empty");
+    }
+
+    // Check if already captured
+    if (orderData.paymentStatus === "CAPTURED" || orderData.status === "SUBMITTED") {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Payment already captured and cannot be cancelled"
+      );
+    }
+
+    const stripeChargeId = orderData.stripeChargeId;
+    if (!stripeChargeId) {
+      throw new functions.https.HttpsError("not-found", "Stripe charge ID not found");
+    }
+
+    // Initialize Stripe
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Stripe secret key not configured"
+      );
+    }
+    const stripe = new Stripe(stripeSecretKey);
+
+    // Refund the uncaptured charge (this cancels the authorization)
+    functions.logger.info("Refunding uncaptured charge:", { chargeId: stripeChargeId });
+    const refund = await stripe.refunds.create({
+      charge: stripeChargeId,
+    });
+    
+    functions.logger.info("Charge refunded/cancelled successfully:", {
+      refundId: refund.id,
+      status: refund.status
+    });
+
+    // Update order in Firestore
+    await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .update({
+        paymentStatus: "CANCELLED",
+        status: "CANCELLED",
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    functions.logger.info("Apple Pay payment cancelled", { transactionId });
+    
+    return { 
+      success: true, 
+      message: "Payment cancelled successfully",
+      refundId: refund.id 
+    };
+    
+  } catch (error) {
+    functions.logger.error("Apple Pay cancellation failed:", error);
+    
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    
+    throw new functions.https.HttpsError(
+      "internal",
+      `Failed to cancel payment: ${(error as Error).message}`
+    );
+  }
+});
+
+// Callable function to capture Apple Pay payment manually (for cancellation support)
+export const captureApplePayPaymentManual = functions.https.onCall(async (data, context) => {
+  // Extract data - check if data is nested
+  let requestData: any;
+  if (data && typeof data === 'object' && 'data' in data) {
+    requestData = (data as any).data;
+  } else {
+    requestData = data;
+  }
+  
+  const transactionId = requestData?.transactionId;
+  
+  if (!transactionId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Transaction ID is required"
+    );
+  }
+  
+  functions.logger.info("Manual Apple Pay capture requested:", { transactionId });
+  
+  try {
+    await captureApplePayPayment(transactionId);
+    return { success: true, message: "Payment captured successfully" };
+  } catch (error) {
+    functions.logger.error("Manual Apple Pay capture failed:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      `Failed to capture payment: ${(error as Error).message}`
+    );
+  }
+});
+
 export const processApplePayPayment = functions.https.onCall(async (data, context) => {
   functions.logger.info("=== APPLE PAY PAYMENT PROCESSING FUNCTION ===");
   functions.logger.info("Raw Apple Pay payment data received:", data);
@@ -948,11 +1260,18 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
       tokenId: paymentData.tokenId
     });
 
-    // Create charge using the token (legacy approach but simpler for Apple Pay)
+    // Create charge using the token with capture=false for authorization only
+    functions.logger.info("Creating Stripe charge with capture=false for Apple Pay authorization", {
+      amount: amount,
+      tokenId: paymentData.tokenId,
+      capture: false
+    });
+    
     const charge = await stripe.charges.create({
       amount: amount, // amount in cents
       currency: 'usd',
       source: paymentData.tokenId, // Use the token ID
+      capture: false, // IMPORTANT: Authorize only, don't capture yet
       description: `Apple Pay order from ${paymentData.coffeeShopData?.name || 'Coffee Shop'}`,
       receipt_email: paymentData.customerEmail,
       metadata: {
@@ -965,28 +1284,156 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
         paymentMethod: 'apple_pay'
       },
     });
-
-    functions.logger.info("Stripe Charge created:", {
-      chargeId: charge.id,
+    
+    functions.logger.info("Raw Stripe charge response:", {
+      id: charge.id,
       status: charge.status,
-      amount: charge.amount
+      captured: charge.captured,
+      amount: charge.amount,
+      amount_captured: charge.amount_captured,
+      amount_refunded: charge.amount_refunded,
+      source: {
+        id: charge.source?.id,
+        type: (charge.source as any)?.type
+      }
     });
 
-    // Check if payment was successful
+    functions.logger.info("Stripe Charge created (AUTHORIZED ONLY):", {
+      chargeId: charge.id,
+      status: charge.status,
+      captured: charge.captured,
+      amount: charge.amount,
+      captureMethod: "manual (capture=false)"
+    });
+
+    // Check if payment was successfully authorized (status should be 'succeeded' but not captured)
     if (charge.status !== 'succeeded') {
       throw new functions.https.HttpsError(
         "failed-precondition",
-        `Apple Pay payment failed with status: ${charge.status}`
+        `Apple Pay payment authorization failed with status: ${charge.status}`
       );
     }
+    
+    // Verify that the charge is authorized but not captured
+    if (charge.captured === true) {
+      functions.logger.error("CRITICAL: Charge was unexpectedly captured immediately! This breaks the authorize-then-capture flow:", {
+        chargeId: charge.id,
+        captured: charge.captured,
+        amount_captured: charge.amount_captured,
+        tokenType: (charge.source as any)?.type
+      });
+      
+      // If charge was captured immediately, we need to handle it differently
+      // The order should go straight to SUBMITTED status since payment is complete
+      const firestoreOrderDataCaptured = {
+        transactionId: transactionId,
+        stripeChargeId: charge.id,
+        paymentStatus: "CAPTURED", // Payment was captured immediately
+        amount: amount.toString(),
+        currency: "USD",
+        merchantId: merchantId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        paymentMethod: "apple_pay",
+        receiptNumber: null,
+        receiptUrl: charge.receipt_url,
+        userId: paymentData.userId,
+        coffeeShopData: paymentData.coffeeShopData,
+        items: paymentData.items || [],
+        customerName: paymentData.customerName,
+        customerEmail: paymentData.customerEmail,
+        pickupTime: paymentData.pickupTime,
+        orderId: null, // Square order will be created immediately
+        status: "SUBMITTED", // Order is submitted since payment is complete
+        oauthToken: oauth_token,
+        locationId: locationId,
+        immediateCapture: true // Flag to indicate this was captured immediately
+      };
+      
+      // Create Square order immediately since payment is complete
+      let squareOrderIdImmediate: string | undefined = undefined;
+      if (paymentData.items && paymentData.items.length > 0) {
+        try {
+          const lineItems = paymentData.items.map((item: any) => ({
+            name: item.name,
+            quantity: item.quantity.toString(),
+            basePriceMoney: {
+              amount: BigInt(item.price),
+              currency: "USD" as any,
+            },
+            note: item.customizations || undefined,
+          }));
 
-    // Get receipt URL from charge
-    const receiptUrl = charge.receipt_url;
+          const orderRequest: any = {
+            order: {
+              locationId: locationId,
+              lineItems,
+              state: "OPEN",
+              source: {
+                name: "SipLocal App - Apple Pay (Immediate Capture)"
+              },
+              fulfillments: [
+                {
+                  type: "PICKUP",
+                  state: "PROPOSED",
+                  pickupDetails: {
+                    recipient: {
+                      displayName: paymentData.customerName || "Customer",
+                      emailAddress: paymentData.customerEmail || undefined
+                    },
+                    pickupAt: paymentData.pickupTime || new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+                    note: "Order placed via mobile app - Apple Pay (Immediate Capture)"
+                  }
+                }
+              ]
+            },
+            idempotencyKey: uuidv4(),
+          };
 
-    // 2. Create Square order after successful payment
+          const orderResponse = await squareClient.orders.create(orderRequest);
+          squareOrderIdImmediate = orderResponse.order?.id;
+          (firestoreOrderDataCaptured as any).orderId = squareOrderIdImmediate;
+          
+          functions.logger.info('Square order created immediately due to immediate capture:', {
+            orderId: squareOrderIdImmediate
+          });
+        } catch (squareError) {
+          functions.logger.error('Failed to create Square order for immediate capture:', squareError);
+        }
+      }
+      
+      // Save order with SUBMITTED status
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .set(firestoreOrderDataCaptured);
+      
+      return {
+        success: true,
+        transactionId: transactionId,
+        orderId: squareOrderIdImmediate,
+        status: "SUBMITTED", // Immediate capture means submitted
+        amount: amount.toString(),
+        currency: "USD",
+        stripeChargeId: charge.id,
+        receiptNumber: null,
+        receiptUrl: charge.receipt_url,
+        immediateCapture: true
+      };
+    }
+
+    // Receipt URL will be available after capture
+    const receiptUrl = null; // Will be set during capture
+
+    // 2. Skip Square order creation during authorization phase
+    // Square order will be created after payment capture (30 seconds later)
     let squareOrderId: string | undefined = undefined;
     
-    if (paymentData.items && paymentData.items.length > 0) {
+    functions.logger.info('Skipping Square order creation during Apple Pay authorization phase');
+    functions.logger.info('Square order will be created after payment capture in 30 seconds');
+    
+    // Comment out Square order creation for now
+    if (false && paymentData.items && paymentData.items.length > 0) {
       try {
         const lineItems = paymentData.items.map((item: any) => ({
           name: item.name,
@@ -1061,11 +1508,11 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
       }
     }
 
-    // 3. Save order to Firestore
+    // 3. Save order to Firestore with AUTHORIZED status
     const firestoreOrderData = {
       transactionId: transactionId,
       stripeChargeId: charge.id,
-      paymentStatus: charge.status.toUpperCase(),
+      paymentStatus: "AUTHORIZED", // Payment authorized but not captured yet
       amount: amount.toString(),
       currency: "USD",
       merchantId: merchantId,
@@ -1073,16 +1520,26 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       paymentMethod: "apple_pay",
       receiptNumber: null,
-      receiptUrl: receiptUrl,
+      receiptUrl: receiptUrl || null, // Will be null until capture
       userId: paymentData.userId,
       coffeeShopData: paymentData.coffeeShopData,
       items: paymentData.items || [],
       customerName: paymentData.customerName,
       customerEmail: paymentData.customerEmail,
       pickupTime: paymentData.pickupTime,
-      orderId: squareOrderId,
-      status: "SUBMITTED", // Order paid and submitted
+      orderId: squareOrderId || null, // Will be null until capture
+      status: "AUTHORIZED", // Order authorized but not submitted yet
+      oauthToken: oauth_token, // Store for completion later
+      locationId: locationId, // Store for Square order creation later
     };
+
+    functions.logger.info("Saving Apple Pay order to Firestore with AUTHORIZED status:", {
+      transactionId: transactionId,
+      paymentStatus: "AUTHORIZED",
+      status: "AUTHORIZED",
+      stripeChargeId: charge.id,
+      captured: charge.captured
+    });
 
     try {
       await admin.firestore()
@@ -1098,17 +1555,45 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
       // Continue anyway since payment was successful
     }
 
-    // 4. Return success response
+    // 4. Schedule payment capture after 30 seconds (backup mechanism)
+    // Note: The iOS app will also trigger capture after 30 seconds as the primary mechanism
+    setTimeout(async () => {
+      try {
+        functions.logger.info("Server timeout: Attempting to capture Apple Pay payment:", transactionId);
+        
+        // Check if payment is still in AUTHORIZED state before capturing
+        const orderDoc = await admin.firestore()
+          .collection("orders")
+          .doc(transactionId)
+          .get();
+          
+        if (orderDoc.exists) {
+          const orderData = orderDoc.data();
+          if (orderData?.paymentStatus === "AUTHORIZED") {
+            functions.logger.info("Payment still authorized, proceeding with server-side capture");
+            await captureApplePayPayment(transactionId);
+          } else {
+            functions.logger.info("Payment already processed, skipping server-side capture", {
+              currentStatus: orderData?.paymentStatus
+            });
+          }
+        }
+      } catch (error) {
+        functions.logger.error("Failed to capture Apple Pay payment via server timeout:", error);
+      }
+    }, 32000); // Slightly longer than iOS timer to serve as backup
+
+    // 5. Return success response with AUTHORIZED status
     return {
       success: true,
       transactionId: transactionId,
-      orderId: squareOrderId,
-      status: "SUBMITTED",
+      orderId: squareOrderId || null, // Will be null for now
+      status: "AUTHORIZED", // Payment authorized, will be captured in 30 seconds
       amount: amount.toString(),
       currency: "USD",
       stripeChargeId: charge.id,
       receiptNumber: null,
-      receiptUrl: receiptUrl,
+      receiptUrl: receiptUrl || null, // Will be null until capture
     };
 
   } catch (error: any) {
