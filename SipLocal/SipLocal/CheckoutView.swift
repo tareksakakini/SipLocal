@@ -848,8 +848,19 @@ class ApplePayDelegate: NSObject, ObservableObject, PKPaymentAuthorizationContro
             Task {
                 do {
                     print("🍎 ApplePayDelegate: Fetching merchant tokens for: \(merchantId)")
-                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
-                    print("🍎 ApplePayDelegate: Merchant tokens retrieved successfully")
+                    print("🍎 ApplePayDelegate: POS Type: \(firstItem.shop.posType.rawValue)")
+                    
+                    // Use appropriate token service based on POS type
+                    let oauthToken: String
+                    if firstItem.shop.posType == .clover {
+                        let cloverCredentials = try await tokenService.getCloverCredentials(merchantId: merchantId)
+                        oauthToken = cloverCredentials.accessToken
+                        print("🍎 ApplePayDelegate: Clover credentials retrieved successfully")
+                    } else {
+                        let squareCredentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
+                        oauthToken = squareCredentials.oauth_token
+                        print("🍎 ApplePayDelegate: Square credentials retrieved successfully")
+                    }
                     
                     // Create Stripe Token from Apple Pay
                     print("🍎 ApplePayDelegate: Creating Stripe Token from Apple Pay...")
@@ -904,7 +915,7 @@ class ApplePayDelegate: NSObject, ObservableObject, PKPaymentAuthorizationContro
                         tokenId: stripeToken.tokenId,
                         amount: amountInCents,
                         merchantId: merchantId,
-                        oauthToken: credentials.oauth_token,
+                        oauthToken: oauthToken,
                         cartItems: cartManager.items,
                         customerName: userData.fullName,
                         customerEmail: userData.email,

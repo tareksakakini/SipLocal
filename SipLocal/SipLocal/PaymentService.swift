@@ -324,7 +324,8 @@ class PaymentService {
             "userId": userId,
             "coffeeShopData": coffeeShop.toDictionary(),
             "paymentMethod": "apple_pay",
-            "tokenId": tokenId // Send Stripe Token ID instead of raw data
+            "tokenId": tokenId, // Send Stripe Token ID instead of raw data
+            "posType": coffeeShop.posType.rawValue // Add POS type for backend routing
         ]
         
         // Add pickup time if provided
@@ -344,22 +345,44 @@ class PaymentService {
             print("🍎💳 PaymentService: Firebase function response received")
             print("🍎💳 PaymentService: Response data: \(result.data)")
             
-            // Parse the response
-            if let data = result.data as? [String: Any],
-               let success = data["success"] as? Bool,
-               success == true,
-               let transactionId = data["transactionId"] as? String {
-                let receiptUrl = data["receiptUrl"] as? String
-                let orderId = data["orderId"] as? String
-                let transactionResult = TransactionResult(
-                    transactionId: transactionId,
-                    message: "Apple Pay payment successful!",
-                    receiptUrl: receiptUrl,
-                    orderId: orderId,
-                    status: data["status"] as? String
-                )
-                print("✅ PaymentService: Firebase function returned success for Apple Pay payment: \(transactionId)")
-                return .success(transactionResult)
+            // Parse the response - handle both old format (with success field) and new format (direct data)
+            if let data = result.data as? [String: Any] {
+                // Check for new Clover format (direct response)
+                if let transactionId = data["transactionId"] as? String,
+                   let status = data["status"] as? String,
+                   status == "SUBMITTED" {
+                    let receiptUrl = data["receiptUrl"] as? String
+                    let orderId = data["orderId"] as? String
+                    let message = data["message"] as? String ?? "Apple Pay payment successful!"
+                    let transactionResult = TransactionResult(
+                        transactionId: transactionId,
+                        message: message,
+                        receiptUrl: receiptUrl,
+                        orderId: orderId,
+                        status: status
+                    )
+                    print("✅ PaymentService: Firebase function returned success for Apple Pay payment: \(transactionId)")
+                    return .success(transactionResult)
+                }
+                // Check for old format (with success field)
+                else if let success = data["success"] as? Bool,
+                        success == true,
+                        let transactionId = data["transactionId"] as? String {
+                    let receiptUrl = data["receiptUrl"] as? String
+                    let orderId = data["orderId"] as? String
+                    let transactionResult = TransactionResult(
+                        transactionId: transactionId,
+                        message: "Apple Pay payment successful!",
+                        receiptUrl: receiptUrl,
+                        orderId: orderId,
+                        status: data["status"] as? String
+                    )
+                    print("✅ PaymentService: Firebase function returned success for Apple Pay payment: \(transactionId)")
+                    return .success(transactionResult)
+                } else {
+                    print("❌ PaymentService: Firebase function returned unexpected response: \(result.data)")
+                    return .failure(.serverError("Unexpected response from server"))
+                }
             } else {
                 print("❌ PaymentService: Firebase function returned unexpected response: \(result.data)")
                 return .failure(.serverError("Unexpected response from server"))
