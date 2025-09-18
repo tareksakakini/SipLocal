@@ -73,18 +73,10 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		E621FFFD2E2B15F20070209A /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		E6913D182E1C221E0082D6F5 = {
 			isa = PBXGroup;
 			children = (
 				E6913D232E1C221E0082D6F5 /* SipLocal */,
-				E621FFFD2E2B15F20070209A /* Frameworks */,
 				E6913D222E1C221E0082D6F5 /* Products */,
 			);
 			sourceTree = "<group>";
