@@ -7,6 +7,16 @@
 
 import SwiftUI
 
+// MARK: - Username Status
+
+enum UsernameStatus {
+    case none, checking, available, unavailable
+}
+
+// MARK: - Signup View
+
+/// User registration screen with comprehensive form validation
+/// Features username availability checking and real-time validation feedback
 struct SignupView: View {
     @State private var fullName = ""
     @State private var username = ""
@@ -24,123 +34,181 @@ struct SignupView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authManager: AuthenticationManager
     
+    // MARK: - Design Constants
+    
+    private enum Design {
+        static let cardCornerRadius: CGFloat = 20
+        static let fieldCornerRadius: CGFloat = 12
+        static let buttonHeight: CGFloat = 50
+        static let buttonCornerRadius: CGFloat = 25
+        static let formSpacing: CGFloat = 20
+        static let sectionSpacing: CGFloat = 28
+        static let headerSpacing: CGFloat = 8
+        static let accentHeight: CGFloat = 6
+        static let shadowRadius: CGFloat = 24
+        static let shadowY: CGFloat = 8
+        
+        static let coffeeBrown = Color(red: 0.396, green: 0.263, blue: 0.129)
+        static let accentGradient = LinearGradient(
+            gradient: Gradient(colors: [
+                Color(red: 0.9, green: 0.85, blue: 0.8), 
+                Color(red: 0.7, green: 0.6, blue: 0.5)
+            ]), 
+            startPoint: .leading, 
+            endPoint: .trailing
+        )
+    }
+    
     var body: some View {
         ZStack {
-            // Background - subtle neutral
-            Color(.systemGray6)
-                .ignoresSafeArea()
+            // Background
+            Color(.systemGray6).ignoresSafeArea()
             
             VStack {
                 Spacer(minLength: 40)
                 
-                // Card container
-                VStack(spacing: 0) {
-                    // Accent header
-                    Rectangle()
-                        .fill(LinearGradient(gradient: Gradient(colors: [Color(red: 0.9, green: 0.85, blue: 0.8), Color(red: 0.7, green: 0.6, blue: 0.5)]), startPoint: .leading, endPoint: .trailing))
-                        .frame(height: 6)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .padding(.horizontal, 24)
-                        .padding(.top, 2)
-                    
-                    VStack(spacing: 28) {
-                        // Header
-                        VStack(spacing: 8) {
-                            Text("Join SipLocal")
-                                .font(.title)
-                                .fontWeight(.bold)
-                                .fontDesign(.rounded)
-                                .foregroundColor(.primary)
-                            Text("Create your account to discover local flavors")
-                                .font(.subheadline)
-                                .fontDesign(.rounded)
-                                .foregroundColor(.secondary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding(.top, 18)
-                        
-                        // Form
-                        VStack(spacing: 20) {
-                            CustomTextField(iconName: "person.fill", placeholder: "Full Name", text: $fullName, autocapitalization: .words)
-                            CustomTextField(iconName: "at", placeholder: "Username", text: $username, status: usernameStatus)
-                            CustomTextField(iconName: "envelope.fill", placeholder: "Email", text: $email, keyboardType: .emailAddress)
-                            CustomSecureField(iconName: "lock.fill", placeholder: "Password", text: $password, isVisible: $isPasswordVisible)
-                            CustomSecureField(iconName: "lock.fill", placeholder: "Confirm Password", text: $confirmPassword, isVisible: $isConfirmPasswordVisible)
-                        }
-                        
-                        // Sign Up Button
-                        Button(action: {
-                            signUp()
-                        }) {
-                            HStack {
-                                if isLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Text("Sign Up")
-                                        .font(.headline)
-                                        .fontWeight(.semibold)
-                                        .fontDesign(.rounded)
-                                }
-                            }
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color(red: 0.396, green: 0.263, blue: 0.129)) // Coffee brown
-                            .cornerRadius(25)
-                            .shadow(color: Color(red: 0.396, green: 0.263, blue: 0.129).opacity(0.4), radius: 10, x: 0, y: 5)
-                        }
-                        .disabled(isLoading || !isFormValid)
-                        .opacity(isFormValid ? 1.0 : 0.6)
-                        
-                        // Back to Login
-                        NavigationLink(destination: LoginView()) {
-                            Text("Already have an account? Login")
-                                .font(.subheadline)
-                                .fontDesign(.rounded)
-                                .foregroundColor(.blue)
-                                .underline()
-                        }
-                        .padding(.bottom, 8)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
-                }
-                .background(Color.white)
-                .cornerRadius(20)
-                .shadow(color: Color(.black).opacity(0.08), radius: 24, x: 0, y: 8)
-                .padding(.horizontal, 16)
+                signupCard
                 
                 Spacer()
             }
         }
-        .navigationTitle("Sign Up")
-        .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: username, perform: { value in
-            usernameStatus = .checking
-            
-            // Debounce logic
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                guard value == username else { return } // Check if text has changed
-                
-                authManager.checkUsernameAvailability(username: value) { isAvailable in
-                    if isAvailable {
-                        usernameStatus = .available
-                    } else {
-                        usernameStatus = .unavailable
+        .onChange(of: username, perform: handleUsernameChange)
+        .alert(isPresented: $showAlert) {
+            Alert(
+                title: Text(signupSuccess ? "Success" : "Error"), 
+                message: Text(alertMessage), 
+                dismissButton: .default(Text("OK")) {
+                    if signupSuccess {
+                        dismiss()
                     }
                 }
-            }
-        })
-        .alert(isPresented: $showAlert) {
-            Alert(title: Text(signupSuccess ? "Success" : "Error"), message: Text(alertMessage), dismissButton: .default(Text("OK")) {
-                if signupSuccess {
-                    dismiss()
-                }
-            })
+            )
         }
     }
+    
+    // MARK: - View Components
+    
+    private var signupCard: some View {
+        VStack(spacing: 0) {
+            accentHeader
+            
+            VStack(spacing: Design.sectionSpacing) {
+                headerSection
+                formFields
+                signupButton
+                loginLink
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 24)
+        }
+        .background(Color.white)
+        .cornerRadius(Design.cardCornerRadius)
+        .shadow(color: Color(.black).opacity(0.08), radius: Design.shadowRadius, x: 0, y: Design.shadowY)
+        .padding(.horizontal, 16)
+    }
+    
+    private var accentHeader: some View {
+        Rectangle()
+            .fill(Design.accentGradient)
+            .frame(height: Design.accentHeight)
+            .clipShape(RoundedRectangle(cornerRadius: Design.fieldCornerRadius, style: .continuous))
+            .padding(.horizontal, 24)
+            .padding(.top, 2)
+    }
+    
+    private var headerSection: some View {
+        VStack(spacing: Design.headerSpacing) {
+            Text("Join SipLocal")
+                .font(.title)
+                .fontWeight(.bold)
+                .fontDesign(.rounded)
+                .foregroundColor(.primary)
+            
+            Text("Create your account to discover local flavors")
+                .font(.subheadline)
+                .fontDesign(.rounded)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 18)
+    }
+    
+    private var formFields: some View {
+        VStack(spacing: Design.formSpacing) {
+            CustomTextField(
+                iconName: "person.fill", 
+                placeholder: "Full Name", 
+                text: $fullName, 
+                autocapitalization: .words
+            )
+            
+            CustomTextField(
+                iconName: "at", 
+                placeholder: "Username", 
+                text: $username, 
+                status: usernameStatus
+            )
+            
+            CustomTextField(
+                iconName: "envelope.fill", 
+                placeholder: "Email", 
+                text: $email, 
+                keyboardType: .emailAddress
+            )
+            
+            CustomSecureField(
+                iconName: "lock.fill", 
+                placeholder: "Password", 
+                text: $password, 
+                isVisible: $isPasswordVisible
+            )
+            
+            CustomSecureField(
+                iconName: "lock.fill", 
+                placeholder: "Confirm Password", 
+                text: $confirmPassword, 
+                isVisible: $isConfirmPasswordVisible
+            )
+        }
+    }
+    
+    private var signupButton: some View {
+        Button(action: signUp) {
+            HStack {
+                if isLoading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                } else {
+                    Text("Sign Up")
+                        .font(.headline)
+                        .fontWeight(.semibold)
+                        .fontDesign(.rounded)
+                }
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: Design.buttonHeight)
+            .background(Design.coffeeBrown)
+            .cornerRadius(Design.buttonCornerRadius)
+            .shadow(color: Design.coffeeBrown.opacity(0.4), radius: 10, x: 0, y: 5)
+        }
+        .disabled(isLoading || !isFormValid)
+        .opacity(isFormValid ? 1.0 : 0.6)
+    }
+    
+    private var loginLink: some View {
+        NavigationLink(destination: LoginView()) {
+            Text("Already have an account? Login")
+                .font(.subheadline)
+                .fontDesign(.rounded)
+                .foregroundColor(.blue)
+                .underline()
+        }
+        .padding(.bottom, 8)
+    }
+    
+    // MARK: - Computed Properties
     
     private var isFormValid: Bool {
         !fullName.isEmpty &&
@@ -150,7 +218,25 @@ struct SignupView: View {
         !confirmPassword.isEmpty &&
         password == confirmPassword &&
         password.count >= 6 &&
-        email.contains("@")
+        email.contains("@") &&
+        email.contains(".")
+    }
+    
+    // MARK: - Actions
+    
+    private func handleUsernameChange(_ value: String) {
+        usernameStatus = .checking
+        
+        // Debounce logic to avoid excessive API calls
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            guard value == username else { return } // Check if text has changed
+            
+            authManager.checkUsernameAvailability(username: value) { isAvailable in
+                DispatchQueue.main.async {
+                    usernameStatus = isAvailable ? .available : .unavailable
+                }
+            }
+        }
     }
     
     private func signUp() {
@@ -160,8 +246,8 @@ struct SignupView: View {
             return
         }
         
-        guard !fullName.isEmpty, !username.isEmpty, !email.isEmpty, !password.isEmpty else {
-            alertMessage = "Please fill in all fields"
+        guard isFormValid else {
+            alertMessage = "Please ensure all fields are filled correctly and passwords match."
             showAlert = true
             return
         }
@@ -192,10 +278,6 @@ struct SignupView: View {
 }
 
 // MARK: - Reusable Components
-
-enum UsernameStatus {
-    case none, checking, available, unavailable
-}
 
 struct CustomTextField: View {
     var iconName: String
@@ -284,6 +366,11 @@ struct CustomSecureField: View {
     }
 }
 
+// MARK: - Previews
+
 #Preview {
-    SignupView()
+    NavigationStack {
+        SignupView()
+            .environmentObject(AuthenticationManager())
+    }
 } 
