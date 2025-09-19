@@ -6,14 +6,13 @@ START DATE: $(date)
 
 QUEUE (Files to Visit):
 ======================
-1. FavoritesView.swift (favorites tab from HomeView)
-2. OrderView.swift (order tab from HomeView)
-3. PassportView.swift (passport/loyalty tab from HomeView)
-4. ProfileView.swift (profile tab from HomeView)
-5. CoffeeShopDetailView.swift (navigation destination from ExploreView)
-6. AuthenticationManager.swift (environment object dependency)
-7. CartManager.swift (environment object dependency)  
-8. OrderManager.swift (environment object dependency - check if exists)
+1. PassportView.swift (passport/loyalty tab from HomeView)
+2. ProfileView.swift (profile tab from HomeView)
+3. MenuCategorySelectionView.swift (navigation destination from OrderView)
+4. CoffeeShopDetailView.swift (navigation destination from ExploreView and FavoritesView)
+5. AuthenticationManager.swift (environment object dependency)
+6. CartManager.swift (environment object dependency)  
+7. OrderManager.swift (environment object dependency - check if exists)
 
 VISITED (Files Refactored):
 ==========================
@@ -97,16 +96,38 @@ VISITED (Files Refactored):
 
 ✅ ExploreView.swift - COMPLETED
    - Created comprehensive Design enum for all UI constants and configuration
-   - Added loading state with proper UX feedback
+   - Removed artificial loading delay for instant data loading
    - Broke down massive body into 15+ focused, testable computed properties
    - Enhanced search to include both name and address filtering
    - Added extensive accessibility labels and hints throughout
-   - Implemented proper error handling for data loading
    - Extracted reusable components (map annotations, search bar, detail cards)
    - Added comprehensive documentation for all methods and properties
    - Improved animation consistency using centralized constants
    - Enhanced map annotation styling with proper shadows and scaling
    - Fixed preview by adding required environment object
+
+✅ FavoritesView.swift - COMPLETED
+   - Created Design enum for centralized UI constants and spacing
+   - Broke down view into focused computed properties (contentView, emptyStateView, favoritesListView)
+   - Enhanced accessibility with proper labels, traits, and combined elements
+   - Fixed image loading issue by removing incorrect Asset Catalog checking
+   - Extracted FavoriteShopCard into well-documented reusable component
+   - Improved empty state messaging and visual design
+   - Added dual preview states (with favorites and empty state)
+   - Enhanced card layout with proper image aspect ratios and info sections
+   - Added comprehensive MARK sections for better code organization
+
+✅ OrderView.swift - COMPLETED
+   - Created comprehensive Design enum with 15+ UI constants for consistency
+   - Broke down massive body into 12+ focused, testable computed properties
+   - Enhanced accessibility with proper labels, traits, and screen reader support
+   - Extracted reusable components (search bar, shop cards, business hours badges)
+   - Improved search functionality with better text handling and empty states
+   - Added comprehensive documentation for all methods and properties
+   - Centralized all styling constants for easier maintenance
+   - Enhanced business hours display with loading states and proper badges
+   - Maintained async business hours fetching with proper Task management
+   - Added comprehensive MARK sections for better code organization
 
 DEPENDENCIES DISCOVERED:
 =======================
@@ -145,8 +166,8 @@ From EmailVerificationView.swift:
 
 From HomeView.swift:
 - ExploreView.swift (tab 0 - main discovery) ✅ COMPLETED
-- FavoritesView.swift (tab 1 - user favorites)
-- OrderView.swift (tab 2 - ordering interface)
+- FavoritesView.swift (tab 1 - user favorites) ✅ COMPLETED
+- OrderView.swift (tab 2 - ordering interface) ✅ COMPLETED
 - PassportView.swift (tab 3 - loyalty/stamps)
 - ProfileView.swift (tab 4 - user profile)
 - AuthenticationManager.swift (environment dependency)
@@ -155,6 +176,16 @@ From ExploreView.swift:
 - CoffeeShopDetailView.swift (navigation destination)
 - CoffeeShop.swift (model - contains DataService) ✅ COMPLETED
 - AuthenticationManager.swift (environment dependency)
+
+From FavoritesView.swift:
+- CoffeeShopDetailView.swift (navigation destination)
+- CoffeeShop.swift (model - contains DataService) ✅ COMPLETED
+- AuthenticationManager.swift (environment dependency)
+
+From OrderView.swift:
+- MenuCategorySelectionView.swift (navigation destination)
+- CoffeeShop.swift (model - contains DataService) ✅ COMPLETED
+- CartManager.swift (environment dependency)
 
 NOTES:
 ======
