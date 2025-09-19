@@ -7,6 +7,11 @@
 
 import SwiftUI
 
+/// Root navigation view that determines which flow to show based on authentication state
+/// Navigation paths:
+/// - Unauthenticated -> ContentView (login/signup)
+/// - Authenticated but unverified -> EmailVerificationView
+/// - Authenticated and verified -> HomeView (main app)
 struct MainView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     
@@ -14,15 +19,15 @@ struct MainView: View {
         Group {
             if authManager.isAuthenticated {
                 if authManager.isEmailVerified {
+                    // Main app experience for verified users
                     HomeView()
-                        .environmentObject(authManager)
                 } else {
+                    // Email verification flow for unverified users
                     EmailVerificationView()
-                        .environmentObject(authManager)
                 }
             } else {
+                // Authentication flow for unauthenticated users
                 ContentView()
-                    .environmentObject(authManager)
             }
         }
         .onAppear {
@@ -31,8 +36,11 @@ struct MainView: View {
     }
 }
 
+// MARK: - Previews
+
 struct MainView_Previews: PreviewProvider {
     static var previews: some View {
         MainView()
+            .environmentObject(AuthenticationManager())
     }
 } 

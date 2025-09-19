@@ -6,10 +6,12 @@ START DATE: $(date)
 
 QUEUE (Files to Visit):
 ======================
-1. MainView.swift (next in execution flow)
-2. AuthenticationManager.swift (environment object dependency)
-3. CartManager.swift (environment object dependency)  
-4. OrderManager.swift (environment object dependency - check if exists)
+1. ContentView.swift (unauthenticated path from MainView)
+2. EmailVerificationView.swift (authenticated unverified path from MainView)
+3. HomeView.swift (authenticated verified path from MainView)
+4. AuthenticationManager.swift (environment object dependency)
+5. CartManager.swift (environment object dependency)  
+6. OrderManager.swift (environment object dependency - check if exists)
 
 VISITED (Files Refactored):
 ==========================
@@ -23,13 +25,26 @@ VISITED (Files Refactored):
    - Added configuration validation with proper error messages
    - Added debug configuration printing
 
+✅ MainView.swift - COMPLETED (Simple Approach)
+   - Added comprehensive documentation explaining navigation paths
+   - Removed redundant environment object passing (already injected at app level)
+   - Fixed preview by adding required AuthenticationManager dependency
+   - Added clear comments for each navigation branch
+   - Kept the core logic simple and readable
+
 DEPENDENCIES DISCOVERED:
 =======================
 From SipLocalApp.swift:
-- MainView.swift (direct dependency in body)
+- MainView.swift (direct dependency in body) ✅ COMPLETED
 - AuthenticationManager.swift (@StateObject)
 - CartManager.swift (@StateObject)
 - OrderManager.swift (@StateObject - need to verify location)
+
+From MainView.swift:
+- ContentView.swift (unauthenticated flow)
+- EmailVerificationView.swift (authenticated unverified flow)
+- HomeView.swift (authenticated verified flow)
+- AuthenticationManager.swift (environment dependency)
 
 NOTES:
 ======
