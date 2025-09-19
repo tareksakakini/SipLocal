@@ -173,10 +173,10 @@ class AuthenticationManager: ObservableObject {
     
     // MARK: - Get User Data
     func getUserData(userId: String, completion: @escaping (UserData?, String?) -> Void) {
-        print("AuthManager: Getting user data for ID: \(userId)")
+        print("AuthManager: Getting user data")
         firestore.collection("users").document(userId).getDocument { document, error in
             if let error = error {
-                print("AuthManager: Error getting user document: \(error.localizedDescription)")
+                print("AuthManager: Get user failed ❌")
                 completion(nil, error.localizedDescription)
                 return
             }
@@ -187,7 +187,7 @@ class AuthenticationManager: ObservableObject {
                   let fullName = data["fullName"] as? String,
                   let username = data["username"] as? String,
                   let email = data["email"] as? String else {
-                print("AuthManager: User document not found or missing required fields")
+                print("AuthManager: User data missing ❌")
                 completion(nil, "User data not found")
                 return
             }
@@ -202,7 +202,7 @@ class AuthenticationManager: ObservableObject {
                 profileImageUrl: profileImageUrl
             )
             
-            print("AuthManager: User data successfully created")
+            print("AuthManager: User data loaded ✅")
             completion(userData, nil)
         }
     }
@@ -421,41 +421,32 @@ class AuthenticationManager: ObservableObject {
     // MARK: - Profile Image Management
     
     func uploadProfileImage(_ image: UIImage) async -> (success: Bool, errorMessage: String?) {
-        print("AuthManager: Starting profile image upload...")
+        print("AuthManager: Uploading image...")
         guard let userId = currentUser?.uid else {
             print("AuthManager: No user signed in")
             return (false, "No user is currently signed in")
         }
         
-        print("AuthManager: User ID: \(userId)")
         
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            print("AuthManager: Failed to convert image to JPEG data")
+            print("AuthManager: Image processing failed")
             return (false, "Failed to process image")
         }
         
-        print("AuthManager: Image data size: \(imageData.count) bytes")
-        
         let storageRef = storage.reference().child("profile_pictures/\(userId).jpg")
-        print("AuthManager: Storage path: profile_pictures/\(userId).jpg")
         
         do {
-            print("AuthManager: Uploading to Firebase Storage...")
             let _ = try await storageRef.putDataAsync(imageData)
-            print("AuthManager: Upload to storage successful")
-            
             let downloadURL = try await storageRef.downloadURL()
-            print("AuthManager: Download URL: \(downloadURL.absoluteString)")
             
             // Update user document with profile image URL
             let userDocument = firestore.collection("users").document(userId)
-            print("AuthManager: Updating Firestore document...")
             try await userDocument.updateData(["profileImageUrl": downloadURL.absoluteString])
-            print("AuthManager: Firestore update successful")
             
+            print("AuthManager: Image upload ✅")
             return (true, nil)
         } catch {
-            print("AuthManager: Upload failed with error: \(error.localizedDescription)")
+            print("AuthManager: Image upload ❌")
             return (false, error.localizedDescription)
         }
     }
@@ -503,9 +494,9 @@ class AuthenticationManager: ObservableObject {
         
         deviceManager.registerDeviceForUser(userId: userId) { success, error in
             if success {
-                print("Device registered successfully for user: \(userId)")
+                print("Device registered ✅")
             } else {
-                print("Failed to register device: \(error ?? "Unknown error")")
+                print("Device registration failed ❌")
             }
         }
     }
@@ -516,7 +507,7 @@ class AuthenticationManager: ObservableObject {
         
         deviceManager.updateDeviceActivity(userId: userId) { success, error in
             if !success {
-                print("Failed to update device activity: \(error ?? "Unknown error")")
+                print("Device activity update failed ❌")
             }
         }
     }

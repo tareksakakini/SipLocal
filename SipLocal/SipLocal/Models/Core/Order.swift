@@ -106,7 +106,7 @@ class OrderManager: ObservableObject {
             return
         }
         
-        print("OrderManager: Setting up real-time listener for user ID: \(userId)")
+        print("OrderManager: Setting up listener")
         
         // Remove any existing listener
         removeListener()
@@ -135,66 +135,40 @@ class OrderManager: ObservableObject {
                         return
                     }
                     
-                    print("OrderManager: 🔄 REAL-TIME UPDATE TRIGGERED - \(snapshot.documents.count) documents")
-                    print("OrderManager: Snapshot metadata - hasPendingWrites: \(snapshot.metadata.hasPendingWrites), fromCache: \(snapshot.metadata.isFromCache)")
-                    
                     // Only process if this is not from cache or if it's the initial load
                     if snapshot.metadata.isFromCache && self.orders.count > 0 {
-                        print("OrderManager: Skipping cache-only update")
                         return
                     }
+                    
+                    print("OrderManager: Processing \(snapshot.documents.count) orders")
                     
                     var fetchedOrders: [Order] = []
                     
                     for document in snapshot.documents {
-                        print("OrderManager: Processing document: \(document.documentID)")
-                        
                         if let order = try? document.data(as: FirestoreOrder.self) {
-                            print("OrderManager: Successfully decoded FirestoreOrder: \(order.transactionId) with status: \(order.status ?? "nil")")
                             // Convert FirestoreOrder to Order
                             if let convertedOrder = order.toOrder() {
                                 fetchedOrders.append(convertedOrder)
-                                print("OrderManager: Successfully converted to Order: \(convertedOrder.id) with status: \(convertedOrder.status)")
-                            } else {
-                                print("OrderManager: Failed to convert FirestoreOrder to Order")
                             }
                         } else {
-                            print("OrderManager: Failed to decode document as FirestoreOrder")
-                            print("OrderManager: Document data: \(document.data())")
-                            
-                            // Try to decode with more detailed error
-                            do {
-                                let _ = try document.data(as: FirestoreOrder.self)
-                            } catch {
-                                print("OrderManager: Decoding error details: \(error)")
-                            }
+                            print("OrderManager: Failed to decode order \(document.documentID)")
                         }
                     }
                     
                     // Sort orders by creation date (newest first)
                     let oldOrders = self.orders
                     self.orders = fetchedOrders.sorted { $0.date > $1.date }
-                    print("OrderManager: Real-time update - \(fetchedOrders.count) orders processed")
                     
-                    // Check if any order statuses changed by comparing by transaction ID
-                    for newOrder in self.orders {
-                        if let oldOrder = oldOrders.first(where: { $0.transactionId == newOrder.transactionId }) {
-                            if oldOrder.status != newOrder.status {
-                                print("OrderManager: 🎉 STATUS CHANGE DETECTED! Order \(newOrder.id) changed from \(oldOrder.status) to \(newOrder.status)")
-                                
-                                // Log transition to help with debugging
-                                let activeStatuses: [OrderStatus] = [.authorized, .submitted, .inProgress, .ready]
-                                let pastStatuses: [OrderStatus] = [.completed, .cancelled]
-                                
-                                if activeStatuses.contains(oldOrder.status) && pastStatuses.contains(newOrder.status) {
-                                    print("OrderManager: ✅ Order moved from ACTIVE to PAST status")
-                                } else if pastStatuses.contains(oldOrder.status) && activeStatuses.contains(newOrder.status) {
-                                    print("OrderManager: ⚠️ Order moved from PAST to ACTIVE status (unusual)")
-                                }
+                    // Check for status changes (only log significant ones)
+                    let statusChanges = self.orders.compactMap { newOrder in
+                        oldOrders.first(where: { $0.transactionId == newOrder.transactionId })
+                            .flatMap { oldOrder in
+                                oldOrder.status != newOrder.status ? (oldOrder.status, newOrder.status) : nil
                             }
-                        } else {
-                            print("OrderManager: ➕ NEW ORDER DETECTED: \(newOrder.id) with status \(newOrder.status)")
-                        }
+                    }
+                    
+                    if !statusChanges.isEmpty {
+                        print("OrderManager: \(statusChanges.count) status changes detected")
                     }
                     
                     self.isLoading = false
@@ -202,13 +176,13 @@ class OrderManager: ObservableObject {
                 }
             }
         
-        print("OrderManager: Real-time listener setup complete")
+        print("OrderManager: Listener active")
     }
     
     private func removeListener() {
         listenerRegistration?.remove()
         listenerRegistration = nil
-        print("OrderManager: Removed real-time listener")
+        print("OrderManager: Listener removed")
     }
     
     // MARK: - Firestore Operations
@@ -245,7 +219,7 @@ class OrderManager: ObservableObject {
                 ])
             
             // No need to manually refresh - the real-time listener will handle updates automatically
-            print("OrderManager: Updated order status to \(newStatus.rawValue) for order \(orderId)")
+            print("OrderManager: Updated order \(orderId) to \(newStatus.rawValue)")
             
         } catch {
             print("OrderManager: Error updating order status: \(error)")
@@ -384,7 +358,7 @@ class OrderManager: ObservableObject {
             
             do {
                 let result = try await functions.httpsCallable("cancelApplePayPayment").call(data)
-                print("OrderManager: Successfully cancelled Apple Pay order: \(paymentId)")
+                print("OrderManager: Cancelled Apple Pay order")
             } catch {
                 print("OrderManager: Error cancelling Apple Pay order: \(error)")
                 throw OrderError.cancellationFailed(error.localizedDescription)
@@ -395,7 +369,7 @@ class OrderManager: ObservableObject {
             
             do {
                 let result = try await functions.httpsCallable("cancelOrder").call(data)
-                print("OrderManager: Successfully cancelled order: \(paymentId)")
+                print("OrderManager: Cancelled order")
             } catch {
                 print("OrderManager: Error cancelling order: \(error)")
                 throw OrderError.cancellationFailed(error.localizedDescription)

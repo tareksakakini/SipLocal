@@ -1,11 +1,66 @@
 import SwiftUI
 
+// MARK: - Design System
+
+/// Centralized design constants for CoffeeShopDetailView
+private enum Design {
+    // Layout
+    static let imageHeightRatio: CGFloat = 0.4
+    static let contentPadding: CGFloat = 16
+    static let sectionSpacing: CGFloat = 16
+    static let quickActionSpacing: CGFloat = 12
+    static let quickActionTopPadding: CGFloat = 12
+    static let detailRowSpacing: CGFloat = 10
+    static let overlayPadding: CGFloat = 10
+    
+    // Buttons
+    static let overlayButtonSize: CGFloat = 44
+    static let quickActionVerticalPadding: CGFloat = 10
+    static let quickActionCornerRadius: CGFloat = 12
+    static let quickActionBorderWidth: CGFloat = 1
+    
+    // Typography
+    static let titleFontSize: CGFloat = 28
+    static let titleMinScale: CGFloat = 0.8
+    static let titleMaxLines: Int = 2
+    static let bodyFontSize: CGFloat = 16
+    static let detailFontSize: CGFloat = 14
+    static let captionFontSize: CGFloat = 12
+    
+    // Colors
+    static let overlayBackground = Color.white.opacity(0.7)
+    static let quickActionBackground = Color.white
+    static let quickActionBorder = Color.black
+    static let primaryText = Color.primary
+    static let secondaryText = Color.secondary
+    
+    // Shadows
+    static let overlayShadowRadius: CGFloat = 5
+    static let quickActionShadowRadius: CGFloat = 2
+    
+    // Animation
+    static let favoriteAnimationDuration: Double = 0.2
+    
+    // Progress
+    static let progressScale: CGFloat = 0.8
+}
+
+// MARK: - Coffee Shop Detail View
+
 struct CoffeeShopDetailView: View {
     let shop: CoffeeShop
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var authManager: AuthenticationManager
+    
+    // MARK: - State Management
+    
+    /// Favorite state
     @State private var isFavorite: Bool
+    
+    /// Navigation states
     @State private var showMenu = false
+    
+    /// Business hours states
     @State private var businessHoursInfo: BusinessHoursInfo?
     @State private var isLoadingBusinessHours = false
     @State private var businessHoursError: String?
@@ -19,111 +74,8 @@ struct CoffeeShopDetailView: View {
         GeometryReader { geometry in
             ScrollView {
                 ZStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Image(shop.imageName)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: geometry.size.width, height: geometry.size.height * 0.4)
-                            .clipped()
-                        
-                        VStack(alignment: .leading, spacing: 16) {
-                            Text(shop.name)
-                                .font(.largeTitle)
-                                .fontWeight(.bold)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.8)
-                            
-                            Text(shop.description)
-                                .font(.body)
-                                .fixedSize(horizontal: false, vertical: true)
-                            
-                            // Quick action buttons
-                            HStack(spacing: 12) {
-                                QuickActionButton(systemImageName: "menucard", title: "Menu") {
-                                    showMenu = true
-                                }
-                                QuickActionButton(systemImageName: "mappin.and.ellipse", title: "Directions") {
-                                    openMapsForDirections(to: shop.address)
-                                }
-                                QuickActionButton(systemImageName: "globe", title: "Website") {
-                                    openWebsite(shop.website)
-                                }
-                                QuickActionButton(systemImageName: "phone.fill", title: "Call") {
-                                    makePhoneCall(to: shop.phone)
-                                }
-                            }
-                            .padding(.top, 12)
-                            
-                            Divider()
-                            
-                            // Details (non-interactive rows)
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack(alignment: .top, spacing: 8) {
-                                    Image(systemName: "mappin.and.ellipse")
-                                    Text(shop.address)
-                                        .font(.subheadline)
-                                        .foregroundColor(.primary)
-                                }
-                                HStack(spacing: 8) {
-                                    Image(systemName: "phone.fill")
-                                    Text(shop.phone)
-                                        .font(.subheadline)
-                                        .foregroundColor(.primary)
-                                }
-                                
-                            }
-                            
-                            
-                            // Business Hours Section
-                            if isLoadingBusinessHours {
-                                HStack {
-                                    ProgressView()
-                                        .scaleEffect(0.8)
-                                    Text("Loading business hours...")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                            } else if let businessHoursInfo = businessHoursInfo {
-                                BusinessHoursView(businessHoursInfo: businessHoursInfo)
-                            } else if businessHoursError != nil {
-                                BusinessHoursUnavailableView()
-                            }
-                            
-                            
-                        }
-                        .padding()
-                        .frame(width: geometry.size.width)
-                    }
-                    
-                    HStack {
-                        Button(action: {
-                            presentationMode.wrappedValue.dismiss()
-                        }) {
-                            Image(systemName: "xmark")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(10)
-                                .background(Color.white.opacity(0.7))
-                                .clipShape(Circle())
-                                .shadow(radius: 5)
-                        }
-                        
-                        Spacer()
-                        
-                        Button(action: {
-                            toggleFavorite()
-                        }) {
-                            Image(systemName: isFavorite ? "heart.fill" : "heart")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                                .padding(10)
-                                .background(Color.white.opacity(0.7))
-                                .clipShape(Circle())
-                                .shadow(radius: 5)
-                        }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, geometry.safeAreaInsets.top)
+                    mainContent(geometry: geometry)
+                    overlayButtons(geometry: geometry)
                 }
             }
             .edgesIgnoringSafeArea(.top)
@@ -134,6 +86,146 @@ struct CoffeeShopDetailView: View {
         }
         .onAppear {
             fetchBusinessHours()
+        }
+    }
+    
+    // MARK: - Main Components
+    
+    /// Main scrollable content
+    private func mainContent(geometry: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            shopImage(geometry: geometry)
+            shopDetails(geometry: geometry)
+        }
+    }
+    
+    /// Shop hero image
+    private func shopImage(geometry: GeometryProxy) -> some View {
+        Image(shop.imageName)
+            .resizable()
+            .aspectRatio(contentMode: .fill)
+            .frame(width: geometry.size.width, height: geometry.size.height * Design.imageHeightRatio)
+            .clipped()
+    }
+    
+    /// Shop details section
+    private func shopDetails(geometry: GeometryProxy) -> some View {
+        VStack(alignment: .leading, spacing: Design.sectionSpacing) {
+            shopHeader
+            quickActionsSection
+            Divider()
+            contactDetailsSection
+            businessHoursSection
+        }
+        .padding(Design.contentPadding)
+        .frame(width: geometry.size.width)
+    }
+    
+    /// Shop name and description header
+    private var shopHeader: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(shop.name)
+                .font(.system(size: Design.titleFontSize, weight: .bold))
+                .lineLimit(Design.titleMaxLines)
+                .minimumScaleFactor(Design.titleMinScale)
+            
+            Text(shop.description)
+                .font(.system(size: Design.bodyFontSize))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    
+    /// Quick action buttons row
+    private var quickActionsSection: some View {
+        HStack(spacing: Design.quickActionSpacing) {
+            QuickActionButton(systemImageName: "menucard", title: "Menu") {
+                showMenu = true
+            }
+            QuickActionButton(systemImageName: "mappin.and.ellipse", title: "Directions") {
+                openMapsForDirections(to: shop.address)
+            }
+            QuickActionButton(systemImageName: "globe", title: "Website") {
+                openWebsite(shop.website)
+            }
+            QuickActionButton(systemImageName: "phone.fill", title: "Call") {
+                makePhoneCall(to: shop.phone)
+            }
+        }
+        .padding(.top, Design.quickActionTopPadding)
+    }
+    
+    /// Contact details section
+    private var contactDetailsSection: some View {
+        VStack(alignment: .leading, spacing: Design.detailRowSpacing) {
+            ContactDetailRow(icon: "mappin.and.ellipse", text: shop.address)
+            ContactDetailRow(icon: "phone.fill", text: shop.phone)
+        }
+    }
+    
+    /// Business hours section
+    private var businessHoursSection: some View {
+        Group {
+            if isLoadingBusinessHours {
+                businessHoursLoadingView
+            } else if let businessHoursInfo = businessHoursInfo {
+                BusinessHoursView(businessHoursInfo: businessHoursInfo)
+            } else if businessHoursError != nil {
+                BusinessHoursUnavailableView()
+            }
+        }
+    }
+    
+    /// Loading state for business hours
+    private var businessHoursLoadingView: some View {
+        HStack {
+            ProgressView()
+                .scaleEffect(Design.progressScale)
+            Text("Loading business hours...")
+                .font(.system(size: Design.detailFontSize))
+                .foregroundColor(Design.secondaryText)
+        }
+    }
+    
+    /// Overlay buttons (close and favorite)
+    private func overlayButtons(geometry: GeometryProxy) -> some View {
+        HStack {
+            closeButton
+            Spacer()
+            favoriteButton
+        }
+        .padding(.horizontal, Design.contentPadding)
+        .padding(.top, geometry.safeAreaInsets.top + Design.overlayPadding)
+    }
+    
+    /// Close button
+    private var closeButton: some View {
+        Button(action: {
+            presentationMode.wrappedValue.dismiss()
+        }) {
+            Image(systemName: "xmark")
+                .font(.headline)
+                .foregroundColor(Design.primaryText)
+                .frame(width: Design.overlayButtonSize, height: Design.overlayButtonSize)
+                .background(Design.overlayBackground)
+                .clipShape(Circle())
+                .shadow(radius: Design.overlayShadowRadius)
+        }
+    }
+    
+    /// Favorite toggle button
+    private var favoriteButton: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: Design.favoriteAnimationDuration)) {
+                toggleFavorite()
+            }
+        }) {
+            Image(systemName: isFavorite ? "heart.fill" : "heart")
+                .font(.headline)
+                .foregroundColor(isFavorite ? .red : Design.primaryText)
+                .frame(width: Design.overlayButtonSize, height: Design.overlayButtonSize)
+                .background(Design.overlayBackground)
+                .clipShape(Circle())
+                .shadow(radius: Design.overlayShadowRadius)
         }
     }
     
@@ -158,21 +250,14 @@ struct CoffeeShopDetailView: View {
     
     private func makePhoneCall(to phoneNumber: String) {
         let cleanedPhoneNumber = phoneNumber.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
-        print("📞 Attempting to call: \(cleanedPhoneNumber)")
         
         if let phoneURL = URL(string: "tel://\(cleanedPhoneNumber)") {
             if UIApplication.shared.canOpenURL(phoneURL) {
-                print("✅ Opening phone app for call")
+                print("CoffeeShopDetail: Phone call initiated")
                 UIApplication.shared.open(phoneURL)
             } else {
-                print("❌ Cannot open phone URL - likely running on simulator")
-                // Show alert for simulator testing
-                #if targetEnvironment(simulator)
-                print("🔍 Simulator detected - phone call would work on real device")
-                #endif
+                print("CoffeeShopDetail: Phone call unavailable")
             }
-        } else {
-            print("❌ Invalid phone URL created")
         }
     }
     
@@ -194,22 +279,20 @@ struct CoffeeShopDetailView: View {
         
         Task {
             do {
-                print("🔍 CoffeeShopDetailView: Fetching business hours for \(shop.name)")
                 let posService = POSServiceFactory.createService(for: shop)
                 let hoursInfo = try await posService.fetchBusinessHours(for: shop)
                 await MainActor.run {
                     if let hoursInfo = hoursInfo {
-                        print("✅ CoffeeShopDetailView: Successfully got business hours for \(shop.name)")
+                        print("CoffeeShopDetail: Business hours loaded ✅")
                         self.businessHoursInfo = hoursInfo
                     } else {
-                        print("⚠️ CoffeeShopDetailView: No business hours returned for \(shop.name)")
                         self.businessHoursError = "No business hours available"
                     }
                     self.isLoadingBusinessHours = false
                 }
             } catch {
                 await MainActor.run {
-                    print("❌ CoffeeShopDetailView: Error fetching business hours for \(shop.name): \(error)")
+                    print("CoffeeShopDetail: Business hours failed ❌")
                     self.businessHoursError = error.localizedDescription
                     self.isLoadingBusinessHours = false
                 }
@@ -218,7 +301,26 @@ struct CoffeeShopDetailView: View {
     }
 }
 
-// MARK: - QuickActionButton
+// MARK: - Supporting Components
+
+/// Contact detail row component
+private struct ContactDetailRow: View {
+    let icon: String
+    let text: String
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: Design.detailFontSize))
+                .foregroundColor(Design.primaryText)
+            Text(text)
+                .font(.system(size: Design.detailFontSize))
+                .foregroundColor(Design.primaryText)
+        }
+    }
+}
+
+/// Quick action button component
 private struct QuickActionButton: View {
     let systemImageName: String
     let title: String
@@ -230,17 +332,16 @@ private struct QuickActionButton: View {
                 Image(systemName: systemImageName)
                     .font(.headline)
                 Text(title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                    .font(.system(size: Design.captionFontSize, weight: .semibold))
             }
-            .foregroundColor(.black)
+            .foregroundColor(Design.quickActionBorder)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(Color.white)
-            .cornerRadius(12)
+            .padding(.vertical, Design.quickActionVerticalPadding)
+            .background(Design.quickActionBackground)
+            .cornerRadius(Design.quickActionCornerRadius)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.black, lineWidth: 1)
+                RoundedRectangle(cornerRadius: Design.quickActionCornerRadius)
+                    .stroke(Design.quickActionBorder, lineWidth: Design.quickActionBorderWidth)
             )
         }
         .buttonStyle(PlainButtonStyle())
