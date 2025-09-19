@@ -55,7 +55,8 @@ integration_logs/
 
 
 # Configuration files with sensitive API keys
-*.plist
+/Users/tareksakakini/Documents/AppDevelopment/SipLocalRoot/SipLocal/SipLocal/Resources/Configuration/Config.plist
+/Users/tareksakakini/Documents/AppDevelopment/SipLocalRoot/SipLocal/SipLocal/Resources/Configuration/GoogleService-Info.plist
 
 SipLocal/SipLocal/CoffeeShops.json
 

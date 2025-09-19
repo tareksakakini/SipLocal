@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>SquareApplicationID</key>
+	<string>sq0idp-e4abRkjlBijc_l97fVO62Q</string>
+	<key>StripePublishableKey</key>
+	<string>pk_live_51RtCBVRsMlbL5TPdurlxI1BMGWdtJ4NCkYHBUS9iHEh3cI0pwKyAdBSMnTlBHzopcF7lDGYAZUWqseG0TKEZ5M6t00lNb0vvdR</string>
+	<key>OneSignalAppID</key>
+	<string>f626f99f-94ea-4859-bac9-10911153f295</string>
+	<key>Environment</key>
+	<string>Production</string>
+	<key>CacheMemoryCapacityMB</key>
+	<integer>50</integer>
+	<key>CacheDiskCapacityMB</key>
+	<integer>200</integer>
+</dict>
+</plist>

@@ -6,12 +6,13 @@ START DATE: $(date)
 
 QUEUE (Files to Visit):
 ======================
-1. ContentView.swift (unauthenticated path from MainView)
-2. EmailVerificationView.swift (authenticated unverified path from MainView)
-3. HomeView.swift (authenticated verified path from MainView)
-4. AuthenticationManager.swift (environment object dependency)
-5. CartManager.swift (environment object dependency)  
-6. OrderManager.swift (environment object dependency - check if exists)
+1. LoginView.swift (login flow from ContentView)
+2. SignupView.swift (signup flow from ContentView)
+3. EmailVerificationView.swift (authenticated unverified path from MainView)
+4. HomeView.swift (authenticated verified path from MainView)
+5. AuthenticationManager.swift (environment object dependency)
+6. CartManager.swift (environment object dependency)  
+7. OrderManager.swift (environment object dependency - check if exists)
 
 VISITED (Files Refactored):
 ==========================
@@ -32,6 +33,16 @@ VISITED (Files Refactored):
    - Added clear comments for each navigation branch
    - Kept the core logic simple and readable
 
+✅ ContentView.swift - COMPLETED
+   - Extracted LoopingVideoPlayer component with cleaner implementation
+   - Created Design enum for centralized styling constants
+   - Broke down large view into smaller, focused computed properties
+   - Added proper video memory management with cleanup
+   - Implemented async video loading with error handling
+   - Created VideoError enum for structured error handling
+   - Removed redundant environment object passing
+   - Added comprehensive documentation and MARK sections
+
 DEPENDENCIES DISCOVERED:
 =======================
 From SipLocalApp.swift:
@@ -41,9 +52,14 @@ From SipLocalApp.swift:
 - OrderManager.swift (@StateObject - need to verify location)
 
 From MainView.swift:
-- ContentView.swift (unauthenticated flow)
+- ContentView.swift (unauthenticated flow) ✅ COMPLETED
 - EmailVerificationView.swift (authenticated unverified flow)
 - HomeView.swift (authenticated verified flow)
+- AuthenticationManager.swift (environment dependency)
+
+From ContentView.swift:
+- LoginView.swift (navigation destination)
+- SignupView.swift (navigation destination)
 - AuthenticationManager.swift (environment dependency)
 
 NOTES:
