@@ -831,7 +831,7 @@ struct MenuCategorySelectionView: View {
                     // In a real implementation, cartManager would have a currentShopId property
                     // For now, we'll assume any cart add failure is a generic failure
                     self.showError(error)
-                } else {
+                        } else {
                     self.showError(error)
                 }
             }

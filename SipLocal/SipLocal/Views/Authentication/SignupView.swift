@@ -7,32 +7,19 @@
 
 import SwiftUI
 
-// MARK: - Username Status
-
-enum UsernameStatus {
-    case none, checking, available, unavailable
-}
-
 // MARK: - Signup View
 
 /// User registration screen with comprehensive form validation
 /// Features username availability checking and real-time validation feedback
 struct SignupView: View {
-    @State private var fullName = ""
-    @State private var username = ""
-    @State private var email = ""
-    @State private var password = ""
-    @State private var confirmPassword = ""
     @State private var isPasswordVisible = false
     @State private var isConfirmPasswordVisible = false
-    @State private var usernameStatus: UsernameStatus = .none
-    @State private var isLoading = false
-    @State private var showAlert = false
-    @State private var alertMessage = ""
-    @State private var signupSuccess = false
     
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var authManager: AuthenticationManager
+    
+    // MARK: - ViewModel
+    @StateObject private var viewModel = SignupViewModel(authManager: AuthenticationManager())
     
     // MARK: - Design Constants
     
@@ -72,17 +59,22 @@ struct SignupView: View {
                 Spacer()
             }
         }
-        .onChange(of: username, perform: handleUsernameChange)
-        .alert(isPresented: $showAlert) {
+        .onChange(of: viewModel.username) { _, newValue in
+            viewModel.handleUsernameChange(newValue)
+        }
+        .alert(isPresented: $viewModel.showError) {
             Alert(
-                title: Text(signupSuccess ? "Success" : "Error"), 
-                message: Text(alertMessage), 
+                title: Text(viewModel.signupSuccess ? "Success" : "Error"), 
+                message: Text(viewModel.errorMessage), 
                 dismissButton: .default(Text("OK")) {
-                    if signupSuccess {
+                    if viewModel.signupSuccess {
                         dismiss()
                     }
                 }
             )
+        }
+        .onAppear {
+            viewModel.updateAuthManager(authManager)
         }
     }
     
@@ -138,44 +130,44 @@ struct SignupView: View {
             CustomTextField(
                 iconName: "person.fill", 
                 placeholder: "Full Name", 
-                text: $fullName, 
+                text: $viewModel.fullName, 
                 autocapitalization: .words
             )
             
             CustomTextField(
                 iconName: "at", 
                 placeholder: "Username", 
-                text: $username, 
-                status: usernameStatus
+                text: $viewModel.username, 
+                status: viewModel.usernameStatus
             )
             
             CustomTextField(
                 iconName: "envelope.fill", 
                 placeholder: "Email", 
-                text: $email, 
+                text: $viewModel.email, 
                 keyboardType: .emailAddress
             )
             
             CustomSecureField(
                 iconName: "lock.fill", 
                 placeholder: "Password", 
-                text: $password, 
+                text: $viewModel.password, 
                 isVisible: $isPasswordVisible
             )
             
             CustomSecureField(
                 iconName: "lock.fill", 
                 placeholder: "Confirm Password", 
-                text: $confirmPassword, 
+                text: $viewModel.confirmPassword, 
                 isVisible: $isConfirmPasswordVisible
             )
         }
     }
     
     private var signupButton: some View {
-        Button(action: signUp) {
+        Button(action: { viewModel.signUp() }) {
             HStack {
-                if isLoading {
+                if viewModel.isLoading {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.8)
@@ -193,8 +185,8 @@ struct SignupView: View {
             .cornerRadius(Design.buttonCornerRadius)
             .shadow(color: Design.coffeeBrown.opacity(0.4), radius: 10, x: 0, y: 5)
         }
-        .disabled(isLoading || !isFormValid)
-        .opacity(isFormValid ? 1.0 : 0.6)
+        .disabled(viewModel.isSignupButtonDisabled)
+        .opacity(viewModel.signupButtonOpacity)
     }
     
     private var loginLink: some View {
@@ -208,73 +200,6 @@ struct SignupView: View {
         .padding(.bottom, 8)
     }
     
-    // MARK: - Computed Properties
-    
-    private var isFormValid: Bool {
-        !fullName.isEmpty &&
-        !username.isEmpty &&
-        !email.isEmpty &&
-        !password.isEmpty &&
-        !confirmPassword.isEmpty &&
-        password == confirmPassword &&
-        password.count >= 6 &&
-        email.contains("@") &&
-        email.contains(".")
-    }
-    
-    // MARK: - Actions
-    
-    private func handleUsernameChange(_ value: String) {
-        usernameStatus = .checking
-        
-        // Debounce logic to avoid excessive API calls
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            guard value == username else { return } // Check if text has changed
-            
-            authManager.checkUsernameAvailability(username: value) { isAvailable in
-                DispatchQueue.main.async {
-                    usernameStatus = isAvailable ? .available : .unavailable
-                }
-            }
-        }
-    }
-    
-    private func signUp() {
-        guard usernameStatus == .available else {
-            alertMessage = "Username is already taken. Please choose another one."
-            showAlert = true
-            return
-        }
-        
-        guard isFormValid else {
-            alertMessage = "Please ensure all fields are filled correctly and passwords match."
-            showAlert = true
-            return
-        }
-        
-        isLoading = true
-        
-        let userData = UserData(
-            fullName: fullName,
-            username: username,
-            email: email
-        )
-        
-        authManager.signUp(email: email, password: password, userData: userData) { success, error in
-            DispatchQueue.main.async {
-                isLoading = false
-                
-                if success {
-                    signupSuccess = true
-                    alertMessage = "Account created successfully! Welcome to SipLocal!"
-                } else {
-                    alertMessage = error ?? "An error occurred during sign up. Please try again."
-                }
-                
-                showAlert = true
-            }
-        }
-    }
 }
 
 // MARK: - Reusable Components

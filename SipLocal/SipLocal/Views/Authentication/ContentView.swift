@@ -253,21 +253,6 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Video Error Handling
-
-private enum VideoError: LocalizedError {
-    case assetNotFound(String)
-    case cachingFailed(Error)
-    
-    var errorDescription: String? {
-        switch self {
-        case .assetNotFound(let name):
-            return "Video asset '\(name)' not found in bundle"
-        case .cachingFailed(let error):
-            return "Failed to cache video: \(error.localizedDescription)"
-        }
-    }
-}
 
 
 // MARK: - Previews

@@ -11,15 +11,12 @@ import SwiftUI
 
 /// User login screen with form validation and error handling
 struct LoginView: View {
-    @State private var email = ""
-    @State private var password = ""
     @State private var isPasswordVisible = false
-    @State private var isLoading = false
-    @State private var showAlert = false
-    @State private var alertMessage = ""
-    
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) private var dismiss
+    
+    // MARK: - ViewModel
+    @StateObject private var viewModel = LoginViewModel(authManager: AuthenticationManager())
     
     // MARK: - Design Constants
     
@@ -53,10 +50,13 @@ struct LoginView: View {
         }
         .navigationTitle("Login")
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Login Failed", isPresented: $showAlert) {
+        .alert("Login Failed", isPresented: $viewModel.showError) {
             Button("OK") {}
         } message: {
-            Text(alertMessage)
+            Text(viewModel.errorMessage)
+        }
+        .onAppear {
+            initializeViewModel()
         }
     }
     
@@ -95,23 +95,23 @@ struct LoginView: View {
             CustomTextField(
                 iconName: "envelope.fill",
                 placeholder: "Email",
-                text: $email,
+                text: $viewModel.email,
                 keyboardType: .emailAddress
             )
             
             CustomSecureField(
                 iconName: "lock.fill",
                 placeholder: "Password",
-                text: $password,
+                text: $viewModel.password,
                 isVisible: $isPasswordVisible
             )
         }
     }
     
     private var loginButton: some View {
-        Button(action: login) {
+        Button(action: { viewModel.signIn() }) {
             HStack {
-                if isLoading {
+                if viewModel.isLoading {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 } else {
@@ -128,8 +128,8 @@ struct LoginView: View {
             .cornerRadius(Design.buttonCornerRadius)
             .shadow(color: Design.coffeeBrown.opacity(0.4), radius: 10, x: 0, y: 5)
         }
-        .disabled(isLoading || !isFormValid)
-        .opacity(isFormValid ? 1.0 : 0.6)
+        .disabled(viewModel.isLoginButtonDisabled)
+        .opacity(viewModel.loginButtonOpacity)
     }
     
     private var forgotPasswordLink: some View {
@@ -143,33 +143,11 @@ struct LoginView: View {
         .padding(.bottom, Design.bottomPadding)
     }
     
-    // MARK: - Computed Properties
+    // MARK: - View Lifecycle
     
-    private var isFormValid: Bool {
-        !email.isEmpty && 
-        !password.isEmpty && 
-        email.contains("@") && 
-        password.count >= 6
-    }
-    
-    // MARK: - Actions
-    
-    private func login() {
-        guard isFormValid else { return }
-        
-        isLoading = true
-        authManager.signIn(email: email, password: password) { success, error in
-            DispatchQueue.main.async {
-                isLoading = false
-                if success {
-                    // Navigation handled by MainView listening to auth state changes
-                    dismiss()
-                } else {
-                    alertMessage = error ?? "An unknown error occurred. Please try again."
-                    showAlert = true
-                }
-            }
-        }
+    private func initializeViewModel() {
+        // Update the viewModel to use the environment's authManager
+        viewModel.updateAuthManager(authManager)
     }
 }
 
