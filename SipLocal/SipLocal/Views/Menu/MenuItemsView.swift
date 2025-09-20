@@ -9,6 +9,7 @@ struct OrderAgainItemsView: View {
     @State private var initialSelectedSizeId: String? = nil
     @State private var showingClosedShopAlert = false
     @State private var showingCart = false
+    @State private var showItemAddedPopup = false
 
     private struct RepeatKey: Hashable, Equatable {
         let menuItemId: String
@@ -71,7 +72,11 @@ struct OrderAgainItemsView: View {
                             let hasCustomizations = (liveItem.modifierLists != nil && !(liveItem.modifierLists?.isEmpty ?? true)) || (liveItem.variations != nil && liveItem.variations!.count > 1)
                             if !hasCustomizations {
                                 let catName = categoryName(for: liveItem.id)
-                                let _ = cartManager.addItem(shop: shop, menuItem: liveItem, category: catName)
+                                let success = cartManager.addItem(shop: shop, menuItem: liveItem, category: catName)
+                                if success {
+                                    // Show success popup
+                                    ItemAddedPopup.show(isVisible: $showItemAddedPopup)
+                                }
                             } else {
                                 customizingItem = liveItem
                                 initialSelectedSizeId = entry.key.selectedSizeId
@@ -158,7 +163,7 @@ struct OrderAgainItemsView: View {
                         return
                     }
                     let catName = categoryName(for: item.id)
-                    let _ = cartManager.addItem(
+                    let success = cartManager.addItem(
                         shop: shop,
                         menuItem: item,
                         category: catName,
@@ -167,6 +172,10 @@ struct OrderAgainItemsView: View {
                         selectedSizeId: selectedSizeIdOut,
                         selectedModifierIdsByList: selectedModsOut
                     )
+                    if success {
+                        // Show success popup
+                        ItemAddedPopup.show(isVisible: $showItemAddedPopup)
+                    }
                     customizingItem = nil
                 },
                 onCancel: { customizingItem = nil }
@@ -177,6 +186,9 @@ struct OrderAgainItemsView: View {
         } message: {
             Text("This coffee shop is currently closed. Please try again during business hours.")
         }
+        .overlay(
+            ItemAddedPopup(isVisible: $showItemAddedPopup)
+        )
     }
 
     private func categoryName(for itemId: String) -> String {

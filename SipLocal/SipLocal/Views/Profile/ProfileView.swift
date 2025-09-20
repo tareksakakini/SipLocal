@@ -1272,7 +1272,7 @@ extension ProfileView {
         let result = await operation()
         print("ProfileView: \(operationType) \(result.success ? "✅" : "❌")")
         
-                        DispatchQueue.main.async {
+            DispatchQueue.main.async {
             // Clear loading state
             self[keyPath: operationType.loadingStateKeyPath] = false
             
@@ -1294,7 +1294,7 @@ extension ProfileView {
                 }
                 
                 print("ProfileView: \(operationType) UI updated")
-            } else {
+                } else {
                 // Handle failure
                 let errorMessage = result.errorMessage ?? failureMessage
                 self.handleOperationFailure(
@@ -1345,7 +1345,7 @@ extension ProfileView {
         
         // Perform operation
         operation { success, error in
-            DispatchQueue.main.async {
+        DispatchQueue.main.async {
                 // Clear loading state
                 self[keyPath: operationType.loadingStateKeyPath] = false
                 
@@ -1373,7 +1373,7 @@ extension ProfileView {
         print("ProfileView: Fetching user data")
         
         authManager.getUserData(userId: userId) { userData, error in
-            DispatchQueue.main.async {
+        DispatchQueue.main.async {
                 self.isLoadingUserData = false
                 if let userData = userData {
                     print("ProfileView: User data loaded ✅")
@@ -1431,9 +1431,9 @@ struct ProfileView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
             // Standard Profile View
-            ProfileView()
-                .environmentObject(AuthenticationManager())
-                .environmentObject(OrderManager())
+        ProfileView()
+            .environmentObject(AuthenticationManager())
+            .environmentObject(OrderManager())
                 .previewDisplayName("Profile View")
             
             // Loading State Preview
