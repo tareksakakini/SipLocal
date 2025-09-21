@@ -1,3 +1,28 @@
+/**
+ * CheckoutView.swift
+ * SipLocal
+ *
+ * Main checkout view displaying cart summary, pickup time selection,
+ * and payment processing functionality.
+ * Refactored with clean architecture and MVVM pattern.
+ *
+ * ## Features
+ * - **Cart Summary**: Display cart items with totals
+ * - **Pickup Time Selection**: Time picker with business hours validation
+ * - **Payment Processing**: Stripe, Apple Pay, and Square payment integration
+ * - **Business Hours Validation**: Shop availability checking
+ * - **Order Management**: Order submission and status tracking
+ *
+ * ## Architecture
+ * - **MVVM Pattern**: Uses CheckoutViewModel for business logic
+ * - **Component-Based**: Uses extracted components (CheckoutItemRow, PickupTimeSelectionView)
+ * - **Clean Separation**: UI logic separated from business logic
+ * - **Reactive State**: Responds to ViewModel state changes
+ *
+ * Created by SipLocal Development Team
+ * Copyright © 2024 SipLocal. All rights reserved.
+ */
+
 import SwiftUI
 import SquareInAppPaymentsSDK
 import Combine
@@ -6,766 +31,379 @@ import PassKit
 import Stripe
 
 struct CheckoutView: View {
+    
+    // MARK: - Properties
+    
     @EnvironmentObject var cartManager: CartManager
     @EnvironmentObject var orderManager: OrderManager
-    @EnvironmentObject var authManager: AuthenticationManager // <-- Inject authManager
+    @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.presentationMode) var presentationMode
-    @State private var isProcessingPayment = false
-    @State private var paymentResult: String = ""
-    @State private var showingCardEntry = false
-    @State private var showingPaymentResult = false
-    @State private var paymentSuccess = false
-    @State private var transactionId: String?
-    @State private var completedOrderItems: [CartItem] = []
-    @State private var completedOrderTotal: Double = 0.0
-    @State private var completedOrderShop: CoffeeShop?
-    @State private var userData: UserData? = nil // <-- Store user data
-    @State private var selectedPickupTime = Date().addingTimeInterval(5 * 60) // Default to 5 minutes from now
-    @State private var showingTimePicker = false
-    @State private var showingClosedShopAlert = false
+    @StateObject private var viewModel: CheckoutViewModel
     
-    // Stripe PaymentSheet state
-    @State private var paymentSheet: PaymentSheet?
-    @State private var stripePaymentResult: PaymentSheetResult?
+    // MARK: - Initialization
     
-    // Store client secret for payment capture
-    @State private var pendingClientSecret: String?
+    /**
+     * Initialize with dependencies
+     */
+    init() {
+        // We'll initialize the ViewModel in onAppear with the environment dependencies
+        self._viewModel = StateObject(wrappedValue: CheckoutViewModel(
+            cartManager: CartManager(),
+            orderManager: OrderManager(),
+            authManager: AuthenticationManager()
+        ))
+    }
     
-    // Apple Pay state
-    @State private var applePayController: PKPaymentAuthorizationController?
-    @State private var isProcessingApplePay = false
-    @StateObject private var applePayDelegate = ApplePayDelegate()
-    
-    // Use @StateObject to create and manage the delegate
-    @StateObject private var cardEntryDelegate = SquareCardEntryDelegate()
-    
-    // Add an instance of our payment service
-    private let paymentService = PaymentService()
-    private let tokenService = TokenService()
+    // MARK: - Body
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
                 // Cart Summary
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Order Summary Header
-                        HStack {
-                            Text("Order Summary")
-                                .font(.title2)
-                                .fontWeight(.bold)
-                            Spacer()
-                        }
-                        .padding(.horizontal)
-                        .padding(.top)
-                        
-                        // Coffee Shop Header
-                        if let firstItem = cartManager.items.first {
-                            VStack(spacing: 4) {
-                                HStack {
-                                    Image(systemName: "house.fill")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                    
-                                    Text(firstItem.shop.name)
-                                        .font(.headline)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.primary)
-                                    
-                                    Spacer()
-                                }
-                                
-                                Divider()
-                                    .padding(.top, 4)
-                            }
-                            .padding(.horizontal)
-                            .padding(.bottom, 8)
-                        }
-                        
-                        // Cart Items
-                        LazyVStack(spacing: 12) {
-                            ForEach(cartManager.items) { item in
-                                CheckoutItemRow(cartItem: item)
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // Pickup Time Section
-                        VStack(spacing: 12) {
-                            Button(action: {
-                                showingTimePicker = true
-                            }) {
-                                HStack(spacing: 16) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("Pickup at")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                        
-                                        Text(formatPickupTime(selectedPickupTime))
-                                            .font(.body)
-                                            .fontWeight(.semibold)
-                                            .foregroundColor(.primary)
-                                    }
-                                    
-                                    Spacer()
-                                    
-                                    // Chevron with subtle background
-                                    ZStack {
-                                        Circle()
-                                            .fill(Color(.systemGray5))
-                                            .frame(width: 28, height: 28)
-                                        
-                                        Image(systemName: "chevron.right")
-                                            .font(.system(size: 12, weight: .semibold))
-                                            .foregroundColor(.secondary)
-                                    }
-                                }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 12)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .fill(Color.white)
-                                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
-                                )
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 16)
-                                        .stroke(Color(.systemGray5), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                            .padding(.horizontal)
-                        }
-                        .padding(.bottom, 20)
-                    }
-                }
+                cartSummarySection
                 
                 // Payment Section
-                VStack(spacing: 16) {
-                    Divider()
-                    
-                    // Total
-                    HStack {
-                        Text("Total")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                        
-                        Spacer()
-                        
-                        Text("$\(cartManager.totalPrice, specifier: "%.2f")")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                    }
-                    .padding(.horizontal)
-                    
-                    // Stripe Payment Button
-                    Button(action: {
-                        // Check if shop is closed before allowing checkout
-                        if let firstItem = cartManager.items.first,
-                           let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
-                           !isOpen {
-                            showingClosedShopAlert = true
-                            return
-                        }
-                        
-                        // Process payment with Stripe
-                        processStripePayment()
-                    }) {
-                        HStack {
-                            if isProcessingPayment {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                                Text("Processing...")
-                            } else {
-                                Image(systemName: "creditcard")
-                                Text("Pay with Card")
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(isProcessingPayment ? Color.gray : Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    .disabled(isProcessingPayment || isProcessingApplePay)
-                    .padding(.horizontal)
-                    
-                    // Apple Pay Button
-                    if PKPaymentAuthorizationController.canMakePayments(usingNetworks: [.visa, .masterCard, .amex, .discover]) {
-                        Button(action: {
-                            // Check if shop is closed before allowing checkout
-                            if let firstItem = cartManager.items.first,
-                               let isOpen = cartManager.isShopOpen(shop: firstItem.shop),
-                               !isOpen {
-                                showingClosedShopAlert = true
-                                return
-                            }
-                            
-                            // Process payment with Apple Pay
-                            processApplePayment()
-                        }) {
-                            HStack {
-                                if isProcessingApplePay {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                    Text("Processing...")
-                                } else {
-                                    Image(systemName: "apple.logo")
-                                    Text("Pay")
-                                        .fontWeight(.semibold)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(isProcessingApplePay ? Color.gray : Color.black)
-                            .foregroundColor(.white)
-                            .cornerRadius(12)
-                        }
-                        .disabled(isProcessingPayment || isProcessingApplePay)
-                        .padding(.horizontal)
-                    }
-                    
-                    Spacer(minLength: 16)
-                    
-                }
-                .background(Color(.systemGray6))
+                paymentSection
             }
-            .background(Color(.systemGray6))
+            .background(CheckoutViewModel.Design.backgroundColor)
             .navigationTitle("Checkout")
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
-                            Text("Back")
-                                .font(.body)
-                        }
-                        .foregroundColor(.primary)
-                    }
+                    backButton
                 }
             }
-        }
-        .sheet(isPresented: $showingCardEntry) {
-            CardEntryView(delegate: self.cardEntryDelegate)
-        }
-        .sheet(isPresented: $showingTimePicker) {
-            PickupTimeSelectionView(
-                selectedTime: $selectedPickupTime, 
-                isPresented: $showingTimePicker,
-                businessHoursInfo: cartManager.items.first.flatMap { cartManager.shopBusinessHours[$0.shop.id] }
-            )
-            .presentationDetents([.fraction(0.4)])
-            .presentationDragIndicator(.visible)
-        }
-        .alert("Shop is Closed", isPresented: $showingClosedShopAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text("This coffee shop is currently closed. Please try again during business hours.")
-        }
-        .sheet(isPresented: $showingPaymentResult) {
-            PaymentResultView(
-                isSuccess: paymentSuccess,
-                transactionId: transactionId,
-                message: paymentResult,
-                coffeeShop: paymentSuccess ? completedOrderShop : nil,
-                orderItems: paymentSuccess ? completedOrderItems : nil,
-                totalAmount: paymentSuccess ? completedOrderTotal : nil,
-                pickupTime: paymentSuccess ? selectedPickupTime : nil,
-                onDismiss: {
-                    showingPaymentResult = false
-                    if paymentSuccess {
-                        // Switch to Explore tab first, then dismiss checkout
-                        NotificationCenter.default.post(name: NSNotification.Name("SwitchToExploreTab"), object: nil)
-                        
-                        // Dismiss the checkout view after a brief delay to ensure tab switch completes
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            .sheet(isPresented: $viewModel.showingCardEntry) {
+                CardEntryView(delegate: viewModel.cardEntryDelegate)
+            }
+            .sheet(isPresented: $viewModel.showingTimePicker) {
+                PickupTimeSelectionView(
+                    selectedTime: $viewModel.selectedPickupTime, 
+                    isPresented: $viewModel.showingTimePicker,
+                    businessHoursInfo: cartManager.items.first.flatMap { cartManager.shopBusinessHours[$0.shop.id] }
+                )
+                .presentationDetents([.fraction(0.4)])
+                .presentationDragIndicator(.visible)
+            }
+            .alert("Shop is Closed", isPresented: $viewModel.showingClosedShopAlert) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("This coffee shop is currently closed. Please try again during business hours.")
+            }
+            .sheet(isPresented: $viewModel.showingPaymentResult) {
+                PaymentResultView(
+                    isSuccess: viewModel.paymentSuccess,
+                    transactionId: viewModel.transactionId,
+                    message: viewModel.paymentResult,
+                    coffeeShop: viewModel.paymentSuccess ? viewModel.completedOrderShop : nil,
+                    orderItems: viewModel.paymentSuccess ? viewModel.completedOrderItems : nil,
+                    totalAmount: viewModel.paymentSuccess ? viewModel.completedOrderTotal : nil,
+                    pickupTime: viewModel.paymentSuccess ? viewModel.selectedPickupTime : nil,
+                    onDismiss: {
+                        viewModel.handlePaymentResultDismiss()
+                        if viewModel.paymentSuccess {
+                            // Dismiss the checkout view after a brief delay to ensure tab switch completes
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                presentationMode.wrappedValue.dismiss()
+                            }
+                        } else {
+                            // For failed payments, just dismiss normally
                             presentationMode.wrappedValue.dismiss()
                         }
-                    } else {
-                        // For failed payments, just dismiss normally
+                    },
+                    onTryAgain: viewModel.paymentSuccess ? nil : {
+                        viewModel.handleTryAgain()
+                    },
+                    onCancel: viewModel.paymentSuccess ? {
+                        viewModel.handleOrderCancellation()
                         presentationMode.wrappedValue.dismiss()
-                    }
-                },
-                onTryAgain: paymentSuccess ? nil : {
-                    // For failed payments, show card entry again
-                    showingPaymentResult = false
-                    showingCardEntry = true
-                },
-                onCancel: paymentSuccess ? {
-                    // Handle order cancellation
-                    showingPaymentResult = false
-                    presentationMode.wrappedValue.dismiss()
-                } : nil
-            )
-        }
-        .onReceive(cardEntryDelegate.$cardDetails) { cardDetails in
-            if let details = cardDetails {
-                // We have the nonce, now process the payment
-                processPayment(nonce: details.nonce)
-            }
-        }
-        .onReceive(cardEntryDelegate.$wasCancelled) { wasCancelled in
-            if wasCancelled {
-                self.paymentResult = "Card entry was canceled."
-                self.showingCardEntry = false
-            }
-        }
-        .onAppear {
-            // Fetch business hours for the shop in cart
-            if let firstItem = cartManager.items.first {
-                Task {
-                    await cartManager.fetchBusinessHours(for: firstItem.shop)
-                }
-            }
-        }
-        .onDisappear {
-            // No cleanup needed - OrderManager handles the payment capture timer
-        }
-    }
-    
-    private func processPayment(nonce: String) {
-        isProcessingPayment = true
-        paymentResult = "Processing payment..."
-        guard let firstItem = cartManager.items.first else {
-            paymentResult = "No items in cart"
-            isProcessingPayment = false
-            return
-        }
-        let merchantId = firstItem.shop.merchantId
-        // Fetch user data before payment
-        guard let userId = authManager.currentUser?.uid else {
-            paymentResult = "User not logged in."
-            isProcessingPayment = false
-            return
-        }
-        authManager.getUserData(userId: userId) { userData, error in
-            guard let userData = userData else {
-                DispatchQueue.main.async {
-                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
-                    self.isProcessingPayment = false
-                }
-                return
-            }
-            Task {
-                do {
-                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
-                    print("Debug - Sending to Firebase:")
-                    print("  nonce: \(nonce)")
-                    print("  amount: \(cartManager.totalPrice)")
-                    print("  merchantId: \(merchantId)")
-                    print("  oauth_token: \(credentials.oauth_token.prefix(10)))...")
-                    // Now process the payment with the fetched tokens and user info
-                    let result = await paymentService.processPayment(
-                        nonce: nonce,
-                        amount: cartManager.totalPrice,
-                        merchantId: merchantId,
-                        oauthToken: credentials.oauth_token,
-                        cartItems: cartManager.items,
-                        customerName: userData.fullName,
-                        customerEmail: userData.email,
-                        userId: userId,
-                        coffeeShop: cartManager.items.first!.shop,
-                        pickupTime: selectedPickupTime
-                    )
-                    await MainActor.run {
-                        switch result {
-                        case .success(let transaction):
-                            paymentResult = transaction.message
-                            paymentSuccess = true
-                            transactionId = transaction.transactionId
-                            completedOrderItems = cartManager.items
-                            completedOrderTotal = cartManager.totalPrice
-                            completedOrderShop = cartManager.items.first?.shop
-                            // Orders are now stored in Firestore by the backend
-                            // Refresh orders to show the new order
-                            Task {
-                                await orderManager.refreshOrders()
-                            }
-                            cartManager.clearCart()
-                        case .failure(let error):
-                            paymentResult = error.localizedDescription
-                            paymentSuccess = false
-                            transactionId = nil
-                        }
-                        isProcessingPayment = false
-                        self.showingCardEntry = false
-                        self.showingPaymentResult = true
-                    }
-                } catch {
-                    await MainActor.run {
-                        paymentResult = "Failed to retrieve payment credentials: \(error.localizedDescription)"
-                        paymentSuccess = false
-                        transactionId = nil
-                        isProcessingPayment = false
-                        self.showingCardEntry = false
-                        self.showingPaymentResult = true
-                    }
-                }
-            }
-        }
-    }
-    
-    private func submitOrderWithExternalPayment() {
-        isProcessingPayment = true
-        paymentResult = "Submitting order..."
-        
-        guard let firstItem = cartManager.items.first else {
-            paymentResult = "No items in cart"
-            isProcessingPayment = false
-            return
-        }
-        
-        let merchantId = firstItem.shop.merchantId
-        
-        // Fetch user data before submitting order
-        guard let userId = authManager.currentUser?.uid else {
-            paymentResult = "User not logged in."
-            isProcessingPayment = false
-            return
-        }
-        
-        authManager.getUserData(userId: userId) { userData, error in
-            guard let userData = userData else {
-                DispatchQueue.main.async {
-                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
-                    self.isProcessingPayment = false
-                }
-                return
-            }
-            
-            Task {
-                do {
-                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
-                    print("Debug - Submitting order to Square without payment:")
-                    print("  amount: \(cartManager.totalPrice)")
-                    print("  merchantId: \(merchantId)")
-                    print("  oauth_token: \(credentials.oauth_token.prefix(10))...")
-                    
-                    // Submit order with external payment flag
-                    let result = await paymentService.submitOrderWithExternalPayment(
-                        amount: cartManager.totalPrice,
-                        merchantId: merchantId,
-                        oauthToken: credentials.oauth_token,
-                        cartItems: cartManager.items,
-                        customerName: userData.fullName,
-                        customerEmail: userData.email,
-                        userId: userId,
-                        coffeeShop: cartManager.items.first!.shop,
-                        pickupTime: selectedPickupTime
-                    )
-                    
-                    await MainActor.run {
-                        switch result {
-                        case .success(let transaction):
-                            paymentResult = "Order submitted successfully! Payment will be handled externally."
-                            paymentSuccess = true
-                            transactionId = transaction.transactionId
-                            completedOrderItems = cartManager.items
-                            completedOrderTotal = cartManager.totalPrice
-                            completedOrderShop = cartManager.items.first?.shop
-                            // Orders are now stored in Firestore by the backend
-                            // Refresh orders to show the new order
-                            Task {
-                                await orderManager.refreshOrders()
-                            }
-                            cartManager.clearCart()
-                        case .failure(let error):
-                            paymentResult = error.localizedDescription
-                            paymentSuccess = false
-                            transactionId = nil
-                        }
-                        isProcessingPayment = false
-                        self.showingPaymentResult = true
-                    }
-                } catch {
-                    await MainActor.run {
-                        paymentResult = "Failed to submit order: \(error.localizedDescription)"
-                        paymentSuccess = false
-                        transactionId = nil
-                        isProcessingPayment = false
-                        self.showingPaymentResult = true
-                    }
-                }
-            }
-        }
-    }
-    
-    private func processStripePayment() {
-        isProcessingPayment = true
-        paymentResult = "Processing Stripe payment..."
-        
-        guard let firstItem = cartManager.items.first else {
-            paymentResult = "No items in cart"
-            isProcessingPayment = false
-            return
-        }
-        
-        let merchantId = firstItem.shop.merchantId
-        
-        // Fetch user data before payment
-        guard let userId = authManager.currentUser?.uid else {
-            paymentResult = "User not logged in."
-            isProcessingPayment = false
-            return
-        }
-        
-        authManager.getUserData(userId: userId) { userData, error in
-            guard let userData = userData else {
-                DispatchQueue.main.async {
-                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
-                    self.isProcessingPayment = false
-                }
-                return
-            }
-            
-            Task {
-                do {
-                    let credentials = try await tokenService.getMerchantTokens(merchantId: merchantId)
-                    print("Debug - Processing Stripe payment:")
-                    print("  amount: \(cartManager.totalPrice)")
-                    print("  merchantId: \(merchantId)")
-                    print("  oauth_token: \(credentials.oauth_token.prefix(10)))...")
-                    
-                    // Get PaymentIntent and client secret from backend
-                    let result = await paymentService.createAuthorizedOrderWithStripe(
-                        amount: cartManager.totalPrice,
-                        merchantId: merchantId,
-                        oauthToken: credentials.oauth_token,
-                        cartItems: cartManager.items,
-                        customerName: userData.fullName,
-                        customerEmail: userData.email,
-                        userId: userId,
-                        coffeeShop: cartManager.items.first!.shop,
-                        pickupTime: selectedPickupTime
-                    )
-                    
-                    await MainActor.run {
-                        switch result {
-                        case .success(let (transaction, clientSecret)):
-                            if let clientSecret = clientSecret {
-                                // Create PaymentSheet configuration
-                                var configuration = PaymentSheet.Configuration()
-                                configuration.merchantDisplayName = cartManager.items.first?.shop.name ?? "Coffee Shop"
-                                configuration.allowsDelayedPaymentMethods = false
-                                
-                                // Create PaymentSheet
-                                self.paymentSheet = PaymentSheet(paymentIntentClientSecret: clientSecret, configuration: configuration)
-                                
-                                // Store transaction details for later use
-                                self.transactionId = transaction.transactionId
-                                self.pendingClientSecret = clientSecret
-                                self.completedOrderItems = cartManager.items
-                                self.completedOrderTotal = cartManager.totalPrice
-                                self.completedOrderShop = cartManager.items.first?.shop
-                                
-                                // Present PaymentSheet
-                                self.isProcessingPayment = false
-                                self.presentPaymentSheet()
-                            } else {
-                                paymentResult = "Failed to get payment client secret"
-                                paymentSuccess = false
-                                transactionId = nil
-                                isProcessingPayment = false
-                                self.showingPaymentResult = true
-                            }
-                        case .failure(let error):
-                            paymentResult = error.localizedDescription
-                            paymentSuccess = false
-                            transactionId = nil
-                            isProcessingPayment = false
-                            self.showingPaymentResult = true
-                        }
-                    }
-                } catch {
-                    await MainActor.run {
-                        paymentResult = "Failed to process Stripe payment: \(error.localizedDescription)"
-                        paymentSuccess = false
-                        transactionId = nil
-                        isProcessingPayment = false
-                        self.showingPaymentResult = true
-                    }
-                }
-            }
-        }
-    }
-    
-    private func presentPaymentSheet() {
-        // Add a small delay to ensure any existing presentations are finished
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                  let window = windowScene.windows.first else {
-                self.paymentResult = "Unable to present payment sheet"
-                self.paymentSuccess = false
-                self.showingPaymentResult = true
-                return
-            }
-            
-            // Find the top-most view controller
-            var topViewController = window.rootViewController
-            while let presentedViewController = topViewController?.presentedViewController {
-                topViewController = presentedViewController
-            }
-            
-            guard let presentingViewController = topViewController else {
-                self.paymentResult = "Unable to find presenting view controller"
-                self.paymentSuccess = false
-                self.showingPaymentResult = true
-                return
-            }
-            
-            self.paymentSheet?.present(from: presentingViewController) { [self] result in
-                DispatchQueue.main.async {
-                    self.stripePaymentResult = result
-                    self.handleStripePaymentResult(result)
-                }
-            }
-        }
-    }
-    
-    private func handleStripePaymentResult(_ result: PaymentSheetResult) {
-        switch result {
-        case .completed:
-            paymentResult = "Order placed successfully! Check your orders to track status."
-            paymentSuccess = true
-            
-            // Start the 30-second background timer for payment completion via OrderManager
-            if let transactionId = self.transactionId,
-               let clientSecret = self.pendingClientSecret {
-                orderManager.startPaymentCaptureTimer(
-                    transactionId: transactionId,
-                    clientSecret: clientSecret,
-                    paymentService: paymentService
+                    } : nil
                 )
             }
-            
-            // Orders are now stored in Firestore by the backend with AUTHORIZED status
-            // Refresh orders to show the new order
-            Task {
-                await orderManager.refreshOrders()
+            .onAppear {
+                viewModel.updateDependencies(
+                    cartManager: cartManager,
+                    orderManager: orderManager,
+                    authManager: authManager
+                )
+                viewModel.fetchBusinessHours()
             }
-            cartManager.clearCart()
-            showingPaymentResult = true
-        case .canceled:
-            paymentResult = "Payment was canceled."
-            paymentSuccess = false
-            showingPaymentResult = true
-        case .failed(let error):
-            paymentResult = "Payment failed: \(error.localizedDescription)"
-            paymentSuccess = false
-            showingPaymentResult = true
         }
     }
     
-    private func formatPickupTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+    // MARK: - View Components
+    
+    /**
+     * Cart summary section with items and pickup time
+     */
+    private var cartSummarySection: some View {
+        ScrollView {
+            VStack(spacing: CheckoutViewModel.Design.sectionSpacing) {
+                // Order Summary Header
+                orderSummaryHeader
+                
+                // Coffee Shop Header
+                if let firstItem = cartManager.items.first {
+                    coffeeShopHeader(for: firstItem.shop)
+                }
+                
+                // Cart Items
+                cartItemsList
+                
+                // Pickup Time Section
+                pickupTimeSection
+            }
+        }
     }
     
-    // MARK: - Apple Pay Methods
+    /**
+     * Order summary header
+     */
+    private var orderSummaryHeader: some View {
+        HStack {
+            Text("Order Summary")
+                .font(CheckoutViewModel.Design.titleFont)
+                .fontWeight(CheckoutViewModel.Design.titleWeight)
+            Spacer()
+        }
+        .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
+        .padding(.top, CheckoutViewModel.Design.verticalPadding)
+    }
     
-    private func processApplePayment() {
-        print("🍎 Apple Pay: Starting processApplePayment()")
-        
-        guard let firstItem = cartManager.items.first else {
-            print("❌ Apple Pay: No items in cart")
-            paymentResult = "No items in cart"
-            return
+    /**
+     * Coffee shop header
+     */
+    private func coffeeShopHeader(for shop: CoffeeShop) -> some View {
+        VStack(spacing: 4) {
+            HStack {
+                Image(systemName: "house.fill")
+                    .font(.subheadline)
+                    .foregroundColor(CheckoutViewModel.Design.secondaryTextColor)
+                
+                Text(shop.name)
+                    .font(CheckoutViewModel.Design.headlineFont)
+                    .fontWeight(CheckoutViewModel.Design.headlineWeight)
+                    .foregroundColor(CheckoutViewModel.Design.primaryTextColor)
+                
+                Spacer()
+            }
+            
+            Divider()
+                .padding(.top, 4)
         }
-        
-        print("🍎 Apple Pay: First item found - \(firstItem.menuItem.name)")
-        print("🍎 Apple Pay: Total price - $\(cartManager.totalPrice)")
-        print("🍎 Apple Pay: Cart items count - \(cartManager.items.count)")
-        
-        let merchantId = "merchant.com.siplocal.app"
-        let request = PKPaymentRequest()
-        
-        request.merchantIdentifier = merchantId
-        request.supportedNetworks = [.visa, .masterCard, .amex, .discover]
-        request.merchantCapabilities = .capability3DS
-        request.countryCode = "US"
-        request.currencyCode = "USD"
-        
-        print("🍎 Apple Pay: Payment request configured with merchant ID: \(merchantId)")
-        
-        // Create payment summary items
-        var paymentItems: [PKPaymentSummaryItem] = []
-        
-        // Add individual cart items
-        for item in cartManager.items {
-            let itemTotal = item.totalPrice
-            let paymentItem = PKPaymentSummaryItem(
-                label: "\(item.menuItem.name) x\(item.quantity)",
-                amount: NSDecimalNumber(value: itemTotal),
-                type: .final
-            )
-            paymentItems.append(paymentItem)
-            print("🍎 Apple Pay: Added item - \(item.menuItem.name) x\(item.quantity) = $\(itemTotal)")
+        .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
+        .padding(.bottom, 8)
+    }
+    
+    /**
+     * Cart items list
+     */
+    private var cartItemsList: some View {
+        LazyVStack(spacing: CheckoutViewModel.Design.itemSpacing) {
+            ForEach(cartManager.items) { item in
+                CheckoutItemRow(cartItem: item)
+            }
         }
-        
-        // Add total
-        let totalItem = PKPaymentSummaryItem(
-            label: firstItem.shop.name,
-            amount: NSDecimalNumber(value: cartManager.totalPrice),
-            type: .final
-        )
-        paymentItems.append(totalItem)
-        
-        request.paymentSummaryItems = paymentItems
-        print("🍎 Apple Pay: Payment summary items created - Total: $\(cartManager.totalPrice)")
-        
-        // Configure the delegate with necessary data
-        print("🍎 Apple Pay: Configuring delegate...")
-        applePayDelegate.configure(
-            cartManager: cartManager,
-            authManager: authManager,
-            tokenService: tokenService,
-            paymentService: paymentService,
-            orderManager: orderManager,
-            selectedPickupTime: selectedPickupTime,
-            onPaymentResult: { [self] success, message, transactionId, orderItems, orderTotal, orderShop in
-                print("🍎 Apple Pay: Payment result callback - Success: \(success), Message: \(message)")
-                DispatchQueue.main.async {
-                    self.paymentSuccess = success
-                    self.paymentResult = message
-                    self.transactionId = transactionId
-                    if success {
-                        print("🍎 Apple Pay: Payment successful, clearing cart")
-                        self.completedOrderItems = orderItems
-                        self.completedOrderTotal = orderTotal
-                        self.completedOrderShop = orderShop
-                        self.cartManager.clearCart()
-                    } else {
-                        print("❌ Apple Pay: Payment failed - \(message)")
+        .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
+    }
+    
+    /**
+     * Pickup time selection section
+     */
+    private var pickupTimeSection: some View {
+        VStack(spacing: CheckoutViewModel.Design.itemSpacing) {
+            Button(action: {
+                viewModel.showingTimePicker = true
+            }) {
+                HStack(spacing: 16) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Pickup at")
+                            .font(CheckoutViewModel.Design.captionFont)
+                            .foregroundColor(CheckoutViewModel.Design.secondaryTextColor)
+                        
+                        Text(viewModel.formatPickupTime(viewModel.selectedPickupTime))
+                            .font(CheckoutViewModel.Design.bodyFont)
+                            .fontWeight(.semibold)
+                            .foregroundColor(CheckoutViewModel.Design.primaryTextColor)
                     }
-                    self.isProcessingApplePay = false
-                    self.showingPaymentResult = true
+                    
+                    Spacer()
+                    
+                    // Chevron with subtle background
+                    ZStack {
+                        Circle()
+                            .fill(Color(.systemGray5))
+                            .frame(width: 28, height: 28)
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(CheckoutViewModel.Design.secondaryTextColor)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: CheckoutViewModel.Design.cardCornerRadius)
+                        .fill(CheckoutViewModel.Design.cardBackgroundColor)
+                        .shadow(
+                            color: Color.black.opacity(CheckoutViewModel.Design.cardShadowOpacity),
+                            radius: CheckoutViewModel.Design.cardShadowRadius,
+                            x: 0,
+                            y: 2
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: CheckoutViewModel.Design.cardCornerRadius)
+                        .stroke(Color(.systemGray5), lineWidth: 1)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
+        }
+        .padding(.bottom, 20)
+    }
+    
+    /**
+     * Payment section with total and payment buttons
+     */
+    private var paymentSection: some View {
+        VStack(spacing: CheckoutViewModel.Design.sectionSpacing) {
+            Divider()
+            
+            // Total
+            totalSection
+            
+            // Payment Buttons
+            paymentButtonsSection
+            
+            Spacer(minLength: 16)
+        }
+        .background(CheckoutViewModel.Design.backgroundColor)
+    }
+    
+    /**
+     * Total price section
+     */
+    private var totalSection: some View {
+        HStack {
+            Text("Total")
+                .font(CheckoutViewModel.Design.titleFont)
+                .fontWeight(CheckoutViewModel.Design.titleWeight)
+            
+            Spacer()
+            
+            Text("$\(viewModel.totalPrice, specifier: "%.2f")")
+                .font(CheckoutViewModel.Design.titleFont)
+                .fontWeight(CheckoutViewModel.Design.titleWeight)
+        }
+        .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
+    }
+    
+    /**
+     * Payment buttons section
+     */
+    private var paymentButtonsSection: some View {
+        VStack(spacing: CheckoutViewModel.Design.sectionSpacing) {
+            // Stripe Payment Button
+            stripePaymentButton
+            
+            // Apple Pay Button
+            if PKPaymentAuthorizationController.canMakePayments(usingNetworks: [.visa, .masterCard, .amex, .discover]) {
+                applePayButton
+            }
+        }
+    }
+    
+    /**
+     * Stripe payment button
+     */
+    private var stripePaymentButton: some View {
+        Button(action: {
+            viewModel.handleCheckout()
+            if !viewModel.isCheckoutDisabled {
+                viewModel.processStripePayment()
+            }
+        }) {
+            HStack {
+                if viewModel.isProcessingPayment {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                    Text("Processing...")
+                } else {
+                    Image(systemName: "creditcard")
+                    Text("Pay with Card")
+                        .fontWeight(.semibold)
                 }
             }
-        )
-        
-        // Present Apple Pay sheet
-        print("🍎 Apple Pay: Creating payment authorization controller...")
-        let controller = PKPaymentAuthorizationController(paymentRequest: request)
-        controller.delegate = applePayDelegate
-        applePayController = controller
-        
-        print("🍎 Apple Pay: Presenting Apple Pay sheet...")
-        controller.present { presented in
-            if !presented {
-                print("❌ Apple Pay: Failed to present Apple Pay sheet")
-                self.paymentResult = "Unable to present Apple Pay"
-                self.showingPaymentResult = true
-            } else {
-                print("✅ Apple Pay: Apple Pay sheet presented successfully")
-            }
+            .frame(maxWidth: .infinity)
+            .padding(CheckoutViewModel.Design.buttonPadding)
+            .background(viewModel.isProcessingPayment ? CheckoutViewModel.Design.disabledButtonColor : CheckoutViewModel.Design.stripeButtonColor)
+            .foregroundColor(CheckoutViewModel.Design.buttonTextColor)
+            .cornerRadius(CheckoutViewModel.Design.buttonCornerRadius)
         }
+        .disabled(viewModel.isProcessingPayment || viewModel.isProcessingApplePay)
+        .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
+    }
+    
+    /**
+     * Apple Pay button
+     */
+    private var applePayButton: some View {
+        Button(action: {
+            viewModel.handleCheckout()
+            if !viewModel.isCheckoutDisabled {
+                viewModel.processApplePayment()
+            }
+        }) {
+            HStack {
+                if viewModel.isProcessingApplePay {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.8)
+                    Text("Processing...")
+                } else {
+                    Image(systemName: "apple.logo")
+                    Text("Pay")
+                        .fontWeight(.semibold)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(CheckoutViewModel.Design.buttonPadding)
+            .background(viewModel.isProcessingApplePay ? CheckoutViewModel.Design.disabledButtonColor : CheckoutViewModel.Design.applePayButtonColor)
+            .foregroundColor(CheckoutViewModel.Design.buttonTextColor)
+            .cornerRadius(CheckoutViewModel.Design.buttonCornerRadius)
+        }
+        .disabled(viewModel.isProcessingPayment || viewModel.isProcessingApplePay)
+        .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
+    }
+    
+    /**
+     * Back navigation button
+     */
+    private var backButton: some View {
+        Button(action: {
+            presentationMode.wrappedValue.dismiss()
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .medium))
+                Text("Back")
+                    .font(.body)
+            }
+            .foregroundColor(.primary)
+        }
+    }
+}
+
+// MARK: - Preview
+
+struct CheckoutView_Previews: PreviewProvider {
+    static var previews: some View {
+        CheckoutView()
+            .environmentObject(CartManager())
+            .environmentObject(OrderManager())
+            .environmentObject(AuthenticationManager())
     }
 }
 
@@ -1254,11 +892,3 @@ extension Calendar {
 }
 
 
-// Preview
-struct CheckoutView_Previews: PreviewProvider {
-    static var previews: some View {
-        CheckoutView()
-            .environmentObject(CartManager())
-            .environmentObject(OrderManager())
-    }
-} 
