@@ -133,9 +133,9 @@ struct CheckoutView: View {
      * Cart summary section with items and pickup time
      */
     private var cartSummarySection: some View {
-        ScrollView {
+                ScrollView {
             VStack(spacing: CheckoutViewModel.Design.sectionSpacing) {
-                // Order Summary Header
+                        // Order Summary Header
                 orderSummaryHeader
                 
                 // Coffee Shop Header
@@ -156,12 +156,12 @@ struct CheckoutView: View {
      * Order summary header
      */
     private var orderSummaryHeader: some View {
-        HStack {
-            Text("Order Summary")
+                        HStack {
+                            Text("Order Summary")
                 .font(CheckoutViewModel.Design.titleFont)
                 .fontWeight(CheckoutViewModel.Design.titleWeight)
-            Spacer()
-        }
+                            Spacer()
+                        }
         .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
         .padding(.top, CheckoutViewModel.Design.verticalPadding)
     }
@@ -170,36 +170,36 @@ struct CheckoutView: View {
      * Coffee shop header
      */
     private func coffeeShopHeader(for shop: CoffeeShop) -> some View {
-        VStack(spacing: 4) {
-            HStack {
-                Image(systemName: "house.fill")
-                    .font(.subheadline)
+                            VStack(spacing: 4) {
+                                HStack {
+                                    Image(systemName: "house.fill")
+                                        .font(.subheadline)
                     .foregroundColor(CheckoutViewModel.Design.secondaryTextColor)
                 
                 Text(shop.name)
                     .font(CheckoutViewModel.Design.headlineFont)
                     .fontWeight(CheckoutViewModel.Design.headlineWeight)
                     .foregroundColor(CheckoutViewModel.Design.primaryTextColor)
-                
-                Spacer()
-            }
-            
-            Divider()
-                .padding(.top, 4)
-        }
+                                    
+                                    Spacer()
+                                }
+                                
+                                Divider()
+                                    .padding(.top, 4)
+                            }
         .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
-        .padding(.bottom, 8)
-    }
-    
+                            .padding(.bottom, 8)
+                        }
+                        
     /**
      * Cart items list
      */
     private var cartItemsList: some View {
         LazyVStack(spacing: CheckoutViewModel.Design.itemSpacing) {
-            ForEach(cartManager.items) { item in
-                CheckoutItemRow(cartItem: item)
-            }
-        }
+                            ForEach(cartManager.items) { item in
+                                CheckoutItemRow(cartItem: item)
+                            }
+                        }
         .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
     }
     
@@ -208,37 +208,37 @@ struct CheckoutView: View {
      */
     private var pickupTimeSection: some View {
         VStack(spacing: CheckoutViewModel.Design.itemSpacing) {
-            Button(action: {
+                            Button(action: {
                 viewModel.showingTimePicker = true
-            }) {
-                HStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Pickup at")
+                            }) {
+                                HStack(spacing: 16) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Pickup at")
                             .font(CheckoutViewModel.Design.captionFont)
                             .foregroundColor(CheckoutViewModel.Design.secondaryTextColor)
-                        
+                                        
                         Text(viewModel.formatPickupTime(viewModel.selectedPickupTime))
                             .font(CheckoutViewModel.Design.bodyFont)
-                            .fontWeight(.semibold)
+                                            .fontWeight(.semibold)
                             .foregroundColor(CheckoutViewModel.Design.primaryTextColor)
-                    }
-                    
-                    Spacer()
-                    
-                    // Chevron with subtle background
-                    ZStack {
-                        Circle()
-                            .fill(Color(.systemGray5))
-                            .frame(width: 28, height: 28)
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    // Chevron with subtle background
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color(.systemGray5))
+                                            .frame(width: 28, height: 28)
+                                        
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(CheckoutViewModel.Design.secondaryTextColor)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+                                .background(
                     RoundedRectangle(cornerRadius: CheckoutViewModel.Design.cardCornerRadius)
                         .fill(CheckoutViewModel.Design.cardBackgroundColor)
                         .shadow(
@@ -247,16 +247,16 @@ struct CheckoutView: View {
                             x: 0,
                             y: 2
                         )
-                )
-                .overlay(
+                                )
+                                .overlay(
                     RoundedRectangle(cornerRadius: CheckoutViewModel.Design.cardCornerRadius)
-                        .stroke(Color(.systemGray5), lineWidth: 1)
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
+                                        .stroke(Color(.systemGray5), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, CheckoutViewModel.Design.horizontalPadding)
-        }
-        .padding(.bottom, 20)
+                        }
+                        .padding(.bottom, 20)
     }
     
     /**
@@ -264,9 +264,9 @@ struct CheckoutView: View {
      */
     private var paymentSection: some View {
         VStack(spacing: CheckoutViewModel.Design.sectionSpacing) {
-            Divider()
-            
-            // Total
+                    Divider()
+                    
+                    // Total
             totalSection
             
             // Payment Buttons
@@ -281,13 +281,13 @@ struct CheckoutView: View {
      * Total price section
      */
     private var totalSection: some View {
-        HStack {
-            Text("Total")
+                    HStack {
+                        Text("Total")
                 .font(CheckoutViewModel.Design.titleFont)
                 .fontWeight(CheckoutViewModel.Design.titleWeight)
-            
-            Spacer()
-            
+                        
+                        Spacer()
+                        
             Text("$\(viewModel.totalPrice, specifier: "%.2f")")
                 .font(CheckoutViewModel.Design.titleFont)
                 .fontWeight(CheckoutViewModel.Design.titleWeight)
@@ -300,7 +300,7 @@ struct CheckoutView: View {
      */
     private var paymentButtonsSection: some View {
         VStack(spacing: CheckoutViewModel.Design.sectionSpacing) {
-            // Stripe Payment Button
+                    // Stripe Payment Button
             stripePaymentButton
             
             // Apple Pay Button
@@ -319,20 +319,20 @@ struct CheckoutView: View {
             if !viewModel.isCheckoutDisabled {
                 viewModel.processStripePayment()
             }
-        }) {
-            HStack {
+                    }) {
+                        HStack {
                 if viewModel.isProcessingPayment {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(0.8)
-                    Text("Processing...")
-                } else {
-                    Image(systemName: "creditcard")
-                    Text("Pay with Card")
-                        .fontWeight(.semibold)
-                }
-            }
-            .frame(maxWidth: .infinity)
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                                Text("Processing...")
+                            } else {
+                                Image(systemName: "creditcard")
+                                Text("Pay with Card")
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
             .padding(CheckoutViewModel.Design.buttonPadding)
             .background(viewModel.isProcessingPayment ? CheckoutViewModel.Design.disabledButtonColor : CheckoutViewModel.Design.stripeButtonColor)
             .foregroundColor(CheckoutViewModel.Design.buttonTextColor)
@@ -346,25 +346,25 @@ struct CheckoutView: View {
      * Apple Pay button
      */
     private var applePayButton: some View {
-        Button(action: {
+                        Button(action: {
             viewModel.handleCheckout()
             if !viewModel.isCheckoutDisabled {
                 viewModel.processApplePayment()
             }
-        }) {
-            HStack {
+                        }) {
+                            HStack {
                 if viewModel.isProcessingApplePay {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        .scaleEffect(0.8)
-                    Text("Processing...")
-                } else {
-                    Image(systemName: "apple.logo")
-                    Text("Pay")
-                        .fontWeight(.semibold)
-                }
-            }
-            .frame(maxWidth: .infinity)
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("Processing...")
+                                } else {
+                                    Image(systemName: "apple.logo")
+                                    Text("Pay")
+                                        .fontWeight(.semibold)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
             .padding(CheckoutViewModel.Design.buttonPadding)
             .background(viewModel.isProcessingApplePay ? CheckoutViewModel.Design.disabledButtonColor : CheckoutViewModel.Design.applePayButtonColor)
             .foregroundColor(CheckoutViewModel.Design.buttonTextColor)
@@ -378,19 +378,19 @@ struct CheckoutView: View {
      * Back navigation button
      */
     private var backButton: some View {
-        Button(action: {
-            presentationMode.wrappedValue.dismiss()
-        }) {
-            HStack(spacing: 4) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .medium))
-                Text("Back")
-                    .font(.body)
+                    Button(action: {
+                        presentationMode.wrappedValue.dismiss()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 16, weight: .medium))
+                            Text("Back")
+                                .font(.body)
+                        }
+                        .foregroundColor(.primary)
+                    }
+                }
             }
-            .foregroundColor(.primary)
-        }
-    }
-}
 
 // MARK: - Preview
 
