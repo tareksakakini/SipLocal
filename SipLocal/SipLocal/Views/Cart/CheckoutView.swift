@@ -9,7 +9,7 @@
  * ## Features
  * - **Cart Summary**: Display cart items with totals
  * - **Pickup Time Selection**: Time picker with business hours validation
- * - **Payment Processing**: Stripe, Apple Pay, and Square payment integration
+ * - **Payment Processing**: Stripe and Apple Pay payment integration
  * - **Business Hours Validation**: Shop availability checking
  * - **Order Management**: Order submission and status tracking
  *
@@ -24,7 +24,6 @@
  */
 
 import SwiftUI
-import SquareInAppPaymentsSDK
 import Combine
 import StripePaymentSheet
 import PassKit
@@ -72,9 +71,6 @@ struct CheckoutView: View {
                 ToolbarItem(placement: .navigationBarLeading) {
                     backButton
                 }
-            }
-            .sheet(isPresented: $viewModel.showingCardEntry) {
-                CardEntryView(delegate: viewModel.cardEntryDelegate)
             }
             .sheet(isPresented: $viewModel.showingTimePicker) {
                 PickupTimeSelectionView(
@@ -638,27 +634,6 @@ class ApplePayDelegate: NSObject, ObservableObject, PKPaymentAuthorizationContro
     }
 }
 
-// 2. Create a UIViewControllerRepresentable to wrap the Square SDK's view controller
-struct CardEntryView: UIViewControllerRepresentable {
-    var delegate: SQIPCardEntryViewControllerDelegate
-    
-    func makeUIViewController(context: Context) -> UINavigationController {
-        // Customize the card entry form theme
-        let theme = SQIPTheme()
-        theme.tintColor = .black
-        theme.saveButtonTitle = "Pay"
-        
-        let cardEntryViewController = SQIPCardEntryViewController(theme: theme)
-        cardEntryViewController.delegate = delegate
-        
-        let navigationController = UINavigationController(rootViewController: cardEntryViewController)
-        return navigationController
-    }
-    
-    func updateUIViewController(_ uiViewController: UINavigationController, context: Context) {
-        // No update needed
-    }
-}
 
 
 struct CheckoutItemRow: View {

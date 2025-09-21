@@ -6,7 +6,7 @@
  * business hours validation, and checkout flow management.
  *
  * ## Features
- * - **Payment Processing**: Stripe, Apple Pay, and Square payment integration
+ * - **Payment Processing**: Stripe and Apple Pay payment integration
  * - **Order Management**: Order submission and status tracking
  * - **Business Hours Validation**: Shop availability checking
  * - **Pickup Time Management**: Time selection and validation
@@ -25,7 +25,6 @@
 
 import SwiftUI
 import Combine
-import SquareInAppPaymentsSDK
 import StripePaymentSheet
 import PassKit
 import Stripe
@@ -62,7 +61,6 @@ class CheckoutViewModel: ObservableObject {
     
     /// Alerts and sheets
     @Published var showingClosedShopAlert = false
-    @Published var showingCardEntry = false
     
     /// Stripe PaymentSheet state
     @Published var paymentSheet: PaymentSheet?
@@ -84,7 +82,6 @@ class CheckoutViewModel: ObservableObject {
     // MARK: - Delegates
     
     @Published var applePayDelegate = ApplePayDelegate()
-    @Published var cardEntryDelegate = SquareCardEntryDelegate()
     
     // MARK: - Computed Properties
     
@@ -416,9 +413,10 @@ class CheckoutViewModel: ObservableObject {
             cartManager.clearCart()
             showingPaymentResult = true
         case .canceled:
-            paymentResult = "Payment was canceled."
-            paymentSuccess = false
-            showingPaymentResult = true
+            // User canceled the payment sheet - just dismiss silently
+            // Don't show any result screen, just reset the processing state
+            isProcessingPayment = false
+            // Don't set showingPaymentResult = true to avoid showing "Payment Failed" screen
         case .failed(let error):
             paymentResult = "Payment failed: \(error.localizedDescription)"
             paymentSuccess = false
@@ -451,7 +449,9 @@ class CheckoutViewModel: ObservableObject {
      */
     func handleTryAgain() {
         showingPaymentResult = false
-        showingCardEntry = true
+        // Reset payment state for retry
+        isProcessingPayment = false
+        isProcessingApplePay = false
     }
     
     /**
@@ -503,119 +503,8 @@ class CheckoutViewModel: ObservableObject {
      * Setup observers for card entry and other events
      */
     private func setupObservers() {
-        // Observe card entry delegate
-        cardEntryDelegate.$cardDetails
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] cardDetails in
-                if let details = cardDetails {
-                    self?.processPayment(nonce: details.nonce)
-                }
-            }
-            .store(in: &cancellables)
-        
-        cardEntryDelegate.$wasCancelled
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] wasCancelled in
-                if wasCancelled {
-                    self?.paymentResult = "Card entry was canceled."
-                    self?.showingCardEntry = false
-                }
-            }
-            .store(in: &cancellables)
     }
     
-    /**
-     * Process payment with nonce (for Square card entry)
-     */
-    private func processPayment(nonce: String) {
-        isProcessingPayment = true
-        paymentResult = "Processing payment..."
-        
-        guard let firstItem = cartManager.items.first else {
-            paymentResult = "No items in cart"
-            isProcessingPayment = false
-            return
-        }
-        
-        let merchantId = firstItem.shop.merchantId
-        
-        // Fetch user data before payment
-        guard let userId = authManager.currentUser?.uid else {
-            paymentResult = "User not logged in."
-            isProcessingPayment = false
-            return
-        }
-        
-        authManager.getUserData(userId: userId) { userData, error in
-            guard let userData = userData else {
-                DispatchQueue.main.async {
-                    self.paymentResult = "Failed to fetch user info: \(error ?? "Unknown error")"
-                    self.isProcessingPayment = false
-                }
-                return
-            }
-            
-            Task {
-                do {
-                    let credentials = try await self.tokenService.getMerchantTokens(merchantId: merchantId)
-                    print("Debug - Sending to Firebase:")
-                    print("  nonce: \(nonce)")
-                    print("  amount: \(self.cartManager.totalPrice)")
-                    print("  merchantId: \(merchantId)")
-                    print("  oauth_token: \(credentials.oauth_token.prefix(10)))...")
-                    
-                    // Now process the payment with the fetched tokens and user info
-                    let result = await self.paymentService.processPayment(
-                        nonce: nonce,
-                        amount: self.cartManager.totalPrice,
-                        merchantId: merchantId,
-                        oauthToken: credentials.oauth_token,
-                        cartItems: self.cartManager.items,
-                        customerName: userData.fullName,
-                        customerEmail: userData.email,
-                        userId: userId,
-                        coffeeShop: self.cartManager.items.first!.shop,
-                        pickupTime: self.selectedPickupTime
-                    )
-                    
-                    await MainActor.run {
-                        switch result {
-                        case .success(let transaction):
-                            self.paymentResult = transaction.message
-                            self.paymentSuccess = true
-                            self.transactionId = transaction.transactionId
-                            self.completedOrderItems = self.cartManager.items
-                            self.completedOrderTotal = self.cartManager.totalPrice
-                            self.completedOrderShop = self.cartManager.items.first?.shop
-                            
-                            // Orders are now stored in Firestore by the backend
-                            // Refresh orders to show the new order
-                            Task {
-                                await self.orderManager.refreshOrders()
-                            }
-                            self.cartManager.clearCart()
-                        case .failure(let error):
-                            self.paymentResult = error.localizedDescription
-                            self.paymentSuccess = false
-                            self.transactionId = nil
-                        }
-                        self.isProcessingPayment = false
-                        self.showingCardEntry = false
-                        self.showingPaymentResult = true
-                    }
-                } catch {
-                    await MainActor.run {
-                        self.paymentResult = "Failed to retrieve payment credentials: \(error.localizedDescription)"
-                        self.paymentSuccess = false
-                        self.transactionId = nil
-                        self.isProcessingPayment = false
-                        self.showingCardEntry = false
-                        self.showingPaymentResult = true
-                    }
-                }
-            }
-        }
-    }
 }
 
 // MARK: - Design System
