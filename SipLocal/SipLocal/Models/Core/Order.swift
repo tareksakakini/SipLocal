@@ -63,6 +63,7 @@ class OrderManager: ObservableObject {
     private let firestore = Firestore.firestore()
     private let auth = Auth.auth()
     private var listenerRegistration: ListenerRegistration?
+    private var authListenerHandle: AuthStateDidChangeListenerHandle?
     
     // Payment capture timer
     private var paymentCaptureTimers: [String: Timer] = [:]
@@ -76,7 +77,7 @@ class OrderManager: ObservableObject {
         }
         
         // Listen for authentication changes
-        auth.addStateDidChangeListener { [weak self] _, user in
+        authListenerHandle = auth.addStateDidChangeListener { [weak self] _, user in
             if user != nil {
                 Task {
                     await self?.setupRealtimeListener()
@@ -91,6 +92,9 @@ class OrderManager: ObservableObject {
     }
     
     deinit {
+        if let handle = authListenerHandle {
+            auth.removeStateDidChangeListener(handle)
+        }
         removeListener()
         // Clean up all payment capture timers
         paymentCaptureTimers.values.forEach { $0.invalidate() }
@@ -357,7 +361,7 @@ class OrderManager: ObservableObject {
             let data = ["transactionId": paymentId]
             
             do {
-                let result = try await functions.httpsCallable("cancelApplePayPayment").call(data)
+                _ = try await functions.httpsCallable("cancelApplePayPayment").call(data)
                 print("OrderManager: Cancelled Apple Pay order")
             } catch {
                 print("OrderManager: Error cancelling Apple Pay order: \(error)")
@@ -368,7 +372,7 @@ class OrderManager: ObservableObject {
             let data = ["paymentId": paymentId]
             
             do {
-                let result = try await functions.httpsCallable("cancelOrder").call(data)
+                _ = try await functions.httpsCallable("cancelOrder").call(data)
                 print("OrderManager: Cancelled order")
             } catch {
                 print("OrderManager: Error cancelling order: \(error)")

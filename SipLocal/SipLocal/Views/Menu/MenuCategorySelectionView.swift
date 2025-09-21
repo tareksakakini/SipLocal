@@ -29,7 +29,7 @@
  */
 
 import SwiftUI
-import struct SipLocal.MenuItemCard
+import Foundation
 
 // MARK: - Design System
 
@@ -511,11 +511,7 @@ struct MenuCategorySelectionView: View {
     /// Handle menu load retry
     private func handleMenuLoadRetry() {
         Task {
-            do {
-                await menuDataManager.refreshMenuData(for: shop)
-            } catch {
-                showError(.menuLoadFailed)
-            }
+            await menuDataManager.refreshMenuData(for: shop)
         }
     }
     
@@ -1057,7 +1053,7 @@ struct MenuCategorySelectionView: View {
         activeTasks.insert(id)
         
         // Create task with timeout
-        let task = Task {
+        _ = Task {
             let startTime = CFAbsoluteTimeGetCurrent()
             
             // Create timeout task
@@ -1112,6 +1108,8 @@ struct MenuCategorySelectionView: View {
     /// Perform memory cleanup
     private func performMemoryCleanup() {
         let memoryBefore = ProcessInfo.processInfo.physicalMemory
+        let formattedMemory = ByteCountFormatter.string(fromByteCount: Int64(memoryBefore), countStyle: .memory)
+        print("🧹 Memory cleanup started. Physical memory: \(formattedMemory)")
         
         // Clear expired cache entries (if any)
         // In a real implementation, you'd clean up cached data here

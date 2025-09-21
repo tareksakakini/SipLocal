@@ -363,11 +363,12 @@ private struct RepeatKey: Hashable, Equatable {
  * Entry for displaying order again items
  */
 private struct OrderAgainEntry: Identifiable {
-    let id = UUID()
     let key: RepeatKey
     let count: Int
     let sample: CartItem
     let menuItem: MenuItem
+
+    var id: RepeatKey { key }
 }
 
 // MARK: - OrderAgainItemCard

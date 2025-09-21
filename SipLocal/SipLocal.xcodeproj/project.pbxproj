@@ -192,10 +192,11 @@
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(DERIVED_FILE_DIR)/SquareInAppPaymentsSDKSetupMarker",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "FRAMEWOKS_SETUP_PATH=\"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/SquareInAppPaymentsSDK.framework/setup\"\nif [ -f \"$FRAMEWOKS_SETUP_PATH\" ]; then\n  /bin/sh \"$FRAMEWOKS_SETUP_PATH\"\nfi\n";
+			shellScript = "FRAMEWOKS_SETUP_PATH=\"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/SquareInAppPaymentsSDK.framework/setup\"\nif [ -f \"$FRAMEWOKS_SETUP_PATH\" ]; then\n  /bin/sh \"$FRAMEWOKS_SETUP_PATH\"\nfi\n\nif [ -n \"$SCRIPT_OUTPUT_FILE_0\" ]; then\n  touch \"$SCRIPT_OUTPUT_FILE_0\"\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 

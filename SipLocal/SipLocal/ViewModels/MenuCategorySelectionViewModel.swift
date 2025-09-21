@@ -137,7 +137,8 @@ class MenuCategorySelectionViewModel: ObservableObject {
         optimisticCartCount = 0
         
         // Delayed view appearance for smooth animation
-        DispatchQueue.main.asyncAfter(deadline: .now() + Design.viewUpdateDebounceDelay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Design.viewUpdateDebounceDelay) { [weak self] in
+            guard let self = self else { return }
             withAnimation(.easeInOut(duration: 0.3)) {
                 self.viewDidAppear = true
             }
@@ -227,7 +228,8 @@ class MenuCategorySelectionViewModel: ObservableObject {
         )
         
         // Handle result
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
             self.isAddingToCart = false
             self.addingItemId = nil
             self.pendingItem = nil
@@ -256,16 +258,17 @@ class MenuCategorySelectionViewModel: ObservableObject {
         showingError = false
         
         // Implement retry logic based on error type
-        Task {
+        Task { [weak self] in
+            guard let self = self else { return }
             do {
-                try await performRetryOperation(for: error)
-                await MainActor.run {
-                    self.isRetrying = false
+                try await self.performRetryOperation(for: error)
+                await MainActor.run { [weak self] in
+                    self?.isRetrying = false
                 }
             } catch {
-                await MainActor.run {
-                    self.isRetrying = false
-                    self.showError(.unknownError(error.localizedDescription))
+                await MainActor.run { [weak self] in
+                    self?.isRetrying = false
+                    self?.showError(.unknownError(error.localizedDescription))
                 }
             }
         }
@@ -406,7 +409,8 @@ class MenuCategorySelectionViewModel: ObservableObject {
                 }
                 
                 // Success path
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
                     self.isAddingToCart = false
                     self.addingItemId = nil
                     self.syncCartCount()
@@ -414,9 +418,10 @@ class MenuCategorySelectionViewModel: ObservableObject {
                 }
                 
             },
-            onError: { error in
+            onError: { [weak self] error in
                 // Error path
-                DispatchQueue.main.async {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
                     self.isAddingToCart = false
                     self.addingItemId = nil
                     self.rollbackOptimisticUpdate()
@@ -439,7 +444,8 @@ class MenuCategorySelectionViewModel: ObservableObject {
         }
         
         // Auto-hide popup after 2 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
+            guard let self = self else { return }
             withAnimation(.easeInOut(duration: 0.3)) {
                 self.showItemAddedPopup = false
             }
@@ -450,15 +456,17 @@ class MenuCategorySelectionViewModel: ObservableObject {
         // Cancel any existing cart update task
         cartUpdateTask?.cancel()
         
-        cartUpdateTask = Task {
+        cartUpdateTask = Task { [weak self] in
+            guard let self = self else { return }
             try? await Task.sleep(nanoseconds: UInt64(Design.cartUpdateDelay * 1_000_000_000))
             
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
                 // Sync optimistic count with actual count
                 let actualCount = self.cartManager.totalItems
                 
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    self.optimisticCartCount = 0  // Reset to use actual count
+                    self.optimisticCartCount = actualCount
                 }
                 
                 self.cartUpdateTask = nil
@@ -528,7 +536,8 @@ class MenuCategorySelectionViewModel: ObservableObject {
         activeTasks.insert(id)
         
         // Create task with timeout
-        let task = Task {
+        _ = Task { [weak self] in
+            guard let self = self else { return }
             let startTime = CFAbsoluteTimeGetCurrent()
             
             // Create timeout task
@@ -559,7 +568,8 @@ class MenuCategorySelectionViewModel: ObservableObject {
             }
             
             // Remove from active tasks
-            await MainActor.run {
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
                 self.activeTasks.remove(id)
                 let duration = CFAbsoluteTimeGetCurrent() - startTime
                 print("✅ Task completed: \(id) in \(String(format: "%.3f", duration))s")
@@ -619,7 +629,7 @@ class MenuCategorySelectionViewModel: ObservableObject {
             // Retry the failed operation
             break
         case .addToCartFailed(let itemName):
-            // Retry adding the item
+            print("Retrying add-to-cart for item: \(itemName)")
             break
         default:
             throw error

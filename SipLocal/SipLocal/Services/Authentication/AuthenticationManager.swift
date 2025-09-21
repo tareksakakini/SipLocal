@@ -56,6 +56,7 @@ class AuthenticationManager: ObservableObject {
     // MARK: - Private Properties
     
     private var lastKnownUserId: String?
+    private var authListenerHandle: AuthStateDidChangeListenerHandle?
     
     // MARK: - Initialization
     
@@ -69,7 +70,7 @@ class AuthenticationManager: ObservableObject {
         self.lastKnownUserId = currentUser?.uid
         
         // Listen for authentication state changes
-        auth.addStateDidChangeListener { [weak self] _, user in
+        authListenerHandle = auth.addStateDidChangeListener { [weak self] _, user in
             DispatchQueue.main.async {
                 self?.handleAuthenticationStateChange(user: user)
             }
@@ -77,6 +78,9 @@ class AuthenticationManager: ObservableObject {
     }
     
     deinit {
+        if let handle = authListenerHandle {
+            auth.removeStateDidChangeListener(handle)
+        }
         print("🔐 AuthenticationManager deinitialized")
     }
     
