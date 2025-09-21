@@ -258,7 +258,7 @@ struct MenuItemsView: View {
 
 struct MenuItemsView_Previews: PreviewProvider {
     static var previews: some View {
-        let sampleShop = DataService.loadCoffeeShops().first!
+        let sampleShop = CoffeeShopDataService.loadCoffeeShops().first!
         
         // Create sample modifier lists to demonstrate different picker types
         

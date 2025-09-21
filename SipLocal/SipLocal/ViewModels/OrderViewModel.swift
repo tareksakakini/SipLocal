@@ -171,7 +171,7 @@ class OrderViewModel: ObservableObject {
         
         // Load coffee shops (instant from local data)
         DispatchQueue.main.asyncAfter(deadline: .now() + Design.loadingDelay) {
-            self.coffeeShops = DataService.loadCoffeeShops()
+            self.coffeeShops = CoffeeShopDataService.loadCoffeeShops()
             self.isLoadingShops = false
             self.loadBusinessHoursForAllShops()
             print("🏪 Loaded \(self.coffeeShops.count) coffee shops for ordering")

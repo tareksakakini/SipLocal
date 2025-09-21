@@ -3,8 +3,71 @@ import OneSignalFramework
 import FirebaseFirestore
 import UIKit
 
+/**
+ * DeviceManager - Coordinates device registration, management, and cleanup operations.
+ *
+ * ## Responsibilities
+ * - **Device Registration**: Registers and unregisters devices for users
+ * - **Activity Tracking**: Updates device activity timestamps
+ * - **Device Management**: Retrieves and manages user devices
+ * - **Cleanup Operations**: Removes inactive devices
+ *
+ * ## Architecture
+ * - **Service Extraction Pattern**: Delegates to specialized services
+ * - **Coordinator Pattern**: Acts as a coordinator for device-related operations
+ * - **Error Handling**: Comprehensive error handling with completion callbacks
+ * - **Firebase Integration**: Manages Firestore operations for device data
+ *
+ * Created by SipLocal Development Team
+ * Copyright © 2024 SipLocal. All rights reserved.
+ */
 class DeviceManager: ObservableObject {
-    private let firestore = Firestore.firestore()
+    
+    // MARK: - Private Services
+    
+    private let deviceRegistrationService: DeviceRegistrationService
+    private let deviceActivityService: DeviceActivityService
+    private let deviceManagementService: DeviceManagementService
+    
+    // MARK: - Initialization
+    
+    init() {
+        self.deviceRegistrationService = DeviceRegistrationService()
+        self.deviceActivityService = DeviceActivityService()
+        self.deviceManagementService = DeviceManagementService()
+        print("📱 DeviceManager initialized with service extraction pattern")
+    }
+    
+    // MARK: - Public Methods
+    
+    func registerDeviceForUser(userId: String, completion: @escaping (Bool, String?) -> Void) {
+        deviceRegistrationService.registerDeviceForUser(userId: userId, completion: completion)
+    }
+    
+    func unregisterDeviceForUser(userId: String, completion: @escaping (Bool, String?) -> Void) {
+        deviceRegistrationService.unregisterDeviceForUser(userId: userId, completion: completion)
+    }
+    
+    func updateDeviceActivity(userId: String, completion: @escaping (Bool, String?) -> Void) {
+        deviceActivityService.updateDeviceActivity(userId: userId, completion: completion)
+    }
+    
+    func getUserDevices(userId: String, completion: @escaping ([UserDevice]) -> Void) {
+        deviceManagementService.getUserDevices(userId: userId, completion: completion)
+    }
+    
+    func getActiveDeviceIds(userId: String, completion: @escaping ([String]) -> Void) {
+        deviceManagementService.getActiveDeviceIds(userId: userId, completion: completion)
+    }
+    
+    func removeInactiveDevices(userId: String, daysCutoff: Int = 90, completion: @escaping (Int, String?) -> Void) {
+        deviceManagementService.removeInactiveDevices(userId: userId, daysCutoff: daysCutoff, completion: completion)
+    }
+}
+
+// MARK: - UserDevice Model
+
+extension DeviceManager {
     
     struct UserDevice {
         let deviceId: String
@@ -52,169 +115,13 @@ class DeviceManager: ObservableObject {
             self.lastActiveAt = lastActiveAt.dateValue()
         }
     }
+}
+
+// MARK: - Device Info Helper
+
+extension DeviceManager {
     
-    func registerDeviceForUser(userId: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let oneSignalDeviceId = OneSignal.User.pushSubscription.id else {
-            completion(false, "OneSignal device ID not available")
-            return
-        }
-        
-        let device = getCurrentDeviceInfo(deviceId: oneSignalDeviceId)
-        let userDocRef = firestore.collection("users").document(userId)
-        
-        userDocRef.updateData([
-            "devices.\(oneSignalDeviceId)": device.dictionary
-        ]) { error in
-            if let error = error {
-                print("Error registering device: \(error.localizedDescription)")
-                completion(false, error.localizedDescription)
-            } else {
-                print("Device registered successfully: \(oneSignalDeviceId)")
-                completion(true, nil)
-            }
-        }
-    }
-    
-    func unregisterDeviceForUser(userId: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let oneSignalDeviceId = OneSignal.User.pushSubscription.id else {
-            completion(false, "OneSignal device ID not available")
-            return
-        }
-        
-        let userDocRef = firestore.collection("users").document(userId)
-        
-        userDocRef.updateData([
-            "devices.\(oneSignalDeviceId)": FieldValue.delete()
-        ]) { error in
-            if let error = error {
-                print("Error unregistering device: \(error.localizedDescription)")
-                completion(false, error.localizedDescription)
-            } else {
-                print("Device unregistered successfully: \(oneSignalDeviceId)")
-                completion(true, nil)
-            }
-        }
-    }
-    
-    func updateDeviceActivity(userId: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let oneSignalDeviceId = OneSignal.User.pushSubscription.id else {
-            completion(false, "OneSignal device ID not available")
-            return
-        }
-        
-        let userDocRef = firestore.collection("users").document(userId)
-        
-        userDocRef.updateData([
-            "devices.\(oneSignalDeviceId).lastActiveAt": Timestamp(date: Date())
-        ]) { error in
-            if let error = error {
-                print("Error updating device activity: \(error.localizedDescription)")
-                completion(false, error.localizedDescription)
-            } else {
-                completion(true, nil)
-            }
-        }
-    }
-    
-    func getUserDevices(userId: String, completion: @escaping ([UserDevice]) -> Void) {
-        let userDocRef = firestore.collection("users").document(userId)
-        
-        userDocRef.getDocument { document, error in
-            if let error = error {
-                print("Error fetching user devices: \(error.localizedDescription)")
-                completion([])
-                return
-            }
-            
-            guard let data = document?.data(),
-                  let devicesData = data["devices"] as? [String: [String: Any]] else {
-                completion([])
-                return
-            }
-            
-            let devices = devicesData.compactMap { (_, deviceData) in
-                UserDevice(from: deviceData)
-            }
-            
-            completion(devices)
-        }
-    }
-    
-    func getActiveDeviceIds(userId: String, completion: @escaping ([String]) -> Void) {
-        let userDocRef = firestore.collection("users").document(userId)
-        let cutoffDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-        
-        userDocRef.getDocument { document, error in
-            if let error = error {
-                print("Error fetching active devices: \(error.localizedDescription)")
-                completion([])
-                return
-            }
-            
-            guard let data = document?.data(),
-                  let devicesData = data["devices"] as? [String: [String: Any]] else {
-                completion([])
-                return
-            }
-            
-            let activeDeviceIds = devicesData.compactMap { (deviceId, deviceData) -> String? in
-                guard let lastActiveTimestamp = deviceData["lastActiveAt"] as? Timestamp else {
-                    return nil
-                }
-                
-                let lastActiveDate = lastActiveTimestamp.dateValue()
-                return lastActiveDate > cutoffDate ? deviceId : nil
-            }
-            
-            completion(activeDeviceIds)
-        }
-    }
-    
-    func removeInactiveDevices(userId: String, daysCutoff: Int = 90, completion: @escaping (Int, String?) -> Void) {
-        let userDocRef = firestore.collection("users").document(userId)
-        let cutoffDate = Calendar.current.date(byAdding: .day, value: -daysCutoff, to: Date()) ?? Date()
-        
-        userDocRef.getDocument { document, error in
-            if let error = error {
-                completion(0, error.localizedDescription)
-                return
-            }
-            
-            guard let data = document?.data(),
-                  let devicesData = data["devices"] as? [String: [String: Any]] else {
-                completion(0, nil)
-                return
-            }
-            
-            let inactiveDeviceIds = devicesData.compactMap { (deviceId, deviceData) -> String? in
-                guard let lastActiveTimestamp = deviceData["lastActiveAt"] as? Timestamp else {
-                    return deviceId // Remove devices without lastActiveAt
-                }
-                
-                let lastActiveDate = lastActiveTimestamp.dateValue()
-                return lastActiveDate < cutoffDate ? deviceId : nil
-            }
-            
-            guard !inactiveDeviceIds.isEmpty else {
-                completion(0, nil)
-                return
-            }
-            
-            let updateData: [String: Any] = inactiveDeviceIds.reduce(into: [:]) { result, deviceId in
-                result["devices.\(deviceId)"] = FieldValue.delete()
-            }
-            
-            userDocRef.updateData(updateData) { error in
-                if let error = error {
-                    completion(0, error.localizedDescription)
-                } else {
-                    completion(inactiveDeviceIds.count, nil)
-                }
-            }
-        }
-    }
-    
-    private func getCurrentDeviceInfo(deviceId: String) -> UserDevice {
+    static func getCurrentDeviceInfo(deviceId: String) -> UserDevice {
         let device = UIDevice.current
         let deviceName = device.name
         let deviceModel = device.model

@@ -571,7 +571,7 @@ extension EmptyMenuView {
 
 struct MenuView_Previews: PreviewProvider {
     static var previews: some View {
-        let sampleShop = DataService.loadCoffeeShops().first!
+        let sampleShop = CoffeeShopDataService.loadCoffeeShops().first!
         MenuView(shop: sampleShop)
     }
 } 

@@ -35,7 +35,7 @@ struct FavoritesView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var favoriteShops: [CoffeeShop] = []
     
-    private let allShops = DataService.loadCoffeeShops()
+    private let allShops = CoffeeShopDataService.loadCoffeeShops()
     
     var body: some View {
         NavigationStack {

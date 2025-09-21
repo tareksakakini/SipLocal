@@ -141,7 +141,7 @@ class FavoritesViewModel: ObservableObject {
         
         // Simulate async loading (instant from local data)
         DispatchQueue.main.asyncAfter(deadline: .now() + Design.loadingDelay) {
-            self.allShops = DataService.loadCoffeeShops()
+            self.allShops = CoffeeShopDataService.loadCoffeeShops()
             self.isLoadingShops = false
             self.fetchFavoriteShops()
             print("📍 Loaded \(self.allShops.count) coffee shops for favorites")

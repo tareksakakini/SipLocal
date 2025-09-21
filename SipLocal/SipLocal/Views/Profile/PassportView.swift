@@ -36,7 +36,7 @@ private enum Design {
 struct PassportView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     
-    private let coffeeShops = DataService.loadCoffeeShops()
+    private let coffeeShops = CoffeeShopDataService.loadCoffeeShops()
     
     // Grid layout configuration
     private var gridColumns: [GridItem] {

@@ -55,7 +55,7 @@ struct OrderView: View {
     @State private var isSearching = false
     @EnvironmentObject var cartManager: CartManager
     
-    private let coffeeShops = DataService.loadCoffeeShops()
+    private let coffeeShops = CoffeeShopDataService.loadCoffeeShops()
     
     // MARK: - Computed Properties
     

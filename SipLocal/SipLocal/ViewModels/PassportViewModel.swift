@@ -139,7 +139,7 @@ class PassportViewModel: ObservableObject {
         
         // Simulate async loading (in real app, this might be from network/database)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            self.coffeeShops = DataService.loadCoffeeShops()
+            self.coffeeShops = CoffeeShopDataService.loadCoffeeShops()
             self.isLoadingShops = false
             print("📍 Loaded \(self.coffeeShops.count) coffee shops for passport")
         }

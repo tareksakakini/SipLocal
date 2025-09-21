@@ -1553,7 +1553,7 @@ extension MenuCategorySelectionView {
  */
 struct MenuCategorySelectionView_Previews: PreviewProvider {
     static var previews: some View {
-        let sampleShop = DataService.loadCoffeeShops().first!
+        let sampleShop = CoffeeShopDataService.loadCoffeeShops().first!
         
         Group {
             // MARK: - Default State Preview

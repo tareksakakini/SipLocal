@@ -180,7 +180,7 @@ class ExploreViewModel: ObservableObject {
         isLoadingShops = true
         
         // Load coffee shops (instant from local data)
-        coffeeShops = DataService.loadCoffeeShops()
+        coffeeShops = CoffeeShopDataService.loadCoffeeShops()
         isLoadingShops = false
         
         print("📍 Loaded \(coffeeShops.count) coffee shops for exploration")

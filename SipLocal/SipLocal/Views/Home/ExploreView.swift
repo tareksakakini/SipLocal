@@ -55,7 +55,7 @@ private enum Design {
 /// Features interactive map with annotations, search functionality, and detailed shop information
 struct ExploreView: View {
     @EnvironmentObject var authManager: AuthenticationManager
-    @State private var coffeeShops: [CoffeeShop] = DataService.loadCoffeeShops()
+    @State private var coffeeShops: [CoffeeShop] = CoffeeShopDataService.loadCoffeeShops()
     @State private var searchText: String = ""
     @State private var region: MKCoordinateRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(

@@ -1,19 +1,47 @@
 import Foundation
 import SwiftUI
 
+/**
+ * MenuDataManager - Coordinates menu data fetching, caching, and state management operations.
+ *
+ * ## Responsibilities
+ * - **Menu Data Coordination**: Coordinates between data fetching and caching services
+ * - **State Management**: Manages loading states and error messages for UI
+ * - **Data Access**: Provides clean API for accessing menu data
+ * - **Background Operations**: Handles silent refreshes and background updates
+ *
+ * ## Architecture
+ * - **Service Extraction Pattern**: Delegates to specialized services
+ * - **Coordinator Pattern**: Acts as a coordinator for menu-related operations
+ * - **Singleton Pattern**: Provides shared instance for app-wide access
+ * - **MainActor Isolation**: Ensures UI updates happen on main thread
+ *
+ * Created by SipLocal Development Team
+ * Copyright © 2024 SipLocal. All rights reserved.
+ */
 @MainActor
 class MenuDataManager: ObservableObject {
+    
+    // MARK: - Singleton
+    
     static let shared = MenuDataManager()
+    
+    // MARK: - Published Properties
     
     @Published var menuData: [String: [MenuCategory]] = [:]
     @Published var loadingStates: [String: Bool] = [:]
     @Published var errorMessages: [String: String] = [:]
     
-    // Remove direct service dependency - will use POSServiceFactory instead
-    private let fileManager = FileManager.default
-    private let cacheTTLSeconds: TimeInterval = 60 * 30 // 30 minutes
+    // MARK: - Private Services
     
-    private init() {}
+    private let menuCachingService: MenuCachingService
+    
+    // MARK: - Initialization
+    
+    private init() {
+        self.menuCachingService = MenuCachingService()
+        print("📋 MenuDataManager initialized with service extraction pattern")
+    }
     
     // MARK: - Public API
     
@@ -30,13 +58,13 @@ class MenuDataManager: ObservableObject {
         }
         
         // 2) Try disk cache first for instant UI
-        if let cached = await loadMenuFromDisk(for: shop.id) {
+        if let cached = await menuCachingService.loadMenuFromDisk(for: shop.id) {
             menuData[shop.id] = cached.categories
             loadingStates[shop.id] = false
             errorMessages[shop.id] = nil
             
             // If cache is stale, refresh in background
-            if Date().timeIntervalSince1970 - cached.timestamp > cacheTTLSeconds {
+            if menuCachingService.isCacheStale(cached) {
                 Task.detached { [weak self] in
                     guard let self else { return }
                     await self.refreshSilently(for: shop)
@@ -60,7 +88,7 @@ class MenuDataManager: ObservableObject {
             menuData[shop.id] = categories
             loadingStates[shop.id] = false
             // Save to disk cache
-            await saveMenuToDisk(for: shop.id, categories: categories)
+            await menuCachingService.saveMenuToDisk(for: shop.id, categories: categories)
         } catch {
             errorMessages[shop.id] = error.localizedDescription
             loadingStates[shop.id] = false
@@ -88,7 +116,7 @@ class MenuDataManager: ObservableObject {
         await fetchMenuData(for: shop)
     }
     
-    // MARK: - Private helpers (caching)
+    // MARK: - Private Methods
     
     private func refreshSilently(for shop: CoffeeShop) async {
         do {
@@ -99,42 +127,10 @@ class MenuDataManager: ObservableObject {
                 self.loadingStates[shop.id] = false
                 self.errorMessages[shop.id] = nil
             }
-            await saveMenuToDisk(for: shop.id, categories: categories)
+            await menuCachingService.saveMenuToDisk(for: shop.id, categories: categories)
         } catch {
             // Keep showing cached data; optionally log error
             print("Silent refresh failed for shop \(shop.id): \(error.localizedDescription)")
-        }
-    }
-    
-    private struct CachedMenu: Codable {
-        let categories: [MenuCategory]
-        let timestamp: TimeInterval
-    }
-    
-    private func cacheFileURL(for shopId: String) -> URL? {
-        guard let cachesDir = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
-        return cachesDir.appendingPathComponent("menu_cache_\(shopId).json")
-    }
-    
-    private func saveMenuToDisk(for shopId: String, categories: [MenuCategory]) async {
-        guard let url = cacheFileURL(for: shopId) else { return }
-        let cached = CachedMenu(categories: categories, timestamp: Date().timeIntervalSince1970)
-        do {
-            let data = try JSONEncoder().encode(cached)
-            try data.write(to: url, options: .atomic)
-        } catch {
-            print("Failed to write menu cache for shop \(shopId): \(error)")
-        }
-    }
-    
-    private func loadMenuFromDisk(for shopId: String) async -> CachedMenu? {
-        guard let url = cacheFileURL(for: shopId) else { return nil }
-        do {
-            let data = try Data(contentsOf: url)
-            let cached = try JSONDecoder().decode(CachedMenu.self, from: data)
-            return cached
-        } catch {
-            return nil
         }
     }
 } 
