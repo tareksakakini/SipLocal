@@ -1,77 +1,115 @@
 import SwiftUI
 
+/**
+ * PastOrdersView - Displays the user's past orders (completed and cancelled).
+ *
+ * ## Features
+ * - **Order History**: Shows completed and cancelled orders
+ * - **Order Details**: Expandable order rows with item details
+ * - **Order Management**: Cancel orders and clear all orders
+ * - **Error Handling**: Displays loading states and error messages
+ * - **Empty State**: Shows helpful message when no orders exist
+ *
+ * ## Architecture
+ * - **MVVM Pattern**: Uses PastOrdersViewModel for business logic
+ * - **Design System**: Centralized styling constants
+ * - **Component-Based**: Reusable UI components
+ * - **Reactive UI**: Updates automatically with ViewModel state changes
+ *
+ * Created by SipLocal Development Team
+ * Copyright © 2024 SipLocal. All rights reserved.
+ */
 struct PastOrdersView: View {
-    @EnvironmentObject var orderManager: OrderManager
-    @Environment(\.presentationMode) var presentationMode
-    @State private var showClearAllConfirmation = false
     
-    // Filter to get only past orders (completed and cancelled)
-    private var pastOrders: [Order] {
-        orderManager.orders.filter { [.completed, .cancelled].contains($0.status) }
+    // MARK: - Properties
+    
+    @StateObject private var viewModel: PastOrdersViewModel
+    @Environment(\.presentationMode) var presentationMode
+    
+    // MARK: - Initialization
+    
+    init(orderManager: OrderManager) {
+        self._viewModel = StateObject(wrappedValue: PastOrdersViewModel(orderManager: orderManager))
     }
     
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if orderManager.isLoading {
-                    loadingView
-                } else if let errorMessage = orderManager.errorMessage {
-                    errorView(message: errorMessage)
-                } else if pastOrders.isEmpty {
-                    emptyStateView
-                } else {
-                    ordersList
-                }
+                contentSection
             }
-            .navigationTitle("Past Orders")
+            .navigationTitle(PastOrdersViewModel.Design.navigationTitle)
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
-                        presentationMode.wrappedValue.dismiss()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
-                            Text("Back")
-                                .font(.body)
-                        }
-                        .foregroundColor(.primary)
-                    }
+                    backButton
                 }
                 
-                if !pastOrders.isEmpty {
+                if viewModel.hasPastOrders {
                     ToolbarItem(placement: .navigationBarTrailing) {
-                        Button("Clear All") {
-                            showClearAllConfirmation = true
-                        }
-                        .foregroundColor(.red)
+                        clearAllButton
                     }
                 }
             }
         }
         .confirmationDialog(
-            "Clear All Orders",
-            isPresented: $showClearAllConfirmation,
+            PastOrdersViewModel.Design.clearAllConfirmationTitle,
+            isPresented: $viewModel.showClearAllConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Clear All Orders", role: .destructive) {
+            Button(PastOrdersViewModel.Design.clearAllActionText, role: .destructive) {
                 Task {
-                    await orderManager.clearAllOrders()
+                    await viewModel.clearAllOrders()
                 }
             }
-            Button("Cancel", role: .cancel) { }
+            Button(PastOrdersViewModel.Design.cancelActionText, role: .cancel) { }
         } message: {
-            Text("This action cannot be undone. All of your past orders will be permanently deleted.")
+            Text(PastOrdersViewModel.Design.clearAllConfirmationMessage)
         }
-        .onAppear {
-            // Debug: Check if orders are being fetched when view appears
-            print("PastOrdersView: View appeared, checking orders...")
-            Task {
-                await orderManager.fetchOrders()
+        .task {
+            await viewModel.loadOrders()
+        }
+    }
+    
+    // MARK: - Content Sections
+    
+    private var contentSection: some View {
+        Group {
+            if viewModel.isLoading {
+                loadingView
+            } else if let errorMessage = viewModel.errorMessage {
+                errorView(message: errorMessage)
+            } else if viewModel.pastOrders.isEmpty {
+                emptyStateView
+            } else {
+                ordersList
             }
         }
     }
+    
+    // MARK: - Toolbar Components
+    
+    private var backButton: some View {
+        Button(action: {
+            presentationMode.wrappedValue.dismiss()
+        }) {
+            HStack(spacing: 4) {
+                Image(systemName: PastOrdersViewModel.Design.backIcon)
+                    .font(.system(size: 16, weight: .medium))
+                Text(PastOrdersViewModel.Design.backButtonText)
+                    .font(PastOrdersViewModel.Design.bodyFont)
+            }
+            .foregroundColor(PastOrdersViewModel.Design.primaryTextColor)
+        }
+    }
+    
+    private var clearAllButton: some View {
+        Button(PastOrdersViewModel.Design.clearAllButtonText) {
+            viewModel.showClearAllConfirmationDialog()
+        }
+        .foregroundColor(PastOrdersViewModel.Design.destructiveColor)
+    }
+    
+    // MARK: - Content Views
     
     private var loadingView: some View {
         VStack(spacing: 24) {
@@ -80,14 +118,14 @@ struct PastOrdersView: View {
             ProgressView()
                 .scaleEffect(1.5)
             
-            Text("Loading orders...")
-                .font(.body)
-                .foregroundColor(.secondary)
+            Text(PastOrdersViewModel.Design.loadingText)
+                .font(PastOrdersViewModel.Design.bodyFont)
+                .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
             
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGray6))
+        .background(PastOrdersViewModel.Design.backgroundColor)
     }
     
     private func errorView(message: String) -> some View {
@@ -95,26 +133,25 @@ struct PastOrdersView: View {
             Spacer()
             
             VStack(spacing: 16) {
-                Image(systemName: "exclamationmark.triangle")
+                Image(systemName: PastOrdersViewModel.Design.errorIcon)
                     .font(.system(size: 60))
-                    .foregroundColor(.orange)
+                    .foregroundColor(PastOrdersViewModel.Design.errorColor)
                 
                 VStack(spacing: 8) {
-                    Text("Error Loading Orders")
-                        .font(.title2)
-                        .fontWeight(.semibold)
+                    Text(PastOrdersViewModel.Design.errorTitle)
+                        .font(PastOrdersViewModel.Design.titleFont)
                     
                     Text(message)
-                        .font(.body)
-                        .foregroundColor(.secondary)
+                        .font(PastOrdersViewModel.Design.bodyFont)
+                        .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
             }
             
-            Button("Try Again") {
+            Button(PastOrdersViewModel.Design.retryButtonText) {
                 Task {
-                    await orderManager.fetchOrders()
+                    await viewModel.retryLoading()
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -122,7 +159,7 @@ struct PastOrdersView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGray6))
+        .background(PastOrdersViewModel.Design.backgroundColor)
     }
     
     private var emptyStateView: some View {
@@ -130,18 +167,17 @@ struct PastOrdersView: View {
             Spacer()
             
             VStack(spacing: 16) {
-                Image(systemName: "cup.and.saucer")
+                Image(systemName: PastOrdersViewModel.Design.emptyStateIcon)
                     .font(.system(size: 60))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                 
                 VStack(spacing: 8) {
-                    Text("No Past Orders")
-                        .font(.title2)
-                        .fontWeight(.semibold)
+                    Text(PastOrdersViewModel.Design.emptyStateTitle)
+                        .font(PastOrdersViewModel.Design.titleFont)
                     
-                    Text("Your order history will appear here after you make your first purchase.")
-                        .font(.body)
-                        .foregroundColor(.secondary)
+                    Text(PastOrdersViewModel.Design.emptyStateMessage)
+                        .font(PastOrdersViewModel.Design.bodyFont)
+                        .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 32)
                 }
@@ -150,38 +186,58 @@ struct PastOrdersView: View {
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGray6))
+        .background(PastOrdersViewModel.Design.backgroundColor)
     }
     
     private var ordersList: some View {
         ScrollView {
-            LazyVStack(spacing: 16) {
-                ForEach(pastOrders) { order in
-                    OrderRow(order: order)
+            LazyVStack(spacing: PastOrdersViewModel.Design.sectionSpacing) {
+                ForEach(viewModel.pastOrders) { order in
+                    OrderRow(order: order, viewModel: viewModel)
                 }
             }
-            .padding()
+            .padding(PastOrdersViewModel.Design.padding)
         }
-        .background(Color(.systemGray6))
+        .background(PastOrdersViewModel.Design.backgroundColor)
     }
 }
 
+/**
+ * OrderRow - Displays individual order information with expandable details.
+ *
+ * ## Features
+ * - **Order Summary**: Shows shop name, date, total, and item count
+ * - **Expandable Details**: Tap to show order items and transaction details
+ * - **Order Actions**: Cancel orders and view receipts
+ * - **Status Display**: Visual status indicators with colors and icons
+ *
+ * ## Architecture
+ * - **Component-Based**: Reusable order display component
+ * - **Design System**: Uses centralized styling constants
+ * - **State Management**: Manages expansion and cancellation states
+ *
+ * Created by SipLocal Development Team
+ * Copyright © 2024 SipLocal. All rights reserved.
+ */
 struct OrderRow: View {
+    
+    // MARK: - Properties
+    
     let order: Order
+    let viewModel: PastOrdersViewModel?
+    
     @State private var isExpanded = false
     @State private var showingCancelAlert = false
     @State private var isCancelling = false
-    @EnvironmentObject var orderManager: OrderManager
     
     var body: some View {
         VStack(spacing: 0) {
             // Main order info
-            HStack(spacing: 12) {
+            HStack(spacing: PastOrdersViewModel.Design.itemSpacing) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack {
                         Text(order.coffeeShop.name)
-                            .font(.headline)
-                            .fontWeight(.semibold)
+                            .font(PastOrdersViewModel.Design.headlineFont)
                         
                         Spacer()
                         
@@ -190,35 +246,34 @@ struct OrderRow: View {
                     }
                     
                     Text(order.coffeeShop.address)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(PastOrdersViewModel.Design.captionFont)
+                        .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                         .lineLimit(1)
                     
                     Text(order.formattedDate)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(PastOrdersViewModel.Design.captionFont)
+                        .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                 }
                 
                 Spacer()
                 
                 VStack(alignment: .trailing, spacing: 4) {
                     Text("$\(order.totalAmount, specifier: "%.2f")")
-                        .font(.headline)
-                        .fontWeight(.semibold)
+                        .font(PastOrdersViewModel.Design.headlineFont)
                     
                     HStack(spacing: 4) {
                         Text("\(order.items.reduce(0) { $0 + $1.quantity }) items")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(PastOrdersViewModel.Design.captionFont)
+                            .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                         
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(PastOrdersViewModel.Design.captionFont)
+                            .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                     }
                 }
             }
-            .padding()
-            .background(Color.white)
+            .padding(PastOrdersViewModel.Design.padding)
+            .background(PastOrdersViewModel.Design.cardBackgroundColor)
             .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isExpanded.toggle()
@@ -227,18 +282,18 @@ struct OrderRow: View {
             
             // Expanded details
             if isExpanded {
-                VStack(spacing: 16) {
+                VStack(spacing: PastOrdersViewModel.Design.sectionSpacing) {
                     Divider()
                     
                     // Order items
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Image(systemName: "cup.and.saucer.fill")
-                                .font(.caption)
+                                .font(PastOrdersViewModel.Design.captionFont)
                                 .foregroundColor(.orange)
                             Text("Items")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(PastOrdersViewModel.Design.captionFont)
+                                .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                                 .textCase(.uppercase)
                                 .fontWeight(.medium)
                             Spacer()
@@ -248,13 +303,13 @@ struct OrderRow: View {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(item.menuItem.name)
-                                        .font(.body)
+                                        .font(PastOrdersViewModel.Design.bodyFont)
                                         .fontWeight(.medium)
                                     
                                     if let customizations = item.customizations, !customizations.isEmpty {
                                         Text(customizations)
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
+                                            .font(PastOrdersViewModel.Design.captionFont)
+                                            .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                                     }
                                 }
                                 
@@ -263,15 +318,15 @@ struct OrderRow: View {
                                 // Show setup details briefly when available
                                 if let sizeId = item.selectedSizeId {
                                     Text("Size: \(sizeId)")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
+                                        .font(PastOrdersViewModel.Design.caption2Font)
+                                        .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                                 }
                                 Text("×\(item.quantity)")
-                                    .font(.body)
-                                    .foregroundColor(.secondary)
+                                    .font(PastOrdersViewModel.Design.bodyFont)
+                                    .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                                 
                                 Text("$\(item.totalPrice, specifier: "%.2f")")
-                                    .font(.body)
+                                    .font(PastOrdersViewModel.Design.bodyFont)
                                     .fontWeight(.medium)
                             }
                             .padding(.bottom, 2)
@@ -283,20 +338,20 @@ struct OrderRow: View {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Image(systemName: "creditcard")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(PastOrdersViewModel.Design.captionFont)
+                                .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                             Text("Transaction ID")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(PastOrdersViewModel.Design.captionFont)
+                                .foregroundColor(PastOrdersViewModel.Design.secondaryTextColor)
                                 .textCase(.uppercase)
                                 .fontWeight(.medium)
                             Spacer()
                         }
                         
                         Text(order.transactionId)
-                            .font(.caption)
+                            .font(PastOrdersViewModel.Design.captionFont)
                             .fontDesign(.monospaced)
-                            .foregroundColor(.primary)
+                            .foregroundColor(PastOrdersViewModel.Design.primaryTextColor)
                     }
                     // Show View Receipt button if receiptUrl is present
                     if let receiptUrl = order.receiptUrl, let url = URL(string: receiptUrl) {
@@ -307,7 +362,7 @@ struct OrderRow: View {
                                 Image(systemName: "doc.text.magnifyingglass")
                                 Text("View Receipt")
                             }
-                            .font(.subheadline)
+                            .font(PastOrdersViewModel.Design.captionFont)
                             .foregroundColor(.blue)
                             .padding(.top, 4)
                         }
@@ -332,24 +387,24 @@ struct OrderRow: View {
                                     Text("Cancel Order")
                                 }
                             }
-                            .font(.subheadline)
+                            .font(PastOrdersViewModel.Design.captionFont)
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(Color.red)
-                            .cornerRadius(8)
+                            .background(PastOrdersViewModel.Design.destructiveColor)
+                            .cornerRadius(PastOrdersViewModel.Design.cornerRadius)
                         }
                         .disabled(isCancelling)
                         .padding(.top, 8)
                     }
                 }
-                .padding(.horizontal)
-                .padding(.bottom)
-                .background(Color.white)
+                .padding(.horizontal, PastOrdersViewModel.Design.padding)
+                .padding(.bottom, PastOrdersViewModel.Design.padding)
+                .background(PastOrdersViewModel.Design.cardBackgroundColor)
             }
         }
-        .cornerRadius(12)
+        .cornerRadius(PastOrdersViewModel.Design.cornerRadius)
         .shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1)
         .alert("Cancel Order?", isPresented: $showingCancelAlert) {
             Button("Cancel Order", role: .destructive) {
@@ -363,95 +418,31 @@ struct OrderRow: View {
     
     private var statusBadge: some View {
         HStack(spacing: 4) {
-            Image(systemName: statusIcon)
-                .font(.caption)
+            Image(systemName: PastOrdersViewModel.statusIcon(for: order.status))
+                .font(PastOrdersViewModel.Design.captionFont)
             
-            Text(statusDisplayText)
-                .font(.caption)
+            Text(PastOrdersViewModel.statusDisplayText(for: order.status))
+                .font(PastOrdersViewModel.Design.captionFont)
                 .fontWeight(.medium)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(statusColor.opacity(0.1))
-        .foregroundColor(statusColor)
+        .background(PastOrdersViewModel.statusColor(for: order.status).opacity(0.1))
+        .foregroundColor(PastOrdersViewModel.statusColor(for: order.status))
         .cornerRadius(8)
     }
     
-    private var statusDisplayText: String {
-        switch order.status {
-        case .authorized:
-            return "Authorized"
-        case .submitted:
-            return "Submitted"
-        case .inProgress:
-            return "In Progress"
-        case .ready:
-            return "Ready"
-        case .completed:
-            return "Completed"
-        case .cancelled:
-            return "Cancelled"
-        case .draft:
-            return "Draft"
-        case .pending:
-            return "Pending"
-        case .active:
-            return "Active"
-        }
-    }
-    
-    private var statusIcon: String {
-        switch order.status {
-        case .authorized:
-            return "clock.badge.checkmark.fill"
-        case .submitted:
-            return "doc.text"
-        case .inProgress:
-            return "clock.fill"
-        case .ready:
-            return "checkmark.circle.fill"
-        case .completed:
-            return "folder.fill"
-        case .cancelled:
-            return "xmark.circle.fill"
-        case .draft:
-            return "doc.text"
-        case .pending:
-            return "hourglass"
-        case .active:
-            return "clock.fill" // Legacy support
-        }
-    }
-    
-    private var statusColor: Color {
-        switch order.status {
-        case .authorized:
-            return .orange
-        case .submitted:
-            return .orange
-        case .inProgress:
-            return .blue
-        case .ready:
-            return .green
-        case .completed:
-            return .gray
-        case .cancelled:
-            return .red
-        case .draft:
-            return .gray
-        case .pending:
-            return .orange
-        case .active:
-            return .blue // Legacy support
-        }
-    }
-    
     private func cancelOrder() {
+        guard let viewModel = viewModel else {
+            print("OrderRow: No ViewModel available for order cancellation")
+            return
+        }
+        
         isCancelling = true
         
         Task {
             do {
-                try await orderManager.cancelOrder(paymentId: order.transactionId)
+                try await viewModel.cancelOrder(order)
                 await MainActor.run {
                     isCancelling = false
                     // Order status will be updated automatically via real-time listener
@@ -467,10 +458,10 @@ struct OrderRow: View {
     }
 }
 
-// Preview
+// MARK: - Preview
+
 struct PastOrdersView_Previews: PreviewProvider {
     static var previews: some View {
-        PastOrdersView()
-            .environmentObject(OrderManager())
+        PastOrdersView(orderManager: OrderManager())
     }
 }

@@ -1075,8 +1075,7 @@ extension View {
         orderManager: OrderManager
     ) -> some View {
         sheet(isPresented: isPresented) {
-            PastOrdersView()
-                .environmentObject(orderManager)
+            PastOrdersView(orderManager: orderManager)
         }
     }
 }

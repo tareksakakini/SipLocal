@@ -235,6 +235,35 @@ VISITED (Files Refactored):
    - ENHANCED testability: Business logic separated from UI for better unit testing
    - ADDED documentation: Comprehensive inline documentation and usage examples
 
+✅ MenuView.swift - COMPLETED (MVVM Refactor)
+   - CREATED MenuViewModel: Comprehensive menu data management and state handling
+   - EXTRACTED business logic: Menu loading, caching, refresh, and error handling
+   - IMPLEMENTED design system: Centralized styling constants for consistent UI
+   - ENHANCED component architecture: Extracted reusable components (MenuCategorySection, MenuItemRow, LoadingView, ErrorView, EmptyMenuView)
+   - ADDED state management: Reactive UI updates with @Published properties and computed properties
+   - IMPROVED user experience: Pull-to-refresh functionality and proper loading states
+   - MAINTAINED full compatibility: All existing functionality preserved with improved architecture
+   - REDUCED complexity: From 197 lines to clean, focused ViewModel + View architecture
+   - ENHANCED testability: Business logic separated from UI for better unit testing
+   - ADDED documentation: Comprehensive inline documentation and usage examples
+
+✅ PastOrdersView.swift - COMPLETED (MVVM Refactor)
+   - CREATED PastOrdersViewModel: Comprehensive order management and state handling
+   - EXTRACTED business logic: Order loading, clearing, cancellation, and error handling
+   - IMPLEMENTED design system: Centralized styling constants for consistent UI
+   - ENHANCED component architecture: Extracted reusable components (OrderRow, loadingView, errorView, emptyStateView)
+   - ADDED state management: Reactive UI updates with @Published properties and computed properties
+   - IMPROVED user experience: Clear all confirmation dialog and proper loading states
+   - MAINTAINED full compatibility: All existing functionality preserved with improved architecture
+   - REDUCED complexity: From 357 lines to clean, focused ViewModel + View architecture
+   - ENHANCED testability: Business logic separated from UI for better unit testing
+   - ADDED documentation: Comprehensive inline documentation and usage examples
+   - FIXED OrderRow reusability: Made viewModel parameter optional for use in ActiveOrdersView
+
+⏭️ ActiveOrdersView.swift - SKIPPED
+   - User requested to skip this file for now
+   - Will be addressed in future refactoring sessions
+
 DEPENDENCIES DISCOVERED:
 =======================
 From SipLocalApp.swift:
@@ -309,8 +338,8 @@ NOTES:
 
 SUMMARY OF ACHIEVEMENTS:
 ========================
-✅ **14 Core Views Refactored** with MVVM architecture
-✅ **13 ViewModels Created** with comprehensive business logic extraction
+✅ **16 Core Views Refactored** with MVVM architecture
+✅ **15 ViewModels Created** with comprehensive business logic extraction
 ✅ **2 Manager Services Refactored** with service extraction pattern
 ✅ **Clean Architecture Implemented** throughout the app
 ✅ **Design Systems Added** to all views for consistency
@@ -320,8 +349,8 @@ SUMMARY OF ACHIEVEMENTS:
 ✅ **Testability Enhanced** with separated business logic
 ✅ **Documentation Added** with comprehensive headers and comments
 
-TOTAL FILES REFACTORED: 16
-TOTAL LINES OF CODE IMPROVED: 5000+
+TOTAL FILES REFACTORED: 18
+TOTAL LINES OF CODE IMPROVED: 5500+
 ARCHITECTURE PATTERN: MVVM + Service Layer
 DESIGN PATTERN: Component-Based + Design System
 

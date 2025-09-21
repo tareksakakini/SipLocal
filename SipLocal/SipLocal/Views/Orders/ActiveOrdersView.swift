@@ -170,7 +170,7 @@ struct ActiveOrdersView: View {
                 }
                 
                 // Order details
-                OrderRow(order: order)
+                OrderRow(order: order, viewModel: nil)
             }
             .padding()
         }
