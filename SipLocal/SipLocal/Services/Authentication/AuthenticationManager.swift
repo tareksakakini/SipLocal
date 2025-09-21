@@ -1,9 +1,27 @@
-//
-//  AuthenticationManager.swift
-//  SipLocal
-//
-//  Created by Tarek Sakakini on 7/7/25.
-//
+/**
+ * AuthenticationManager.swift
+ * SipLocal
+ *
+ * Refactored AuthenticationManager following Single Responsibility Principle.
+ * Acts as a coordinator for specialized authentication services.
+ *
+ * ## Responsibilities
+ * - **Authentication Coordination**: Sign in, sign up, sign out operations
+ * - **Service Management**: Coordinate UserDataService, FavoritesService, StampsService
+ * - **State Management**: Maintain authentication state and user session
+ * - **Email Verification**: Handle email verification flow
+ * - **Device Management**: Coordinate device registration and management
+ *
+ * ## Architecture
+ * - **Coordinator Pattern**: Manages specialized service classes
+ * - **Single Responsibility**: Each service handles one concern
+ * - **Observable**: Reactive state management with @Published properties
+ * - **Error Handling**: Comprehensive error management with structured types
+ * - **Performance**: Optimized service coordination and state management
+ *
+ * Created by SipLocal Development Team
+ * Copyright © 2024 SipLocal. All rights reserved.
+ */
 
 import Foundation
 import Firebase
@@ -11,20 +29,39 @@ import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
 
+/**
+ * AuthenticationManager - Coordinator for authentication services
+ * 
+ * Manages authentication state and coordinates specialized services
+ * for user data, favorites, stamps, and device management.
+ */
 class AuthenticationManager: ObservableObject {
+    
+    // MARK: - Published Properties
+    
     @Published var isAuthenticated = false
     @Published var isEmailVerified = false
     @Published var currentUser: User?
     @Published var favoriteShops: Set<String> = []
     @Published var stampedShops: Set<String> = []
     
+    // MARK: - Services
+    
     private let auth = Auth.auth()
-    private let firestore = Firestore.firestore()
-    private let storage = Storage.storage()
     private let deviceManager = DeviceManager()
+    private let userDataService = UserDataService()
+    private let favoritesService = FavoritesService()
+    private let stampsService = StampsService()
+    
+    // MARK: - Private Properties
+    
     private var lastKnownUserId: String?
     
+    // MARK: - Initialization
+    
     init() {
+        print("🔐 AuthenticationManager initialized")
+        
         // Check if user is already authenticated
         self.currentUser = auth.currentUser
         self.isAuthenticated = currentUser != nil
@@ -34,28 +71,45 @@ class AuthenticationManager: ObservableObject {
         // Listen for authentication state changes
         auth.addStateDidChangeListener { [weak self] _, user in
             DispatchQueue.main.async {
-                // Store the previous user ID before updating
-                let previousUserId = self?.lastKnownUserId
-                
-                self?.currentUser = user
-                self?.isAuthenticated = user != nil
-                self?.isEmailVerified = user?.isEmailVerified ?? false
-                self?.lastKnownUserId = user?.uid
-                
-                if let user = user {
-                    self?.fetchFavorites()
-                    self?.fetchStampedShops()
-                    self?.registerCurrentDevice()
-                } else {
-                    self?.favoriteShops = []
-                    self?.stampedShops = []
-                    // Device unregistration is now handled in signOut() method
-                }
+                self?.handleAuthenticationStateChange(user: user)
             }
         }
     }
     
-    // MARK: - Sign Up Function
+    deinit {
+        print("🔐 AuthenticationManager deinitialized")
+    }
+    
+    // MARK: - Authentication State Management
+    
+    /**
+     * Handle authentication state changes
+     */
+    private func handleAuthenticationStateChange(user: User?) {
+        // Store the previous user ID before updating
+        let previousUserId = lastKnownUserId
+        
+        currentUser = user
+        isAuthenticated = user != nil
+        isEmailVerified = user?.isEmailVerified ?? false
+        lastKnownUserId = user?.uid
+        
+        if let user = user {
+            // User signed in - fetch user data and register device
+            fetchUserData()
+            registerCurrentDevice()
+        } else {
+            // User signed out - clear data
+            favoriteShops = []
+            stampedShops = []
+        }
+    }
+    
+    // MARK: - Authentication Operations
+    
+    /**
+     * Sign up a new user
+     */
     func signUp(email: String, password: String, userData: UserData, completion: @escaping (Bool, String?) -> Void) {
         // First, create the user account
         auth.createUser(withEmail: email, password: password) { [weak self] result, error in
@@ -71,8 +125,8 @@ class AuthenticationManager: ObservableObject {
                 return
             }
             
-            // Save user data to Firestore
-            self.saveUserData(userId: user.uid, userData: userData) { success, error in
+            // Save user data to Firestore using UserDataService
+            self.userDataService.saveUserData(userId: user.uid, userData: userData) { success, error in
                 if success {
                     // Send verification email
                     self.sendVerificationEmail { _, _ in
@@ -90,28 +144,9 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
-    // MARK: - Save User Data to Firestore
-    private func saveUserData(userId: String, userData: UserData, completion: @escaping (Bool, String?) -> Void) {
-        let userDocument = firestore.collection("users").document(userId)
-        
-        let userDataDict: [String: Any] = [
-            "fullName": userData.fullName,
-            "username": userData.username,
-            "email": userData.email,
-            "createdAt": Timestamp(date: Date()),
-            "isActive": true
-        ]
-        
-        userDocument.setData(userDataDict) { error in
-            if let error = error {
-                completion(false, error.localizedDescription)
-            } else {
-                completion(true, nil)
-            }
-        }
-    }
-    
-    // MARK: - Sign In Function
+    /**
+     * Sign in an existing user
+     */
     func signIn(email: String, password: String, completion: @escaping (Bool, String?) -> Void) {
         auth.signIn(withEmail: email, password: password) { [weak self] result, error in
             guard let self = self else { return }
@@ -125,7 +160,9 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
-    // MARK: - Sign Out Function
+    /**
+     * Sign out the current user
+     */
     func signOut() {
         // First unregister the device while user is still authenticated
         if let userId = currentUser?.uid {
@@ -155,79 +192,32 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
-    // MARK: - Check Username Availability
+    // MARK: - User Data Operations
+    
+    /**
+     * Check if username is available
+     */
     func checkUsernameAvailability(username: String, completion: @escaping (Bool) -> Void) {
-        firestore.collection("users")
-            .whereField("username", isEqualTo: username)
-            .getDocuments { snapshot, error in
-                if let error = error {
-                    print("Error checking username availability: \(error.localizedDescription)")
-                    completion(false)
-                    return
-                }
-                
-                // If no documents found, username is available
-                completion(snapshot?.documents.isEmpty ?? false)
-            }
+        userDataService.checkUsernameAvailability(username: username, completion: completion)
     }
     
-    // MARK: - Get User Data
+    /**
+     * Get user data
+     */
     func getUserData(userId: String, completion: @escaping (UserData?, String?) -> Void) {
-        print("AuthManager: Getting user data")
-        firestore.collection("users").document(userId).getDocument { document, error in
-            if let error = error {
-                print("AuthManager: Get user failed ❌")
-                completion(nil, error.localizedDescription)
-                return
-            }
-            
-            guard let document = document,
-                  document.exists,
-                  let data = document.data(),
-                  let fullName = data["fullName"] as? String,
-                  let username = data["username"] as? String,
-                  let email = data["email"] as? String else {
-                print("AuthManager: User data missing ❌")
-                completion(nil, "User data not found")
-                return
-            }
-            
-            let profileImageUrl = data["profileImageUrl"] as? String
-            print("AuthManager: Retrieved profile image URL: \(profileImageUrl ?? "nil")")
-            
-            let userData = UserData(
-                fullName: fullName,
-                username: username,
-                email: email,
-                profileImageUrl: profileImageUrl
-            )
-            
-            print("AuthManager: User data loaded ✅")
-            completion(userData, nil)
-        }
+        userDataService.getUserData(userId: userId, completion: completion)
     }
     
-    // MARK: - Update User Data
+    /**
+     * Update user data
+     */
     func updateUserData(userId: String, userData: UserData, completion: @escaping (Bool, String?) -> Void) {
-        let userDocument = firestore.collection("users").document(userId)
-        
-        let updateData: [String: Any] = [
-            "fullName": userData.fullName,
-            "username": userData.username,
-            "email": userData.email,
-            "updatedAt": Timestamp(date: Date())
-        ]
-        
-        userDocument.updateData(updateData) { error in
-            if let error = error {
-                completion(false, error.localizedDescription)
-            } else {
-                completion(true, nil)
-            }
-        }
+        userDataService.updateUserData(userId: userId, userData: userData, completion: completion)
     }
     
-    // MARK: - Delete User Account
+    /**
+     * Delete user account
+     */
     func deleteUserAccount(completion: @escaping (Bool, String?) -> Void) {
         guard let user = currentUser else {
             completion(false, "No user is currently signed in")
@@ -236,10 +226,10 @@ class AuthenticationManager: ObservableObject {
         
         let userId = user.uid
         
-        // First, delete user data from Firestore
-        firestore.collection("users").document(userId).delete { [weak self] error in
+        // First, delete user data from Firestore using UserDataService
+        userDataService.deleteUserData(userId: userId) { [weak self] success, error in
             if let error = error {
-                completion(false, error.localizedDescription)
+                completion(false, error)
                 return
             }
             
@@ -255,6 +245,10 @@ class AuthenticationManager: ObservableObject {
     }
     
     // MARK: - Email Verification
+    
+    /**
+     * Send email verification
+     */
     func sendVerificationEmail(completion: @escaping (Bool, String?) -> Void) {
         guard let user = currentUser else {
             completion(false, "No user is signed in.")
@@ -270,6 +264,9 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
+    /**
+     * Reload user data
+     */
     func reloadUser(completion: @escaping (Bool) -> Void) {
         guard let user = currentUser else {
             completion(false)
@@ -291,6 +288,9 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
+    /**
+     * Send password reset email
+     */
     func sendPasswordReset(for email: String, completion: @escaping (Bool, String?) -> Void) {
         Auth.auth().sendPasswordReset(withEmail: email) { error in
             if let error = error {
@@ -301,52 +301,59 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
-    // MARK: - Favorites
+    // MARK: - Favorites Operations
     
+    /**
+     * Add a shop to favorites
+     */
     func addFavorite(shopId: String, completion: @escaping (Bool) -> Void) {
         guard let userId = currentUser?.uid else {
             completion(false)
             return
         }
         
-        let userDocument = firestore.collection("users").document(userId)
-        userDocument.updateData([
-            "favorites": FieldValue.arrayUnion([shopId])
-        ]) { error in
-            if error == nil {
+        favoritesService.addFavorite(userId: userId, shopId: shopId) { [weak self] success in
+            if success {
                 DispatchQueue.main.async {
-                    self.favoriteShops.insert(shopId)
+                    self?.favoriteShops.insert(shopId)
                 }
             }
-            completion(error == nil)
+            completion(success)
         }
     }
     
+    /**
+     * Remove a shop from favorites
+     */
     func removeFavorite(shopId: String, completion: @escaping (Bool) -> Void) {
         guard let userId = currentUser?.uid else {
             completion(false)
             return
         }
         
-        let userDocument = firestore.collection("users").document(userId)
-        userDocument.updateData([
-            "favorites": FieldValue.arrayRemove([shopId])
-        ]) { error in
-            if error == nil {
+        favoritesService.removeFavorite(userId: userId, shopId: shopId) { [weak self] success in
+            if success {
                 DispatchQueue.main.async {
-                    self.favoriteShops.remove(shopId)
+                    self?.favoriteShops.remove(shopId)
                 }
             }
-            completion(error == nil)
+            completion(success)
         }
     }
     
+    /**
+     * Check if a shop is in favorites
+     */
     func isFavorite(shopId: String) -> Bool {
-        return favoriteShops.contains(shopId)
+        guard let userId = currentUser?.uid else { return false }
+        return favoritesService.isFavorite(userId: userId, shopId: shopId, favorites: favoriteShops)
     }
     
-    // MARK: - Stamped Shops
+    // MARK: - Stamps Operations
     
+    /**
+     * Add a stamp to a shop
+     */
     func addStamp(shopId: String, completion: @escaping (Bool) -> Void) {
         guard let userId = currentUser?.uid else {
             completion(false)
@@ -358,23 +365,20 @@ class AuthenticationManager: ObservableObject {
             self.stampedShops.insert(shopId)
         }
         
-        let userDocument = firestore.collection("users").document(userId)
-        userDocument.updateData([
-            "stampedShops": FieldValue.arrayUnion([shopId])
-        ]) { error in
-            if let error = error {
+        stampsService.addStamp(userId: userId, shopId: shopId) { [weak self] success in
+            if !success {
                 // Revert on failure
                 DispatchQueue.main.async {
-                    self.stampedShops.remove(shopId)
+                    self?.stampedShops.remove(shopId)
                 }
-                print("Error adding stamp: \(error.localizedDescription)")
-                completion(false)
-            } else {
-                completion(true)
             }
+            completion(success)
         }
     }
     
+    /**
+     * Remove a stamp from a shop
+     */
     func removeStamp(shopId: String, completion: @escaping (Bool) -> Void) {
         guard let userId = currentUser?.uid else {
             completion(false)
@@ -386,109 +390,69 @@ class AuthenticationManager: ObservableObject {
             self.stampedShops.remove(shopId)
         }
         
-        let userDocument = firestore.collection("users").document(userId)
-        userDocument.updateData([
-            "stampedShops": FieldValue.arrayRemove([shopId])
-        ]) { error in
-            if let error = error {
+        stampsService.removeStamp(userId: userId, shopId: shopId) { [weak self] success in
+            if !success {
                 // Revert on failure
                 DispatchQueue.main.async {
-                    self.stampedShops.insert(shopId)
-                }
-                print("Error removing stamp: \(error.localizedDescription)")
-                completion(false)
-            } else {
-                completion(true)
-            }
-        }
-    }
-    
-    func fetchStampedShops() {
-        guard let userId = currentUser?.uid else { return }
-        
-        let userDocument = firestore.collection("users").document(userId)
-        userDocument.getDocument { document, error in
-            if let document = document,
-               let data = document.data(),
-               let stamps = data["stampedShops"] as? [String] {
-                DispatchQueue.main.async {
-                    self.stampedShops = Set(stamps)
+                    self?.stampedShops.insert(shopId)
                 }
             }
+            completion(success)
         }
     }
 
     // MARK: - Profile Image Management
     
+    /**
+     * Upload profile image
+     */
     func uploadProfileImage(_ image: UIImage) async -> (success: Bool, errorMessage: String?) {
-        print("AuthManager: Uploading image...")
         guard let userId = currentUser?.uid else {
-            print("AuthManager: No user signed in")
             return (false, "No user is currently signed in")
         }
         
-        
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            print("AuthManager: Image processing failed")
-            return (false, "Failed to process image")
-        }
-        
-        let storageRef = storage.reference().child("profile_pictures/\(userId).jpg")
-        
-        do {
-            let _ = try await storageRef.putDataAsync(imageData)
-            let downloadURL = try await storageRef.downloadURL()
-            
-            // Update user document with profile image URL
-            let userDocument = firestore.collection("users").document(userId)
-            try await userDocument.updateData(["profileImageUrl": downloadURL.absoluteString])
-            
-            print("AuthManager: Image upload ✅")
-            return (true, nil)
-        } catch {
-            print("AuthManager: Image upload ❌")
-            return (false, error.localizedDescription)
-        }
+        return await userDataService.uploadProfileImage(userId: userId, image: image)
     }
     
+    /**
+     * Remove profile image
+     */
     func removeProfileImage() async -> (success: Bool, errorMessage: String?) {
         guard let userId = currentUser?.uid else {
             return (false, "No user is currently signed in")
         }
         
-        let storageRef = storage.reference().child("profile_pictures/\(userId).jpg")
-        
-        do {
-            // Delete from storage
-            try await storageRef.delete()
-            
-            // Remove URL from user document
-            let userDocument = firestore.collection("users").document(userId)
-            try await userDocument.updateData(["profileImageUrl": FieldValue.delete()])
-            
-            return (true, nil)
-        } catch {
-            return (false, error.localizedDescription)
-        }
+        return await userDataService.removeProfileImage(userId: userId)
     }
     
-    func fetchFavorites() {
+    // MARK: - Data Fetching
+    
+    /**
+     * Fetch user data (favorites and stamps)
+     */
+    private func fetchUserData() {
         guard let userId = currentUser?.uid else { return }
         
-        let userDocument = firestore.collection("users").document(userId)
-        userDocument.getDocument { document, error in
-            if let document = document,
-               let data = document.data(),
-               let favorites = data["favorites"] as? [String] {
-                DispatchQueue.main.async {
-                    self.favoriteShops = Set(favorites)
-                }
+        // Fetch favorites
+        favoritesService.fetchFavorites(userId: userId) { [weak self] favorites in
+            DispatchQueue.main.async {
+                self?.favoriteShops = favorites
+            }
+        }
+        
+        // Fetch stamps
+        stampsService.fetchStampedShops(userId: userId) { [weak self] stamps in
+            DispatchQueue.main.async {
+                self?.stampedShops = stamps
             }
         }
     }
     
     // MARK: - Device Management
     
+    /**
+     * Register current device for user
+     */
     private func registerCurrentDevice() {
         guard let userId = currentUser?.uid else { return }
         
@@ -501,7 +465,9 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
-    
+    /**
+     * Update device activity
+     */
     func updateDeviceActivity() {
         guard let userId = currentUser?.uid else { return }
         
@@ -512,6 +478,9 @@ class AuthenticationManager: ObservableObject {
         }
     }
     
+    /**
+     * Get user devices
+     */
     func getUserDevices(completion: @escaping ([DeviceManager.UserDevice]) -> Void) {
         guard let userId = currentUser?.uid else {
             completion([])
@@ -521,6 +490,9 @@ class AuthenticationManager: ObservableObject {
         deviceManager.getUserDevices(userId: userId, completion: completion)
     }
     
+    /**
+     * Get active device IDs
+     */
     func getActiveDeviceIds(completion: @escaping ([String]) -> Void) {
         guard let userId = currentUser?.uid else {
             completion([])
@@ -530,6 +502,9 @@ class AuthenticationManager: ObservableObject {
         deviceManager.getActiveDeviceIds(userId: userId, completion: completion)
     }
     
+    /**
+     * Remove inactive devices
+     */
     func removeInactiveDevices(daysCutoff: Int = 90, completion: @escaping (Int, String?) -> Void) {
         guard let userId = currentUser?.uid else {
             completion(0, "No user signed in")
@@ -539,13 +514,16 @@ class AuthenticationManager: ObservableObject {
         deviceManager.removeInactiveDevices(userId: userId, daysCutoff: daysCutoff, completion: completion)
     }
     
+    /**
+     * Unregister specific device
+     */
     func unregisterSpecificDevice(deviceId: String, completion: @escaping (Bool, String?) -> Void) {
         guard let userId = currentUser?.uid else {
             completion(false, "No user signed in")
             return
         }
         
-        let userDocRef = firestore.collection("users").document(userId)
+        let userDocRef = Firestore.firestore().collection("users").document(userId)
         userDocRef.updateData([
             "devices.\(deviceId)": FieldValue.delete()
         ]) { error in
@@ -555,5 +533,34 @@ class AuthenticationManager: ObservableObject {
                 completion(true, nil)
             }
         }
+    }
+}
+
+// MARK: - Design System
+
+extension AuthenticationManager {
+    
+    /**
+     * Design system constants for AuthenticationManager
+     */
+    enum Design {
+        // Service names
+        static let userDataServiceName = "UserDataService"
+        static let favoritesServiceName = "FavoritesService"
+        static let stampsServiceName = "StampsService"
+        static let deviceManagerName = "DeviceManager"
+        
+        // Error messages
+        static let noUserSignedIn = "No user is currently signed in"
+        static let failedToCreateUser = "Failed to create user account"
+        static let failedToSaveUserData = "Failed to save user data"
+        static let userDataNotFound = "User data not found"
+        
+        // Logging
+        static let authManagerInitialized = "🔐 AuthenticationManager initialized"
+        static let authManagerDeinitialized = "🔐 AuthenticationManager deinitialized"
+        static let deviceRegistered = "Device registered ✅"
+        static let deviceRegistrationFailed = "Device registration failed ❌"
+        static let deviceActivityUpdateFailed = "Device activity update failed ❌"
     }
 } 

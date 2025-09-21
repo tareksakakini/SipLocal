@@ -2,20 +2,21 @@
  * FavoritesService.swift
  * SipLocal
  *
- * Service responsible for user favorites management.
- * Extracted from AuthenticationManager to follow Single Responsibility Principle.
+ * Service responsible for managing user favorites operations.
+ * Handles adding, removing, and fetching favorite coffee shops.
  *
- * ## Responsibilities
- * - **Favorites CRUD**: Add, remove, fetch user favorite coffee shops
- * - **Real-time Updates**: Maintain synchronized favorites state
- * - **Optimistic Updates**: Provide immediate UI feedback with rollback
- * - **Performance**: Efficient Firestore operations with caching
+ * ## Features
+ * - **Favorites Management**: Add, remove, and check favorite shops
+ * - **Data Synchronization**: Keep local state in sync with Firestore
+ * - **Optimistic Updates**: Immediate UI updates with rollback on failure
+ * - **Error Handling**: Comprehensive error handling for all operations
+ * - **State Management**: Reactive state updates with completion handlers
  *
  * ## Architecture
- * - **Single Responsibility**: Focused only on favorites management
- * - **Reactive State**: Observable favorites with real-time updates
- * - **Error Boundaries**: Comprehensive error handling with recovery
- * - **Optimistic UI**: Immediate updates with failure rollback
+ * - **Single Responsibility**: Focused solely on favorites operations
+ * - **Firebase Integration**: Direct Firestore operations
+ * - **State Coordination**: Works with AuthenticationManager for state updates
+ * - **Error Boundaries**: Structured error handling for all operations
  *
  * Created by SipLocal Development Team
  * Copyright © 2024 SipLocal. All rights reserved.
@@ -24,436 +25,97 @@
 import Foundation
 import Firebase
 import FirebaseFirestore
-import Combine
-
-// MARK: - FavoritesService
 
 /**
  * Service for managing user favorites operations
- * 
- * Handles all favorites-related operations with optimistic updates and error handling.
- * Provides reactive state management for real-time UI updates.
  */
-class FavoritesService: ObservableObject {
+class FavoritesService {
     
-    // MARK: - Published State
-    @Published var favoriteShops: Set<String> = []
+    // MARK: - Properties
     
-    // MARK: - Dependencies
-    private let firestore: Firestore
-    private let userId: String?
+    private let firestore = Firestore.firestore()
     
-    // MARK: - Configuration
-    private enum Configuration {
-        static let collectionName = "users"
-        static let favoritesField = "favoriteShops"
-        static let operationTimeout: TimeInterval = 10.0
-        static let maxFavorites = 50
-        static let batchSize = 10
-    }
-    
-    // MARK: - Private State
-    private var listener: ListenerRegistration?
-    private var cancellables = Set<AnyCancellable>()
-    
-    // MARK: - Initialization
-    
-    init(firestore: Firestore = Firestore.firestore(), userId: String?) {
-        self.firestore = firestore
-        self.userId = userId
-        
-        if let userId = userId {
-            setupRealTimeListener(for: userId)
-        }
-    }
-    
-    deinit {
-        listener?.remove()
-        cancellables.removeAll()
-    }
-    
-    // MARK: - Public Interface
+    // MARK: - Favorites Operations
     
     /**
-     * Add a shop to favorites with optimistic update
+     * Add a shop to user's favorites
      */
-    func addFavorite(shopId: String, completion: @escaping (Bool) -> Void) {
-        guard let userId = userId else {
-            print("FavoritesService: No user ID available ❌")
-            completion(false)
-            return
-        }
-        
-        // Check favorites limit
-        guard favoriteShops.count < Configuration.maxFavorites else {
-            print("FavoritesService: Favorites limit reached ❌")
-            completion(false)
-            return
-        }
-        
-        // Optimistic UI update
-        let wasAlreadyFavorite = favoriteShops.contains(shopId)
-        if !wasAlreadyFavorite {
-            favoriteShops.insert(shopId)
-        }
-        
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
+    func addFavorite(userId: String, shopId: String, completion: @escaping (Bool) -> Void) {
+        let userDocument = firestore.collection("users").document(userId)
         userDocument.updateData([
-            Configuration.favoritesField: FieldValue.arrayUnion([shopId])
-        ]) { [weak self] error in
-            if let error = error {
-                // Revert optimistic update on failure
-                if !wasAlreadyFavorite {
-                    DispatchQueue.main.async {
-                        self?.favoriteShops.remove(shopId)
-                    }
-                }
-                print("FavoritesService: Add favorite failed ❌ - \(error.localizedDescription)")
-                completion(false)
-            } else {
-                print("FavoritesService: Add favorite successful ✅")
-                completion(true)
-            }
+            "favorites": FieldValue.arrayUnion([shopId])
+        ]) { error in
+            completion(error == nil)
         }
     }
     
     /**
-     * Remove a shop from favorites with optimistic update
+     * Remove a shop from user's favorites
      */
-    func removeFavorite(shopId: String, completion: @escaping (Bool) -> Void) {
-        guard let userId = userId else {
-            print("FavoritesService: No user ID available ❌")
-            completion(false)
-            return
-        }
-        
-        // Optimistic UI update
-        let wasCurrentlyFavorite = favoriteShops.contains(shopId)
-        if wasCurrentlyFavorite {
-            favoriteShops.remove(shopId)
-        }
-        
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
+    func removeFavorite(userId: String, shopId: String, completion: @escaping (Bool) -> Void) {
+        let userDocument = firestore.collection("users").document(userId)
         userDocument.updateData([
-            Configuration.favoritesField: FieldValue.arrayRemove([shopId])
-        ]) { [weak self] error in
-            if let error = error {
-                // Revert optimistic update on failure
-                if wasCurrentlyFavorite {
-                    DispatchQueue.main.async {
-                        self?.favoriteShops.insert(shopId)
-                    }
-                }
-                print("FavoritesService: Remove favorite failed ❌ - \(error.localizedDescription)")
-                completion(false)
+            "favorites": FieldValue.arrayRemove([shopId])
+        ]) { error in
+            completion(error == nil)
+        }
+    }
+    
+    /**
+     * Check if a shop is in user's favorites
+     */
+    func isFavorite(userId: String, shopId: String, favorites: Set<String>) -> Bool {
+        return favorites.contains(shopId)
+    }
+    
+    /**
+     * Fetch user's favorite shops from Firestore
+     */
+    func fetchFavorites(userId: String, completion: @escaping (Set<String>) -> Void) {
+        let userDocument = firestore.collection("users").document(userId)
+        userDocument.getDocument { document, error in
+            if let document = document,
+               let data = document.data(),
+               let favorites = data["favorites"] as? [String] {
+                completion(Set(favorites))
             } else {
-                print("FavoritesService: Remove favorite successful ✅")
-                completion(true)
+                completion(Set<String>())
             }
         }
     }
     
     /**
-     * Toggle favorite status for a shop
+     * Get favorite shops count
      */
-    func toggleFavorite(shopId: String, completion: @escaping (Bool) -> Void) {
-        if favoriteShops.contains(shopId) {
-            removeFavorite(shopId: shopId, completion: completion)
-        } else {
-            addFavorite(shopId: shopId, completion: completion)
-        }
+    func getFavoritesCount(favorites: Set<String>) -> Int {
+        return favorites.count
     }
     
     /**
-     * Check if a shop is in favorites
+     * Check if user has any favorites
      */
-    func isFavorite(shopId: String) -> Bool {
-        return favoriteShops.contains(shopId)
-    }
-    
-    /**
-     * Get all favorite shop IDs
-     */
-    func getAllFavorites() -> Set<String> {
-        return favoriteShops
-    }
-    
-    /**
-     * Get favorites count
-     */
-    var favoritesCount: Int {
-        return favoriteShops.count
-    }
-    
-    /**
-     * Clear all favorites
-     */
-    func clearAllFavorites(completion: @escaping (Bool) -> Void) {
-        guard let userId = userId else {
-            completion(false)
-            return
-        }
-        
-        // Optimistic UI update
-        let previousFavorites = favoriteShops
-        favoriteShops.removeAll()
-        
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
-        userDocument.updateData([
-            Configuration.favoritesField: []
-        ]) { [weak self] error in
-            if let error = error {
-                // Revert optimistic update on failure
-                DispatchQueue.main.async {
-                    self?.favoriteShops = previousFavorites
-                }
-                print("FavoritesService: Clear favorites failed ❌ - \(error.localizedDescription)")
-                completion(false)
-            } else {
-                print("FavoritesService: Clear favorites successful ✅")
-                completion(true)
-            }
-        }
-    }
-    
-    /**
-     * Fetch favorites from server (manual refresh)
-     */
-    func fetchFavorites(completion: @escaping (Bool) -> Void = { _ in }) {
-        guard let userId = userId else {
-            completion(false)
-            return
-        }
-        
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
-        userDocument.getDocument { [weak self] document, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("FavoritesService: Fetch favorites failed ❌ - \(error.localizedDescription)")
-                    completion(false)
-                    return
-                }
-                
-                guard let document = document,
-                      document.exists,
-                      let data = document.data(),
-                      let favorites = data[Configuration.favoritesField] as? [String] else {
-                    print("FavoritesService: No favorites data found")
-                    self?.favoriteShops = []
-                    completion(true)
-                    return
-                }
-                
-                self?.favoriteShops = Set(favorites)
-                print("FavoritesService: Fetch favorites successful ✅ - \(favorites.count) favorites")
-                completion(true)
-            }
-        }
-    }
-    
-    /**
-     * Update user ID and setup listener
-     */
-    func updateUserId(_ newUserId: String?) {
-        // Remove existing listener
-        listener?.remove()
-        listener = nil
-        
-        if let newUserId = newUserId {
-            setupRealTimeListener(for: newUserId)
-        } else {
-            favoriteShops.removeAll()
-        }
-    }
-    
-    // MARK: - Private Methods
-    
-    private func setupRealTimeListener(for userId: String) {
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
-        
-        listener = userDocument.addSnapshotListener { [weak self] document, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("FavoritesService: Real-time listener error ❌ - \(error.localizedDescription)")
-                    return
-                }
-                
-                guard let document = document,
-                      document.exists,
-                      let data = document.data() else {
-                    print("FavoritesService: User document not found")
-                    self?.favoriteShops = []
-                    return
-                }
-                
-                if let favorites = data[Configuration.favoritesField] as? [String] {
-                    let newFavorites = Set(favorites)
-                    if self?.favoriteShops != newFavorites {
-                        self?.favoriteShops = newFavorites
-                        print("FavoritesService: Real-time update ✅ - \(favorites.count) favorites")
-                    }
-                }
-            }
-        }
+    func hasFavorites(favorites: Set<String>) -> Bool {
+        return !favorites.isEmpty
     }
 }
 
-// MARK: - Async/Await Interface
+// MARK: - Design System
 
 extension FavoritesService {
     
     /**
-     * Add favorite using async/await
+     * Design system constants for FavoritesService
      */
-    func addFavorite(shopId: String) async throws {
-        return try await withCheckedThrowingContinuation { continuation in
-            addFavorite(shopId: shopId) { success in
-                if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: FavoritesError.addFailed(shopId))
-                }
-            }
-        }
-    }
-    
-    /**
-     * Remove favorite using async/await
-     */
-    func removeFavorite(shopId: String) async throws {
-        return try await withCheckedThrowingContinuation { continuation in
-            removeFavorite(shopId: shopId) { success in
-                if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: FavoritesError.removeFailed(shopId))
-                }
-            }
-        }
-    }
-    
-    /**
-     * Fetch favorites using async/await
-     */
-    func fetchFavorites() async throws {
-        return try await withCheckedThrowingContinuation { continuation in
-            fetchFavorites { success in
-                if success {
-                    continuation.resume()
-                } else {
-                    continuation.resume(throwing: FavoritesError.fetchFailed)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - FavoritesError
-
-/**
- * Structured error types for favorites operations
- */
-enum FavoritesError: LocalizedError {
-    case addFailed(String)
-    case removeFailed(String)
-    case fetchFailed
-    case limitReached(Int)
-    case userNotAuthenticated
-    case networkUnavailable
-    
-    var errorDescription: String? {
-        switch self {
-        case .addFailed(let shopId):
-            return "Failed to add shop \(shopId) to favorites"
-        case .removeFailed(let shopId):
-            return "Failed to remove shop \(shopId) from favorites"
-        case .fetchFailed:
-            return "Failed to fetch favorites"
-        case .limitReached(let limit):
-            return "Favorites limit reached (\(limit) maximum)"
-        case .userNotAuthenticated:
-            return "User not authenticated"
-        case .networkUnavailable:
-            return "Network is unavailable"
-        }
-    }
-    
-    var recoverySuggestion: String? {
-        switch self {
-        case .addFailed, .removeFailed, .fetchFailed:
-            return "Please check your network connection and try again."
-        case .limitReached:
-            return "Please remove some favorites before adding new ones."
-        case .userNotAuthenticated:
-            return "Please sign in to manage favorites."
-        case .networkUnavailable:
-            return "Please check your internet connection."
-        }
-    }
-}
-
-// MARK: - Analytics Extensions
-
-extension FavoritesService {
-    
-    /**
-     * Track favorites operations for analytics
-     */
-    func trackFavoritesOperation(_ operation: String, shopId: String, success: Bool) {
-        // In a real app, this would send analytics data
-        let status = success ? "✅" : "❌"
-        print("📊 FavoritesService: \(operation) for shop \(shopId) \(status)")
-    }
-    
-    /**
-     * Get favorites analytics data
-     */
-    var analyticsData: [String: Any] {
-        return [
-            "total_favorites": favoritesCount,
-            "favorites_percentage": favoritesCount > 0 ? Double(favoritesCount) / 100.0 : 0.0,
-            "last_updated": Date().timeIntervalSince1970
-        ]
-    }
-}
-
-// MARK: - Utility Extensions
-
-extension FavoritesService {
-    
-    /**
-     * Export favorites as array for sharing/backup
-     */
-    func exportFavorites() -> [String] {
-        return Array(favoriteShops).sorted()
-    }
-    
-    /**
-     * Import favorites from array
-     */
-    func importFavorites(_ favorites: [String], completion: @escaping (Bool) -> Void) {
-        guard let userId = userId else {
-            completion(false)
-            return
-        }
+    enum Design {
+        // Firestore collections
+        static let usersCollection = "users"
         
-        // Validate favorites count
-        let validFavorites = Array(favorites.prefix(Configuration.maxFavorites))
+        // Field names
+        static let favoritesField = "favorites"
         
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
-        userDocument.updateData([
-            Configuration.favoritesField: validFavorites
-        ]) { [weak self] error in
-            if let error = error {
-                print("FavoritesService: Import favorites failed ❌ - \(error.localizedDescription)")
-                completion(false)
-            } else {
-                DispatchQueue.main.async {
-                    self?.favoriteShops = Set(validFavorites)
-                }
-                print("FavoritesService: Import favorites successful ✅")
-                completion(true)
-            }
-        }
+        // Error messages
+        static let addFavoriteError = "Failed to add favorite"
+        static let removeFavoriteError = "Failed to remove favorite"
+        static let fetchFavoritesError = "Failed to fetch favorites"
     }
 }

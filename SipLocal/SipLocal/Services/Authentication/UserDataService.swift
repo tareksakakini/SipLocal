@@ -3,19 +3,20 @@
  * SipLocal
  *
  * Service responsible for user data management operations.
- * Extracted from AuthenticationManager to follow Single Responsibility Principle.
+ * Handles CRUD operations for user profile data in Firestore.
  *
- * ## Responsibilities
- * - **User Data CRUD**: Create, read, update, delete user data in Firestore
- * - **Data Validation**: Validate user data before operations
- * - **Error Handling**: Provide structured error handling for data operations
- * - **Performance**: Optimize Firestore queries and data operations
+ * ## Features
+ * - **User Data CRUD**: Create, read, update, delete user profile data
+ * - **Profile Image Management**: Upload, remove, and manage profile images
+ * - **Username Validation**: Check username availability
+ * - **Data Validation**: Ensure data integrity and proper formatting
+ * - **Error Handling**: Comprehensive error handling with structured types
  *
  * ## Architecture
- * - **Single Responsibility**: Focused only on user data management
- * - **Dependency Injection**: Clean Firebase service integration
- * - **Error Boundaries**: Comprehensive error handling with recovery
- * - **Async Operations**: Modern async/await support with completion handlers
+ * - **Single Responsibility**: Focused solely on user data operations
+ * - **Firebase Integration**: Direct Firestore and Storage operations
+ * - **Async/Await Support**: Modern Swift concurrency patterns
+ * - **Error Boundaries**: Structured error handling for all operations
  *
  * Created by SipLocal Development Team
  * Copyright © 2024 SipLocal. All rights reserved.
@@ -24,61 +25,39 @@
 import Foundation
 import Firebase
 import FirebaseFirestore
-
-// MARK: - UserDataService
+import FirebaseStorage
+import UIKit
 
 /**
- * Service for managing user data operations in Firestore
- * 
- * Handles all user data CRUD operations with proper error handling and validation.
- * Provides both async/await and completion handler interfaces for flexibility.
+ * Service for managing user data operations
  */
 class UserDataService {
     
-    // MARK: - Dependencies
-    private let firestore: Firestore
+    // MARK: - Properties
     
-    // MARK: - Configuration
-    private enum Configuration {
-        static let collectionName = "users"
-        static let operationTimeout: TimeInterval = 30.0
-        static let maxRetryAttempts = 3
-        static let retryDelay: TimeInterval = 1.0
-    }
+    private let firestore = Firestore.firestore()
+    private let storage = Storage.storage()
     
-    // MARK: - Initialization
-    
-    init(firestore: Firestore = Firestore.firestore()) {
-        self.firestore = firestore
-    }
-    
-    // MARK: - Public Interface
+    // MARK: - User Data Operations
     
     /**
      * Save user data to Firestore
-     * Creates a new user document with the provided data
      */
     func saveUserData(userId: String, userData: UserData, completion: @escaping (Bool, String?) -> Void) {
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
+        let userDocument = firestore.collection("users").document(userId)
         
         let userDataDict: [String: Any] = [
             "fullName": userData.fullName,
             "username": userData.username,
             "email": userData.email,
-            "profileImageUrl": userData.profileImageUrl ?? "",
-            "favoriteShops": [],
-            "stampedShops": [],
-            "devices": [:],
             "createdAt": Timestamp(date: Date()),
-            "updatedAt": Timestamp(date: Date())
+            "isActive": true
         ]
         
         userDocument.setData(userDataDict) { error in
             if let error = error {
-                print("UserDataService: Save failed ❌ - \(error.localizedDescription)")
                 completion(false, error.localizedDescription)
             } else {
-                print("UserDataService: Save successful ✅")
                 completion(true, nil)
             }
         }
@@ -86,29 +65,30 @@ class UserDataService {
     
     /**
      * Get user data from Firestore
-     * Retrieves user document and converts to UserData model
      */
     func getUserData(userId: String, completion: @escaping (UserData?, String?) -> Void) {
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
+        print("UserDataService: Getting user data for \(userId)")
         
-        userDocument.getDocument { document, error in
+        firestore.collection("users").document(userId).getDocument { document, error in
             if let error = error {
                 print("UserDataService: Get user failed ❌ - \(error.localizedDescription)")
                 completion(nil, error.localizedDescription)
                 return
             }
             
-            guard let document = document, document.exists, let data = document.data() else {
-                print("UserDataService: User document not found ❌")
+            guard let document = document,
+                  document.exists,
+                  let data = document.data(),
+                  let fullName = data["fullName"] as? String,
+                  let username = data["username"] as? String,
+                  let email = data["email"] as? String else {
+                print("UserDataService: User data missing ❌")
                 completion(nil, "User data not found")
                 return
             }
             
-            // Extract user data from Firestore document
-            let fullName = data["fullName"] as? String ?? ""
-            let username = data["username"] as? String ?? ""
-            let email = data["email"] as? String ?? ""
             let profileImageUrl = data["profileImageUrl"] as? String
+            print("UserDataService: Retrieved profile image URL: \(profileImageUrl ?? "nil")")
             
             let userData = UserData(
                 fullName: fullName,
@@ -117,17 +97,16 @@ class UserDataService {
                 profileImageUrl: profileImageUrl
             )
             
-            print("UserDataService: Get user successful ✅")
+            print("UserDataService: User data loaded ✅")
             completion(userData, nil)
         }
     }
     
     /**
-     * Update existing user data in Firestore
-     * Updates only the provided fields, preserving others
+     * Update user data in Firestore
      */
     func updateUserData(userId: String, userData: UserData, completion: @escaping (Bool, String?) -> Void) {
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
+        let userDocument = firestore.collection("users").document(userId)
         
         let updateData: [String: Any] = [
             "fullName": userData.fullName,
@@ -138,10 +117,8 @@ class UserDataService {
         
         userDocument.updateData(updateData) { error in
             if let error = error {
-                print("UserDataService: Update failed ❌ - \(error.localizedDescription)")
                 completion(false, error.localizedDescription)
             } else {
-                print("UserDataService: Update successful ✅")
                 completion(true, nil)
             }
         }
@@ -149,17 +126,12 @@ class UserDataService {
     
     /**
      * Delete user data from Firestore
-     * Removes the entire user document
      */
     func deleteUserData(userId: String, completion: @escaping (Bool, String?) -> Void) {
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
-        
-        userDocument.delete { error in
+        firestore.collection("users").document(userId).delete { error in
             if let error = error {
-                print("UserDataService: Delete failed ❌ - \(error.localizedDescription)")
                 completion(false, error.localizedDescription)
             } else {
-                print("UserDataService: Delete successful ✅")
                 completion(true, nil)
             }
         }
@@ -167,208 +139,99 @@ class UserDataService {
     
     /**
      * Check if username is available
-     * Queries Firestore to see if username is already taken
      */
-    func checkUsernameAvailability(username: String) async -> Bool {
+    func checkUsernameAvailability(username: String, completion: @escaping (Bool) -> Void) {
+        firestore.collection("users")
+            .whereField("username", isEqualTo: username)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("UserDataService: Error checking username availability: \(error.localizedDescription)")
+                    completion(false)
+                    return
+                }
+                
+                // If no documents found, username is available
+                completion(snapshot?.documents.isEmpty ?? false)
+            }
+    }
+    
+    // MARK: - Profile Image Management
+    
+    /**
+     * Upload profile image to Firebase Storage
+     */
+    func uploadProfileImage(userId: String, image: UIImage) async -> (success: Bool, errorMessage: String?) {
+        print("UserDataService: Uploading image for user \(userId)...")
+        
+        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
+            print("UserDataService: Image processing failed")
+            return (false, "Failed to process image")
+        }
+        
+        let storageRef = storage.reference().child("profile_pictures/\(userId).jpg")
+        
         do {
-            let query = firestore.collection(Configuration.collectionName)
-                .whereField("username", isEqualTo: username)
-                .limit(to: 1)
+            let _ = try await storageRef.putDataAsync(imageData)
+            let downloadURL = try await storageRef.downloadURL()
             
-            let snapshot = try await query.getDocuments()
-            let isAvailable = snapshot.documents.isEmpty
+            // Update user document with profile image URL
+            let userDocument = firestore.collection("users").document(userId)
+            try await userDocument.updateData(["profileImageUrl": downloadURL.absoluteString])
             
-            print("UserDataService: Username '\(username)' availability: \(isAvailable ? "✅" : "❌")")
-            return isAvailable
-            
+            print("UserDataService: Image upload ✅")
+            return (true, nil)
         } catch {
-            print("UserDataService: Username check failed ❌ - \(error.localizedDescription)")
-            return false // Assume unavailable on error for safety
+            print("UserDataService: Image upload ❌ - \(error.localizedDescription)")
+            return (false, error.localizedDescription)
         }
     }
     
     /**
-     * Update profile image URL
-     * Updates only the profile image URL field
+     * Remove profile image from Firebase Storage
      */
-    func updateProfileImageUrl(userId: String, imageUrl: String?, completion: @escaping (Bool, String?) -> Void) {
-        let userDocument = firestore.collection(Configuration.collectionName).document(userId)
+    func removeProfileImage(userId: String) async -> (success: Bool, errorMessage: String?) {
+        let storageRef = storage.reference().child("profile_pictures/\(userId).jpg")
         
-        let updateData: [String: Any] = [
-            "profileImageUrl": imageUrl ?? "",
-            "updatedAt": Timestamp(date: Date())
-        ]
-        
-        userDocument.updateData(updateData) { error in
-            if let error = error {
-                print("UserDataService: Profile image update failed ❌ - \(error.localizedDescription)")
-                completion(false, error.localizedDescription)
-            } else {
-                print("UserDataService: Profile image update successful ✅")
-                completion(true, nil)
-            }
-        }
-    }
-    
-    // MARK: - Async/Await Interface
-    
-    /**
-     * Save user data using async/await
-     */
-    func saveUserData(userId: String, userData: UserData) async throws {
-        return try await withCheckedThrowingContinuation { continuation in
-            saveUserData(userId: userId, userData: userData) { success, error in
-                if success {
-                    continuation.resume()
-                } else {
-                    let userDataError = UserDataError.saveFailed(error ?? "Unknown error")
-                    continuation.resume(throwing: userDataError)
-                }
-            }
-        }
-    }
-    
-    /**
-     * Get user data using async/await
-     */
-    func getUserData(userId: String) async throws -> UserData {
-        return try await withCheckedThrowingContinuation { continuation in
-            getUserData(userId: userId) { userData, error in
-                if let userData = userData {
-                    continuation.resume(returning: userData)
-                } else {
-                    let userDataError = UserDataError.notFound(error ?? "User not found")
-                    continuation.resume(throwing: userDataError)
-                }
-            }
-        }
-    }
-    
-    /**
-     * Update user data using async/await
-     */
-    func updateUserData(userId: String, userData: UserData) async throws {
-        return try await withCheckedThrowingContinuation { continuation in
-            updateUserData(userId: userId, userData: userData) { success, error in
-                if success {
-                    continuation.resume()
-                } else {
-                    let userDataError = UserDataError.updateFailed(error ?? "Unknown error")
-                    continuation.resume(throwing: userDataError)
-                }
-            }
-        }
-    }
-    
-    /**
-     * Delete user data using async/await
-     */
-    func deleteUserData(userId: String) async throws {
-        return try await withCheckedThrowingContinuation { continuation in
-            deleteUserData(userId: userId) { success, error in
-                if success {
-                    continuation.resume()
-                } else {
-                    let userDataError = UserDataError.deleteFailed(error ?? "Unknown error")
-                    continuation.resume(throwing: userDataError)
-                }
-            }
+        do {
+            // Delete from storage
+            try await storageRef.delete()
+            
+            // Remove URL from user document
+            let userDocument = firestore.collection("users").document(userId)
+            try await userDocument.updateData(["profileImageUrl": FieldValue.delete()])
+            
+            return (true, nil)
+        } catch {
+            return (false, error.localizedDescription)
         }
     }
 }
 
-// MARK: - UserDataError
-
-/**
- * Structured error types for user data operations
- */
-enum UserDataError: LocalizedError {
-    case saveFailed(String)
-    case notFound(String)
-    case updateFailed(String)
-    case deleteFailed(String)
-    case validationFailed(String)
-    case networkUnavailable
-    case permissionDenied
-    
-    var errorDescription: String? {
-        switch self {
-        case .saveFailed(let message):
-            return "Failed to save user data: \(message)"
-        case .notFound(let message):
-            return "User data not found: \(message)"
-        case .updateFailed(let message):
-            return "Failed to update user data: \(message)"
-        case .deleteFailed(let message):
-            return "Failed to delete user data: \(message)"
-        case .validationFailed(let message):
-            return "User data validation failed: \(message)"
-        case .networkUnavailable:
-            return "Network is unavailable"
-        case .permissionDenied:
-            return "Permission denied for user data operation"
-        }
-    }
-    
-    var recoverySuggestion: String? {
-        switch self {
-        case .saveFailed, .updateFailed, .deleteFailed:
-            return "Please check your network connection and try again."
-        case .notFound:
-            return "Please ensure the user account exists and try again."
-        case .validationFailed:
-            return "Please check the user data format and try again."
-        case .networkUnavailable:
-            return "Please check your internet connection."
-        case .permissionDenied:
-            return "Please ensure you have the necessary permissions."
-        }
-    }
-}
-
-// MARK: - Validation Extensions
+// MARK: - Design System
 
 extension UserDataService {
     
     /**
-     * Validate user data before operations
+     * Design system constants for UserDataService
      */
-    func validateUserData(_ userData: UserData) -> UserDataError? {
-        if userData.fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return .validationFailed("Full name cannot be empty")
-        }
+    enum Design {
+        // Image compression
+        static let imageCompressionQuality: CGFloat = 0.8
         
-        if userData.username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return .validationFailed("Username cannot be empty")
-        }
+        // Storage paths
+        static let profileImagePath = "profile_pictures"
+        static let profileImageExtension = "jpg"
         
-        if !isValidEmail(userData.email) {
-            return .validationFailed("Invalid email format")
-        }
+        // Firestore collections
+        static let usersCollection = "users"
         
-        return nil
-    }
-    
-    /**
-     * Validate email format
-     */
-    private func isValidEmail(_ email: String) -> Bool {
-        let emailRegex = "^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"
-        let emailPredicate = NSPredicate(format: "SELF MATCHES %@", emailRegex)
-        return emailPredicate.evaluate(with: email)
-    }
-}
-
-// MARK: - Analytics Extensions
-
-extension UserDataService {
-    
-    /**
-     * Track user data operations for analytics
-     */
-    func trackOperation(_ operation: String, userId: String, success: Bool) {
-        // In a real app, this would send analytics data
-        let status = success ? "✅" : "❌"
-        print("📊 UserDataService: \(operation) for user \(userId) \(status)")
+        // Field names
+        static let fullNameField = "fullName"
+        static let usernameField = "username"
+        static let emailField = "email"
+        static let profileImageUrlField = "profileImageUrl"
+        static let createdAtField = "createdAt"
+        static let updatedAtField = "updatedAt"
+        static let isActiveField = "isActive"
     }
 }
