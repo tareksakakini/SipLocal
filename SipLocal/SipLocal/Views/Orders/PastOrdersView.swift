@@ -225,6 +225,7 @@ struct OrderRow: View {
     
     let order: Order
     let viewModel: PastOrdersViewModel?
+    @EnvironmentObject private var orderManager: OrderManager
     
     @State private var isExpanded = false
     @State private var showingCancelAlert = false
@@ -433,16 +434,15 @@ struct OrderRow: View {
     }
     
     private func cancelOrder() {
-        guard let viewModel = viewModel else {
-            print("OrderRow: No ViewModel available for order cancellation")
-            return
-        }
-        
         isCancelling = true
         
         Task {
             do {
-                try await viewModel.cancelOrder(order)
+                if let viewModel {
+                    try await viewModel.cancelOrder(order)
+                } else {
+                    try await orderManager.cancelOrder(paymentId: order.transactionId)
+                }
                 await MainActor.run {
                     isCancelling = false
                     // Order status will be updated automatically via real-time listener
@@ -462,6 +462,8 @@ struct OrderRow: View {
 
 struct PastOrdersView_Previews: PreviewProvider {
     static var previews: some View {
-        PastOrdersView(orderManager: OrderManager())
+        let manager = OrderManager()
+        return PastOrdersView(orderManager: manager)
+            .environmentObject(manager)
     }
 }
