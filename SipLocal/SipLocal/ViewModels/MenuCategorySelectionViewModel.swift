@@ -117,8 +117,8 @@ class MenuCategorySelectionViewModel: ObservableObject {
     }
     
     deinit {
-        Task { @MainActor in
-            cleanup()
+        Task { @MainActor [weak self] in
+            self?.cleanup()
         }
     }
     

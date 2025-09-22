@@ -177,57 +177,41 @@ class ProfileViewModel: ObservableObject {
     /// Handle profile image upload
     func uploadProfileImage(_ image: UIImage) async {
         isUploadingImage = true
-        
-        do {
-            // Compress and resize image
-            let processedImage = await processImageForUpload(image)
-            
-            // Upload with timeout
-            let success = await withTimeout(Design.imageUploadTimeout) {
-                await self.performImageUpload(processedImage)
-            }
-            
-            await MainActor.run {
-                self.isUploadingImage = false
-                
-                if success == true {
-                    self.handleImageUploadSuccess()
-                } else {
-                    self.handleImageUploadFailure("Upload timed out or failed")
-                }
-            }
-            
-        } catch {
-            await MainActor.run {
-                self.isUploadingImage = false
-                self.handleImageUploadFailure(error.localizedDescription)
+
+        // Compress and resize image
+        let processedImage = await processImageForUpload(image)
+
+        // Upload with timeout
+        let success = await withTimeout(Design.imageUploadTimeout) {
+            await self.performImageUpload(processedImage)
+        }
+
+        await MainActor.run {
+            self.isUploadingImage = false
+
+            if success == true {
+                self.handleImageUploadSuccess()
+            } else {
+                self.handleImageUploadFailure("Upload timed out or failed")
             }
         }
     }
-    
+
     /// Handle profile image removal
     func removeProfileImage() async {
         isRemovingImage = true
-        
-        do {
-            let success = await withTimeout(Design.imageUploadTimeout) {
-                await self.performImageRemoval()
-            }
-            
-            await MainActor.run {
-                self.isRemovingImage = false
-                
-                if success == true {
-                    self.handleImageRemovalSuccess()
-                } else {
-                    self.handleImageRemovalFailure("Removal timed out or failed")
-                }
-            }
-            
-        } catch {
-            await MainActor.run {
-                self.isRemovingImage = false
-                self.handleImageRemovalFailure(error.localizedDescription)
+
+        let success = await withTimeout(Design.imageUploadTimeout) {
+            await self.performImageRemoval()
+        }
+
+        await MainActor.run {
+            self.isRemovingImage = false
+
+            if success == true {
+                self.handleImageRemovalSuccess()
+            } else {
+                self.handleImageRemovalFailure("Removal timed out or failed")
             }
         }
     }

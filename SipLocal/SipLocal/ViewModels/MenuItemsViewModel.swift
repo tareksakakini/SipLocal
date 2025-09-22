@@ -86,9 +86,9 @@ class MenuItemsViewModel: ObservableObject {
     /**
      * Initialize with dependencies
      */
-    init(cartManager: CartManager, menuDataManager: MenuDataManager = MenuDataManager.shared) {
+    init(cartManager: CartManager, menuDataManager: MenuDataManager? = nil) {
         self.cartManager = cartManager
-        self.menuDataManager = menuDataManager
+        self.menuDataManager = menuDataManager ?? MenuDataManager.shared
         
         setupNotificationObservers()
     }

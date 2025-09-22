@@ -101,8 +101,8 @@ class ContentViewModel: ObservableObject {
     }
     
     deinit {
-        Task { @MainActor in
-            cleanup()
+        Task { @MainActor [weak self] in
+            self?.cleanup()
         }
     }
     
@@ -181,18 +181,19 @@ class ContentViewModel: ObservableObject {
     private func setupCacheManagement() {
         // Setup periodic cache cleanup
         Timer.scheduledTimer(withTimeInterval: Design.cacheCleanupInterval, repeats: true) { [weak self] _ in
-            Task {
+            Task { [weak self] in
                 await self?.cleanupVideoCache()
             }
         }
     }
-    
+
     private func loadVideo() {
         videoLoadTask?.cancel()
         isVideoLoading = true
         videoLoadError = nil
-        
-        videoLoadTask = Task {
+
+        videoLoadTask = Task { [weak self] in
+            guard let self = self else { return }
             do {
                 let url = try await loadVideoURL()
                 
@@ -201,29 +202,32 @@ class ContentViewModel: ObservableObject {
                 
                 await setupPlayer(with: url)
                 
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
                     self.isVideoLoading = false
                     self.isPlayerReady = true
                     print("✅ Video loaded successfully")
                 }
-                
+
             } catch let error as VideoError {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
                     self.isVideoLoading = false
                     self.videoLoadError = error
                     print("❌ Video loading failed: \(error.localizedDescription)")
                 }
-                
+
                 // Auto-retry on certain errors
                 if case .cachingFailed = error, self.retryCount < Design.retryAttempts {
                     try? await Task.sleep(nanoseconds: UInt64(Design.retryDelay * 1_000_000_000))
-                    await MainActor.run {
-                        self.retryVideoLoad()
+                    await MainActor.run { [weak self] in
+                        self?.retryVideoLoad()
                     }
                 }
-                
+
             } catch {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
                     self.isVideoLoading = false
                     self.videoLoadError = .cachingFailed(error)
                     print("❌ Video loading failed with unknown error: \(error.localizedDescription)")
@@ -249,8 +253,8 @@ class ContentViewModel: ObservableObject {
         // Start playback
         newPlayer.play()
         
-        await MainActor.run {
-            self.player = newPlayer
+        await MainActor.run { [weak self] in
+            self?.player = newPlayer
         }
     }
     
@@ -259,7 +263,7 @@ class ContentViewModel: ObservableObject {
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             player.seek(to: .zero)
             player.play()
             print("🔄 Video looped")
@@ -268,9 +272,10 @@ class ContentViewModel: ObservableObject {
     
     private func setupPlayerObservation(for player: AVPlayer) {
         // Use modern observation instead of KVO
-        Task {
+        Task { [weak self] in
             for await status in player.publisher(for: \.status).values {
-                await MainActor.run {
+                await MainActor.run { [weak self] in
+                    guard let self = self else { return }
                     switch status {
                     case .readyToPlay:
                         self.isPlayerReady = true

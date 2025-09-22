@@ -698,7 +698,6 @@ struct PickupTimeSelectionView: View {
             
             // Find the latest closing time for today
             var latestClosingTime: (hour: Int, minute: Int) = (0, 0)
-            var latestClosingTimeString = ""
             
             for period in todayPeriods {
                 let closingTime = parseTimeString(period.endTime)
@@ -711,7 +710,6 @@ struct PickupTimeSelectionView: View {
                 
                 if periodClosing > currentLatest {
                     latestClosingTime = closingTime
-                    latestClosingTimeString = period.endTime
                     print("Debug - New latest: \(latestClosingTime.hour):\(latestClosingTime.minute)")
                 }
             }
@@ -778,7 +776,7 @@ struct PickupTimeSelectionView: View {
         
         // Find the latest closing time
         var latestClosingTime: (hour: Int, minute: Int) = (0, 0)
-        var latestClosingTimeString = ""
+        var latestClosingPeriodEnd: String?
         
         for period in todayPeriods {
             let closingTime = parseTimeString(period.endTime)
@@ -787,12 +785,14 @@ struct PickupTimeSelectionView: View {
             
             if periodClosing > currentLatest {
                 latestClosingTime = closingTime
-                latestClosingTimeString = period.endTime
+                latestClosingPeriodEnd = period.endTime
             }
         }
-        
+
         // For debugging, let's also show the original time string
-        print("Debug - Original closing time string: \(latestClosingTimeString)")
+        if let periodEnd = latestClosingPeriodEnd {
+            print("Debug - Original closing time string: \(periodEnd)")
+        }
         print("Debug - Parsed closing time: \(latestClosingTime.hour):\(latestClosingTime.minute)")
         
         // Format the time for display
@@ -865,5 +865,3 @@ extension Calendar {
         return self.date(from: components)
     }
 }
-
-

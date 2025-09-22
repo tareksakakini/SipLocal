@@ -90,15 +90,12 @@ class AuthenticationManager: ObservableObject {
      * Handle authentication state changes
      */
     private func handleAuthenticationStateChange(user: User?) {
-        // Store the previous user ID before updating
-        let previousUserId = lastKnownUserId
-        
         currentUser = user
         isAuthenticated = user != nil
         isEmailVerified = user?.isEmailVerified ?? false
         lastKnownUserId = user?.uid
         
-        if let user = user {
+        if user != nil {
             // User signed in - fetch user data and register device
             fetchUserData()
             registerCurrentDevice()
@@ -152,9 +149,7 @@ class AuthenticationManager: ObservableObject {
      * Sign in an existing user
      */
     func signIn(email: String, password: String, completion: @escaping (Bool, String?) -> Void) {
-        auth.signIn(withEmail: email, password: password) { [weak self] result, error in
-            guard let self = self else { return }
-            
+        auth.signIn(withEmail: email, password: password) { result, error in
             if let error = error {
                 completion(false, error.localizedDescription)
                 return
@@ -231,7 +226,7 @@ class AuthenticationManager: ObservableObject {
         let userId = user.uid
         
         // First, delete user data from Firestore using UserDataService
-        userDataService.deleteUserData(userId: userId) { [weak self] success, error in
+        userDataService.deleteUserData(userId: userId) { success, error in
             if let error = error {
                 completion(false, error)
                 return

@@ -98,7 +98,7 @@ struct ContentView: View {
     
     private var backgroundView: some View {
         ZStack {
-            if let player = player {
+            if player != nil {
                 LoopingVideoPlayer(player: $player)
                     .ignoresSafeArea()
             } else {

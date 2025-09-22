@@ -307,7 +307,7 @@ class CheckoutViewModel: ObservableObject {
         
         request.merchantIdentifier = merchantId
         request.supportedNetworks = [.visa, .masterCard, .amex, .discover]
-        request.merchantCapabilities = .capability3DS
+        request.merchantCapabilities = .threeDSecure
         request.countryCode = "US"
         request.currencyCode = "USD"
         

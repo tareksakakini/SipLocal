@@ -266,7 +266,10 @@ class OrderViewModel: ObservableObject {
     
     private func setupBusinessHoursRefresh() {
         businessHoursRefreshTimer = Timer.scheduledTimer(withTimeInterval: Design.businessHoursRefreshInterval, repeats: true) { [weak self] _ in
-            self?.refreshBusinessHours()
+            guard let self else { return }
+            Task { @MainActor in
+                self.refreshBusinessHours()
+            }
         }
     }
     
