@@ -303,12 +303,12 @@ struct SquareSpecialDayPeriod: Codable {
 
 // MARK: - App Business Hours Models
 
-struct BusinessHoursInfo {
+struct BusinessHoursInfo: Codable {
     let weeklyHours: [String: [BusinessHoursPeriod]]
     let isCurrentlyOpen: Bool
 }
 
-struct BusinessHoursPeriod {
+struct BusinessHoursPeriod: Codable {
     let startTime: String
     let endTime: String
 } 
