@@ -40,11 +40,10 @@ Prepared by: Codex assistant
    - Immediate action: Restrict or regenerate Maps key in Google Cloud Console; move key to `local.properties` or encrypted resource not tracked by git.  
    - Follow-up: Clean old key from commits.
 
-6. **Square Sandbox Application ID (Android assets)**  
-   - Value: `sandbox-sq0idb-rQ0tQ8bixxpZyp3kiP4SEA`  
-   - Source files: `SipLocalAndroid/app/src/main/assets/coffee_shops.json`, `SipLocalAndroid/app/src/main/res/raw/coffee_shops.json`  
-   - Immediate action: Confirm whether sandbox key requires rotation; consider removing from public repo if unnecessary.  
-   - Follow-up: Replace with mock data or load dynamically at runtime.
+7. **Square OAuth Migration Scripts**  
+   - Value: Legacy access/refresh tokens embedded in `SipLocalBackend/functions/simple-migrate.js` (removed) and `functions/src/migrate.ts` sample data  
+   - Status: `simple-migrate.js` removed from repo; migrate.ts still references historical token data for documentation.  
+   - Follow-up: Rotate any Square tokens that appeared in those scripts and ensure future migrations read credentials from secure storage.
 
 ## Next Actions Checklist
 
