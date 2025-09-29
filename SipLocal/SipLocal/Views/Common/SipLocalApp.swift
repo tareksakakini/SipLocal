@@ -16,7 +16,7 @@ import PassKit
 // MARK: - App Configuration
 
 /// Centralized app configuration management
-/// Reads sensitive configuration from Config.plist to keep API keys out of source code
+/// Reads configuration from Config.plist with overrides via Config.secrets.plist or environment variables
 struct AppConfiguration {
     
     private static let configPlist: NSDictionary = {
@@ -27,25 +27,70 @@ struct AppConfiguration {
         return config
     }()
     
-    // MARK: - API Keys (from Config.plist)
+    private static let secretsPlist: NSDictionary? = {
+        guard let path = Bundle.main.path(forResource: "Config.secrets", ofType: "plist"),
+              let config = NSDictionary(contentsOfFile: path) else {
+            return nil
+        }
+        return config
+    }()
+    
+    private static func configurationValue(for key: String, envKey: String? = nil) -> Any? {
+        if let envKey = envKey,
+           let envValue = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !envValue.isEmpty {
+            return envValue
+        }
+        if let secretsPlist, let value = secretsPlist[key] {
+            if let stringValue = value as? String {
+                let trimmed = stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    return trimmed
+                }
+            } else {
+                return value
+            }
+        }
+        return configPlist[key]
+    }
+
+    private static func configurationSourceDescription(for key: String, envKey: String? = nil) -> String {
+        if let envKey = envKey,
+           let envValue = ProcessInfo.processInfo.environment[envKey]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !envValue.isEmpty {
+            return "environment variable \(envKey)"
+        }
+        if let secretsPlist, let value = secretsPlist[key] {
+            if let stringValue = value as? String,
+               !stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "Config.secrets.plist"
+            } else if !(value is NSNull) {
+                return "Config.secrets.plist"
+            }
+        }
+        return "Config.plist"
+    }
+
+    
+    // MARK: - API Keys
     
     static let squareApplicationID: String = {
-        guard let key = configPlist["SquareApplicationID"] as? String, !key.isEmpty else {
-            fatalError("❌ SquareApplicationID not found or empty in Config.plist")
+        guard let key = configurationValue(for: "SquareApplicationID", envKey: "SQUARE_APPLICATION_ID") as? String, !key.isEmpty else {
+            fatalError("❌ SquareApplicationID not found. Provide it via Config.plist, Config.secrets.plist, or the SQUARE_APPLICATION_ID environment variable.")
         }
         return key
     }()
     
     static let stripePublishableKey: String = {
-        guard let key = configPlist["StripePublishableKey"] as? String, !key.isEmpty else {
-            fatalError("❌ StripePublishableKey not found or empty in Config.plist")
+        guard let key = configurationValue(for: "StripePublishableKey", envKey: "STRIPE_PUBLISHABLE_KEY") as? String, !key.isEmpty else {
+            fatalError("❌ StripePublishableKey not found. Set the STRIPE_PUBLISHABLE_KEY environment variable or supply a Config.secrets.plist file.")
         }
         return key
     }()
     
     static let oneSignalAppID: String = {
-        guard let key = configPlist["OneSignalAppID"] as? String, !key.isEmpty else {
-            fatalError("❌ OneSignalAppID not found or empty in Config.plist")
+        guard let key = configurationValue(for: "OneSignalAppID", envKey: "ONESIGNAL_APP_ID") as? String, !key.isEmpty else {
+            fatalError("❌ OneSignalAppID not found. Provide it via Config.plist, Config.secrets.plist, or the ONESIGNAL_APP_ID environment variable.")
         }
         return key
     }()
@@ -71,9 +116,9 @@ struct AppConfiguration {
     static func printConfiguration() {
         print("🔧 App Configuration Loaded:")
         print("   Environment: \(environment)")
-        print("   Square App ID: \(squareApplicationID.prefix(10))...")
-        print("   Stripe Key: \(stripePublishableKey.prefix(10))...")
-        print("   OneSignal ID: \(oneSignalAppID.prefix(10))...")
+        print("   Square App ID Source: \(configurationSourceDescription(for: "SquareApplicationID", envKey: "SQUARE_APPLICATION_ID"))")
+        print("   Stripe Key Source: \(configurationSourceDescription(for: "StripePublishableKey", envKey: "STRIPE_PUBLISHABLE_KEY"))")
+        print("   OneSignal ID Source: \(configurationSourceDescription(for: "OneSignalAppID", envKey: "ONESIGNAL_APP_ID"))")
         print("   Cache Memory: \(cacheMemoryCapacity / 1024 / 1024)MB")
         print("   Cache Disk: \(cacheDiskCapacity / 1024 / 1024)MB")
     }
