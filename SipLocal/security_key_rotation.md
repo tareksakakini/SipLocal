@@ -16,22 +16,22 @@ Prepared by: Codex assistant
    - Value: `sq0idp-e4abRkjlBijc_l97fVO62Q`  
    - Source file: `SipLocal/SipLocal/Resources/Configuration/Config.plist:5`  
    - Consumer code: `SipLocal/SipLocal/Views/Common/SipLocalApp.swift`  
-   - Immediate action: Regenerate application ID (if needed) or create a new application credential in Square Developer portal.  
-   - Follow-up: Update configuration loading mechanism and purge old value from repository history.
+   - Status: Rotation skipped (Square does not issue alternate IDs); treat as public identifier.  
+   - Follow-up: Limit exposure to trusted builds, keep `.plist` out of git history, and document that the ID is public-only.
 
 3. **OneSignal App ID**  
    - Value: `f626f99f-94ea-4859-bac9-10911153f295`  
    - Source file: `SipLocal/SipLocal/Resources/Configuration/Config.plist:9`  
    - Consumer code: `SipLocal/SipLocal/Views/Common/SipLocalApp.swift`  
-   - Immediate action: Generate a new OneSignal App ID or migrate to environment-based configuration.  
-   - Follow-up: Remove legacy ID from code history post-rotation.
+   - Status: Rotation deferred (treated as public identifier); continue to avoid committing replacements and prefer env/ignored overrides.  
+   - Follow-up: Re-evaluate if future leaks or OneSignal policy changes require issuing a new app.
 
 4. **Firebase iOS API Key**  
-   - Value: `AIzaSyCDRQYi_X5QkxJmV3xVDchuOSvFZi4y4Nw`  
-   - Source file: `SipLocal/SipLocal/Resources/Configuration/GoogleService-Info.plist:6`  
-   - Consumer code: Firebase initialization (bundled plist)  
-   - Immediate action: Regenerate API key in Google Cloud Console and download a sanitized config for the app.  
-   - Follow-up: Store new config outside of version control or use encrypted secrets management.
+   - Value: _stored outside repository (GoogleService-Info.secrets.plist or FIREBASE_OPTIONS_PATH)_  
+   - Source (runtime): `GoogleService-Info.secrets.plist` (ignored) or external path via `FIREBASE_OPTIONS_PATH`  
+   - Consumer code: `SipLocal/SipLocal/Views/Common/SipLocalApp.swift` loads options with `FirebaseOptions(contentsOfFile:)`  
+   - Status: Existing key preserved locally; removed from tracked `GoogleService-Info.plist`.  
+   - Follow-up: Rotate key in Firebase Console when ready and update the ignored secrets file; scrub old key from git history.
 
 5. **Google Maps API Key (Android)**  
    - Value: `AIzaSyDgUUetZc96lAvwUw719iegNwNXn1LEpWE`  

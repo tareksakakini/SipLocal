@@ -5,6 +5,7 @@
 //  Created by Tarek Sakakini on 7/7/25.
 //
 
+import Foundation
 import SwiftUI
 import FirebaseCore
 import Firebase
@@ -71,6 +72,72 @@ struct AppConfiguration {
         return "Config.plist"
     }
 
+    private enum FirebaseOptionsSource: Equatable {
+        case environmentPath
+        case bundleSecrets
+        case bundleDefault
+
+        var description: String {
+            switch self {
+            case .environmentPath:
+                return "environment path (FIREBASE_OPTIONS_PATH)"
+            case .bundleSecrets:
+                return "GoogleService-Info.secrets.plist (bundle)"
+            case .bundleDefault:
+                return "GoogleService-Info.plist (bundle)"
+            }
+        }
+    }
+
+    private static var cachedFirebaseOptionsSource: FirebaseOptionsSource?
+
+    private static func locateFirebaseOptions() -> (FirebaseOptionsSource, String)? {
+        let env = ProcessInfo.processInfo.environment
+        if let envPath = env["FIREBASE_OPTIONS_PATH"]?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !envPath.isEmpty,
+           FileManager.default.fileExists(atPath: envPath) {
+            return (.environmentPath, envPath)
+        }
+        if let path = Bundle.main.path(forResource: "GoogleService-Info.secrets", ofType: "plist") {
+            return (.bundleSecrets, path)
+        }
+        if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") {
+            return (.bundleDefault, path)
+        }
+        return nil
+    }
+
+    static func firebaseOptionsSourceDescription() -> String {
+        if let cached = cachedFirebaseOptionsSource {
+            return cached.description
+        }
+        guard let (source, _) = locateFirebaseOptions() else {
+            return "not found"
+        }
+        cachedFirebaseOptionsSource = source
+        return source.description
+    }
+
+    static func makeFirebaseOptions() -> FirebaseOptions {
+        if let cached = cachedFirebaseOptionsSource,
+           let (source, path) = locateFirebaseOptions(),
+           source == cached,
+           let options = FirebaseOptions(contentsOfFile: path) {
+            return options
+        }
+
+        guard let (source, path) = locateFirebaseOptions() else {
+            fatalError("❌ Firebase configuration not found. Provide a GoogleService-Info.secrets.plist file or set FIREBASE_OPTIONS_PATH.")
+        }
+
+        guard let options = FirebaseOptions(contentsOfFile: path) else {
+            fatalError("❌ Failed to load Firebase options from path: \(path)")
+        }
+
+        cachedFirebaseOptionsSource = source
+        return options
+    }
+
     
     // MARK: - API Keys
     
@@ -119,6 +186,7 @@ struct AppConfiguration {
         print("   Square App ID Source: \(configurationSourceDescription(for: "SquareApplicationID", envKey: "SQUARE_APPLICATION_ID"))")
         print("   Stripe Key Source: \(configurationSourceDescription(for: "StripePublishableKey", envKey: "STRIPE_PUBLISHABLE_KEY"))")
         print("   OneSignal ID Source: \(configurationSourceDescription(for: "OneSignalAppID", envKey: "ONESIGNAL_APP_ID"))")
+        print("   Firebase Options Source: \(firebaseOptionsSourceDescription())")
         print("   Cache Memory: \(cacheMemoryCapacity / 1024 / 1024)MB")
         print("   Cache Disk: \(cacheDiskCapacity / 1024 / 1024)MB")
     }
@@ -139,8 +207,10 @@ class ServiceConfigurationManager {
     }
     
     private static func configureFirebase() {
-        FirebaseApp.configure()
-        print("✅ Firebase configured successfully")
+        guard FirebaseApp.app() == nil else { return }
+        let options = AppConfiguration.makeFirebaseOptions()
+        FirebaseApp.configure(options: options)
+        print("✅ Firebase configured using \(AppConfiguration.firebaseOptionsSourceDescription())")
     }
     
     private static func configureSquarePayments() {
