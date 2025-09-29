@@ -87,13 +87,6 @@ class PaymentResultViewModel: ObservableObject {
     }
     
     /**
-     * Check if transaction ID is available
-     */
-    var hasTransactionId: Bool {
-        return transactionId != nil
-    }
-    
-    /**
      * Success icon configuration
      */
     var successIconConfig: (name: String, color: Color, size: CGFloat) {
@@ -225,11 +218,7 @@ extension PaymentResultViewModel {
         
         // Spacing
         static let topSpacer: CGFloat = 20
-        static let bottomSpacer: CGFloat = 20
+        static let bottomSpacer: CGFloat = 0
         static let dividerPadding: CGFloat = 4
-        static let transactionIdPadding: CGFloat = 8
-        static let transactionIdHorizontalPadding: CGFloat = 16
-        static let transactionIdVerticalPadding: CGFloat = 8
-        static let transactionIdCornerRadius: CGFloat = 8
     }
 }

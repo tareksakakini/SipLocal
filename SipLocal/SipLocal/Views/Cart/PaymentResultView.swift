@@ -102,11 +102,6 @@ struct PaymentResultView: View {
                 orderSummaryCard
             }
             
-            // Transaction ID
-            if viewModel.hasTransactionId {
-                transactionIdSection
-            }
-            
             Spacer().frame(height: PaymentResultViewModel.Design.bottomSpacer)
             
             // Action Button
@@ -250,27 +245,6 @@ struct PaymentResultView: View {
     }
     
     /**
-     * Transaction ID section
-     */
-    private var transactionIdSection: some View {
-        VStack(spacing: PaymentResultViewModel.Design.transactionIdPadding) {
-            Text("Transaction ID")
-                .font(PaymentResultViewModel.Design.captionFont)
-                .foregroundColor(PaymentResultViewModel.Design.secondaryTextColor)
-                .textCase(.uppercase)
-                .fontWeight(PaymentResultViewModel.Design.captionWeight)
-            
-            Text(viewModel.transactionId ?? "")
-                .font(PaymentResultViewModel.Design.captionFont)
-                .fontDesign(.monospaced)
-                .padding(.horizontal, PaymentResultViewModel.Design.transactionIdHorizontalPadding)
-                .padding(.vertical, PaymentResultViewModel.Design.transactionIdVerticalPadding)
-                .background(PaymentResultViewModel.Design.backgroundColor)
-                .cornerRadius(PaymentResultViewModel.Design.transactionIdCornerRadius)
-        }
-    }
-    
-    /**
      * Continue button
      */
     private var continueButton: some View {
@@ -310,7 +284,7 @@ struct PaymentResultView: View {
                 .font(.system(size: viewModel.failureIconConfig.size))
                 .foregroundColor(viewModel.failureIconConfig.color)
             
-            VStack(spacing: PaymentResultViewModel.Design.transactionIdPadding) {
+            VStack(spacing: PaymentResultViewModel.Design.itemSpacing) {
                 Text("Payment Failed")
                     .font(PaymentResultViewModel.Design.titleFont)
                     .fontWeight(PaymentResultViewModel.Design.titleWeight)
@@ -435,6 +409,4 @@ struct PaymentResultView_Previews: PreviewProvider {
         }
     }
 }
-
-
 
