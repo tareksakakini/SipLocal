@@ -1,1 +1,1 @@
-export {};
+export * as squareService from "./square";

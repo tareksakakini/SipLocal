@@ -2,22 +2,18 @@ import * as functions from "firebase-functions";
 import {logger} from "./utils";
 import * as admin from "firebase-admin";
 import {v4 as uuidv4} from "uuid";
-import {SquareClient, SquareEnvironment, Square} from "square";
+import {Square} from "square";
 import * as OneSignal from "onesignal-node";
 import Stripe from "stripe";
 import axios from "axios";
 import {appConfig} from "./config";
+import {squareService} from "./services";
 // import * as crypto from "crypto";
 
 // Initialize Firebase Admin
 admin.initializeApp();
 
 // Square client will be initialized inside the function
-const squareEnvironmentSetting =
-  appConfig.square.environment === "production"
-    ? SquareEnvironment.Production
-    : SquareEnvironment.Sandbox;
-
 // Webhook signature verification
 /*
 async function verifyWebhookSignature(
@@ -375,10 +371,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
     );
   }
 
-  const squareClient = new SquareClient({
-    token: accessToken,
-    environment: squareEnvironmentSetting,
-  });
+  const squareClient = squareService.createSquareClient({ token: accessToken });
 
   // Fetch locationId from Firestore or Square API
   let locationId = "";
@@ -761,10 +754,7 @@ export const processStripePayment = functions.https.onCall(async (data, context)
   const stripe = new Stripe(stripeSecretKey);
 
   // Initialize Square client for order creation
-  const squareClient = new SquareClient({
-    token: oauth_token,
-    environment: squareEnvironmentSetting,
-  });
+  const squareClient = squareService.createSquareClient({ token: oauth_token });
 
   // Fetch locationId from Firestore or Square API
   let locationId = "";
@@ -972,10 +962,7 @@ async function captureApplePayPayment(transactionId: string) {
     if (orderData.items && orderData.items.length > 0 && oauth_token) {
       try {
         // Initialize Square client
-        const squareClient = new SquareClient({
-          token: oauth_token,
-          environment: squareEnvironmentSetting,
-        });
+        const squareClient = squareService.createSquareClient({ token: oauth_token });
 
         const lineItems = orderData.items.map((item: any) => ({
           name: item.name,
@@ -1315,10 +1302,7 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
   const stripe = new Stripe(stripeSecretKey);
 
   // Initialize Square client for order creation
-  const squareClient = new SquareClient({
-    token: oauth_token,
-    environment: squareEnvironmentSetting,
-  });
+  const squareClient = squareService.createSquareClient({ token: oauth_token });
 
   // Fetch locationId from Firestore or Square API
   let locationId = "";
@@ -1857,9 +1841,8 @@ export const completeStripePayment = functions.https.onCall(async (data, context
         }
         
         // Initialize Square client
-        const squareClient = new SquareClient({
+        const squareClient = squareService.createSquareClient({
           token: oauthToken,
-          environment: squareEnvironmentSetting,
         });
         
         // Fetch location ID if not available
@@ -2073,10 +2056,7 @@ export const submitOrderWithExternalPayment = functions.https.onCall(async (data
     );
   }
 
-  const squareClient = new SquareClient({
-    token: accessToken,
-    environment: squareEnvironmentSetting,
-  });
+  const squareClient = squareService.createSquareClient({ token: accessToken });
 
   // Fetch locationId from Firestore or Square API
   let locationId = "";
@@ -2405,10 +2385,7 @@ async function completeAuthorizedOrder(paymentId: string) {
     }
 
     // Initialize Square client
-    const squareClient = new SquareClient({
-      token: orderData.oauthToken,
-      environment: squareEnvironmentSetting,
-    });
+    const squareClient = squareService.createSquareClient({ token: orderData.oauthToken });
 
     // Complete the payment
     functions.logger.info("Attempting to complete Square payment:", paymentId);
@@ -2548,9 +2525,8 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
       functions.logger.info("Cancelling Square payment (legacy):", paymentId);
       
       try {
-        const squareClient = new SquareClient({
+        const squareClient = squareService.createSquareClient({
           token: orderData.oauthToken,
-          environment: squareEnvironmentSetting,
         });
         
         await squareClient.payments.cancel({
@@ -2586,9 +2562,8 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
           const oauthToken = merchantData?.oauth_token;
           
           if (locationId && oauthToken) {
-            const squareClient = new SquareClient({
+            const squareClient = squareService.createSquareClient({
               token: oauthToken,
-              environment: squareEnvironmentSetting,
             });
             
             await squareClient.orders.update({
