@@ -91,7 +91,7 @@ Phase 0.3 Risk & Quick-Win Notes
 Phase 1 – Foundation & Project Structure
 ----------------------------------------
 [x] 1.1 Introduce explicit configuration module (env validation, secret access) and remove ad-hoc `dotenv.config` usage.
-[ ] 1.2 Sketch target folder layout (`config/`, `services/`, `data/`, `handlers/`, `utils/`) and add barrel exports to preserve Firebase entrypoints.
+[x] 1.2 Sketch target folder layout (`config/`, `services/`, `data/`, `handlers/`, `utils/`) and add barrel exports to preserve Firebase entrypoints.
 [ ] 1.3 Add lightweight logging/error helper capturing context + standardized error translation for client-safe messages.
 
 Phase 1 Foundation Blueprint
@@ -108,6 +108,10 @@ Phase 1 Foundation Blueprint
   * Provide helper to retrieve optional secrets with warnings instead of crashes in emulator/dev.
 - Logging helper goal: wrap `functions.logger` to add consistent context (request id, handler) and redact sensitive fields.
 - Initial refactor path: build `config` + `utils/logger` first, then migrate handlers incrementally while keeping exports in `index.ts`.
+- Next actions:
+  * Implement `utils/logger.ts` with redaction helpers and shared context tags.
+  * Add `services/square/clientFactory.ts` to centralize Square client creation using `appConfig`.
+  * Extract Firestore order persistence into `data/ordersRepository.ts` as the first data module.
 
 Phase 2 – Domain Modules & Shared Types
 ---------------------------------------
@@ -140,3 +144,4 @@ Phase 5 – Security & Operations
 Rolling Notes / Decisions
 -------------------------
 - 2025-09-29 Introduced `src/config/env.ts` with centralized env loading/validation; Firebase Functions now consume `appConfig` instead of direct `process.env` access.
+- 2025-09-29 Scaffolded `src/data`, `src/services` (square/stripe/clover/notifications), `src/handlers`, and `src/utils` with barrel exports for incremental migration.
