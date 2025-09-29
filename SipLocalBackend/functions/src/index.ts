@@ -116,7 +116,11 @@ interface PaymentData {
     description: string;
     imageName: string;
     stampName: string;
+    posType?: string;
   };
+  paymentMethod?: string; // Add payment method
+  tokenId?: string; // Add token ID for Apple Pay
+  posType?: string; // Add POS type
 }
 
 // Define the expected data structure for external payment orders
@@ -1262,14 +1266,25 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
     userId: requestData?.userId,
     coffeeShopData: requestData?.coffeeShopData,
     paymentMethod: requestData?.paymentMethod || "apple_pay",
-    tokenId: requestData?.tokenId
+    tokenId: requestData?.tokenId,
+    posType: requestData?.posType
   };
+
+  // Determine POS type and route to appropriate handler
+  const posType = paymentData.posType || paymentData.coffeeShopData?.posType || "square";
+  functions.logger.info("Apple Pay processing with POS type:", posType);
+
+  // Route to Clover Apple Pay handler if needed
+  if (posType === "clover") {
+    return processApplePayPaymentClover(paymentData, context);
+  }
 
   functions.logger.info("Apple Pay payment request received:", {
     amount: paymentData.amount,
     merchantId: paymentData.merchantId,
     hasOauthToken: !!paymentData.oauth_token,
     paymentMethod: paymentData.paymentMethod,
+    posType: posType,
     tokenId: paymentData.tokenId
   });
 
@@ -3299,3 +3314,250 @@ export const submitCloverOrderWithExternalPayment = functions.https.onCall(async
     );
   }
 });
+
+// Apple Pay payment processing for Clover merchants
+async function processApplePayPaymentClover(paymentData: any, context: any) {
+  functions.logger.info("=== APPLE PAY PAYMENT PROCESSING FOR CLOVER ===");
+  
+  const { amount, merchantId, oauth_token, items, customerName, customerEmail, pickupTime, userId, coffeeShopData, tokenId } = paymentData;
+
+  // Validate the request data
+  if (!amount || !merchantId || !oauth_token || !tokenId) {
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Missing required payment data: amount, merchantId, oauth_token, or tokenId"
+    );
+  }
+
+  const transactionId = `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  functions.logger.info("Generated transaction ID:", transactionId);
+
+  // Initialize Stripe
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeSecretKey) {
+    throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Stripe secret key not configured"
+    );
+  }
+
+  const stripe = new Stripe(stripeSecretKey);
+
+  try {
+    // 1. Process Apple Pay payment with Stripe
+    functions.logger.info("Processing Apple Pay payment with Stripe for Clover merchant...", {
+      amount: amount,
+      merchantId: merchantId
+    });
+
+    // Create charge using the token with capture=false for authorization only
+    const charge = await stripe.charges.create({
+      amount: amount, // amount in cents
+      currency: 'usd',
+      source: tokenId, // Use the token ID from client
+      capture: false, // IMPORTANT: Authorize only, don't capture yet
+      description: `Apple Pay order from ${coffeeShopData?.name || 'Coffee Shop'} (Clover)`,
+      receipt_email: customerEmail,
+      metadata: {
+        merchantId: merchantId,
+        transactionId: transactionId,
+        userId: userId || '',
+        coffeeShop: coffeeShopData?.name || '',
+        customerEmail: customerEmail || '',
+        customerName: customerName || '',
+        paymentMethod: 'apple_pay',
+        posType: 'clover'
+      },
+    });
+    
+    functions.logger.info("Stripe Charge created (AUTHORIZED ONLY) for Clover:", {
+      chargeId: charge.id,
+      status: charge.status,
+      captured: charge.captured,
+      amount: charge.amount
+    });
+
+    // Check if payment was successfully authorized
+    if (charge.status !== 'succeeded') {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Apple Pay payment authorization failed with status: ${charge.status}`
+      );
+    }
+
+    // 2. Store order in Firestore with AUTHORIZED status
+    const firestoreOrderData = {
+      transactionId: transactionId,
+      stripeChargeId: charge.id,
+      paymentStatus: "AUTHORIZED", // Payment is authorized but not captured
+      amount: amount.toString(),
+      currency: "USD",
+      merchantId: merchantId,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      paymentMethod: "apple_pay",
+      receiptNumber: null,
+      receiptUrl: charge.receipt_url,
+      userId: userId,
+      coffeeShopData: coffeeShopData,
+      items: items || [],
+      customerName: customerName,
+      customerEmail: customerEmail,
+      pickupTime: pickupTime,
+      orderId: null, // Will be set when order is submitted to Clover
+      status: "AUTHORIZED", // Order is authorized but not yet submitted
+      oauthToken: oauth_token,
+      posType: "clover"
+    };
+
+    await admin.firestore()
+      .collection("orders")
+      .doc(transactionId)
+      .set(firestoreOrderData);
+
+    functions.logger.info("Order stored in Firestore with AUTHORIZED status");
+
+    // 3. Submit order to Clover
+    functions.logger.info("Submitting order to Clover...");
+    
+    try {
+      // Submit to Clover using proper API approach
+      functions.logger.info("Creating Clover order with line items...");
+      
+      // Step 1: Create the base order
+      const baseOrderPayload = {
+        currency: "USD",
+        note: `Apple Pay order - ${customerName || 'Customer'}`,
+        testMode: true // Explicitly set test mode for sandbox
+      };
+
+      functions.logger.info("Creating base Clover order:", baseOrderPayload);
+
+      const cloverResponse = await axios.post<CloverOrderResponse>(
+        `https://sandbox.dev.clover.com/v3/merchants/${merchantId}/orders`,
+        baseOrderPayload,
+        {
+          headers: {
+            'Authorization': `Bearer ${oauth_token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      functions.logger.info("Base order created:", cloverResponse.data);
+      const orderId = cloverResponse.data.id;
+
+      // Step 2: Add line items to the order
+      for (const item of items || []) {
+        const lineItemPayload = {
+          name: item.name,
+          price: item.price, // Price in cents
+          unitQty: item.quantity || 1,
+          note: item.customizations || ""
+        };
+
+        functions.logger.info(`Adding line item to order ${orderId}:`, lineItemPayload);
+
+        try {
+          const lineItemResponse = await axios.post(
+            `https://sandbox.dev.clover.com/v3/merchants/${merchantId}/orders/${orderId}/line_items`,
+            lineItemPayload,
+            {
+              headers: {
+                'Authorization': `Bearer ${oauth_token}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+          functions.logger.info("Line item added:", lineItemResponse.data);
+        } catch (lineItemError) {
+          functions.logger.error("Failed to add line item:", lineItemError);
+          // Continue with other items even if one fails
+        }
+      }
+
+      functions.logger.info("Full Clover API response:", {
+        status: cloverResponse.status,
+        statusText: cloverResponse.statusText,
+        data: cloverResponse.data,
+        headers: cloverResponse.headers
+      });
+
+      const cloverResult = {
+        orderId: orderId,
+        status: "SUBMITTED", 
+        message: "Clover order created successfully with line items"
+      };
+      
+      functions.logger.info("Clover order submission result:", cloverResult);
+
+      // 4. Capture the Stripe payment since Clover order was successful
+      functions.logger.info("Capturing Stripe payment...");
+      const capturedCharge = await stripe.charges.capture(charge.id);
+      
+      functions.logger.info("Stripe payment captured:", {
+        chargeId: capturedCharge.id,
+        captured: capturedCharge.captured,
+        amount_captured: capturedCharge.amount_captured
+      });
+
+      // 5. Update order status to SUBMITTED
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .update({
+          paymentStatus: "CAPTURED",
+          status: "SUBMITTED",
+          orderId: cloverResult.orderId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+      functions.logger.info("Apple Pay + Clover order completed successfully");
+
+      return {
+        transactionId: transactionId,
+        orderId: cloverResult.orderId,
+        stripeChargeId: charge.id,
+        status: "SUBMITTED",
+        message: "Apple Pay payment and Clover order completed successfully"
+      };
+
+    } catch (cloverError) {
+      functions.logger.error("Failed to submit order to Clover:", cloverError);
+      
+      // Update order status to failed
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .update({
+          status: "CLOVER_SUBMISSION_FAILED",
+          error: (cloverError as Error).message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+      throw new functions.https.HttpsError(
+        "internal",
+        `Failed to submit order to Clover: ${(cloverError as Error).message}`
+      );
+    }
+
+  } catch (error) {
+    functions.logger.error("Error processing Apple Pay payment for Clover:", error);
+    
+    // Update order status to failed if it exists
+    try {
+      await admin.firestore()
+        .collection("orders")
+        .doc(transactionId)
+        .update({
+          paymentStatus: "FAILED",
+          error: (error as Error).message,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+    } catch (updateError) {
+      functions.logger.error("Failed to update order status:", updateError);
+    }
+    
+    throw error;
+  }
+}

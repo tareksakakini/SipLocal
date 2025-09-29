@@ -54,7 +54,9 @@ integration_logs/
 *.orig
 
 
+# Configuration files with sensitive API keys
 *.plist
+SipLocal/SipLocal/Resources/Configuration/Config.secrets.plist
 
 SipLocal/SipLocal/CoffeeShops.json
 

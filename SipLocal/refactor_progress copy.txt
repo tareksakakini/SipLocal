@@ -1,0 +1,11 @@
+SIPLOCAL REFACTORING PROGRESS (Personal)
+=============================
+
+Still to work through:
+
+- ActiveOrdersView.swift
+- PaymentService
+- SquareAPIService
+- CloverAPIService
+
+- Backend!!
