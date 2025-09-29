@@ -2,19 +2,20 @@ import * as functions from "firebase-functions";
 import * as admin from "firebase-admin";
 import {v4 as uuidv4} from "uuid";
 import {SquareClient, SquareEnvironment, Square} from "square";
-import * as dotenv from "dotenv";
 import * as OneSignal from "onesignal-node";
 import Stripe from "stripe";
 import axios from "axios";
+import {appConfig} from "./config";
 // import * as crypto from "crypto";
-
-// Load environment variables
-dotenv.config();
 
 // Initialize Firebase Admin
 admin.initializeApp();
 
 // Square client will be initialized inside the function
+const squareEnvironmentSetting =
+  appConfig.square.environment === "production"
+    ? SquareEnvironment.Production
+    : SquareEnvironment.Sandbox;
 
 // Webhook signature verification
 /*
@@ -25,7 +26,7 @@ async function verifyWebhookSignature(
 ): Promise<boolean> {
   try {
     // Get the webhook signature key from Firebase secrets
-    const webhookSignatureKey = process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+    const webhookSignatureKey = appConfig.square.webhookSignatureKey;
     if (!webhookSignatureKey) {
       functions.logger.error("SQUARE_WEBHOOK_SIGNATURE_KEY not configured in secrets");
       return false;
@@ -366,8 +367,6 @@ export const processPayment = functions.https.onCall(async (data, context) => {
 
   // Initialize Square client with coffee shop's oauth token
   const accessToken = oauth_token;
-  const environment = process.env.SQUARE_ENVIRONMENT || "sandbox";
-  
   if (!accessToken) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -377,8 +376,7 @@ export const processPayment = functions.https.onCall(async (data, context) => {
 
   const squareClient = new SquareClient({
     token: accessToken,
-    environment: environment === "production" ? 
-      SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    environment: squareEnvironmentSetting,
   });
 
   // Fetch locationId from Firestore or Square API
@@ -751,7 +749,7 @@ export const processStripePayment = functions.https.onCall(async (data, context)
   const transactionId = uuidv4(); // Generate unique transaction ID
 
   // Initialize Stripe client
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const stripeSecretKey = appConfig.stripe.secretKey;
   if (!stripeSecretKey) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -764,8 +762,7 @@ export const processStripePayment = functions.https.onCall(async (data, context)
   // Initialize Square client for order creation
   const squareClient = new SquareClient({
     token: oauth_token,
-    environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-      SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    environment: squareEnvironmentSetting,
   });
 
   // Fetch locationId from Firestore or Square API
@@ -952,7 +949,7 @@ async function captureApplePayPayment(transactionId: string) {
     }
 
     // Initialize Stripe
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    const stripeSecretKey = appConfig.stripe.secretKey;
     if (!stripeSecretKey) {
       throw new Error("Stripe secret key not configured");
     }
@@ -976,8 +973,7 @@ async function captureApplePayPayment(transactionId: string) {
         // Initialize Square client
         const squareClient = new SquareClient({
           token: oauth_token,
-          environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-            SquareEnvironment.Production : SquareEnvironment.Sandbox,
+          environment: squareEnvironmentSetting,
         });
 
         const lineItems = orderData.items.map((item: any) => ({
@@ -1142,7 +1138,7 @@ export const cancelApplePayPayment = functions.https.onCall(async (data, context
     }
 
     // Initialize Stripe
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    const stripeSecretKey = appConfig.stripe.secretKey;
     if (!stripeSecretKey) {
       throw new functions.https.HttpsError(
         "failed-precondition",
@@ -1307,7 +1303,7 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
   const transactionId = uuidv4(); // Generate unique transaction ID
 
   // Initialize Stripe client
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const stripeSecretKey = appConfig.stripe.secretKey;
   if (!stripeSecretKey) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -1320,8 +1316,7 @@ export const processApplePayPayment = functions.https.onCall(async (data, contex
   // Initialize Square client for order creation
   const squareClient = new SquareClient({
     token: oauth_token,
-    environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-      SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    environment: squareEnvironmentSetting,
   });
 
   // Fetch locationId from Firestore or Square API
@@ -1753,7 +1748,7 @@ export const completeStripePayment = functions.https.onCall(async (data, context
   }
   
   // Initialize Stripe client
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const stripeSecretKey = appConfig.stripe.secretKey;
   if (!stripeSecretKey) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -1863,8 +1858,7 @@ export const completeStripePayment = functions.https.onCall(async (data, context
         // Initialize Square client
         const squareClient = new SquareClient({
           token: oauthToken,
-          environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-            SquareEnvironment.Production : SquareEnvironment.Sandbox,
+          environment: squareEnvironmentSetting,
         });
         
         // Fetch location ID if not available
@@ -2070,8 +2064,7 @@ export const submitOrderWithExternalPayment = functions.https.onCall(async (data
 
   // Initialize Square client with coffee shop's oauth token
   const accessToken = oauth_token;
-  const environment = process.env.SQUARE_ENVIRONMENT || "sandbox";
-  
+
   if (!accessToken) {
     throw new functions.https.HttpsError(
       "failed-precondition",
@@ -2081,8 +2074,7 @@ export const submitOrderWithExternalPayment = functions.https.onCall(async (data
 
   const squareClient = new SquareClient({
     token: accessToken,
-    environment: environment === "production" ? 
-      SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    environment: squareEnvironmentSetting,
   });
 
   // Fetch locationId from Firestore or Square API
@@ -2414,8 +2406,7 @@ async function completeAuthorizedOrder(paymentId: string) {
     // Initialize Square client
     const squareClient = new SquareClient({
       token: orderData.oauthToken,
-      environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-        SquareEnvironment.Production : SquareEnvironment.Sandbox,
+      environment: squareEnvironmentSetting,
     });
 
     // Complete the payment
@@ -2536,7 +2527,7 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
       
       try {
         // Initialize Stripe client
-        const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+        const stripeSecretKey = appConfig.stripe.secretKey;
         if (!stripeSecretKey) {
           functions.logger.error("Stripe secret key not configured");
         } else {
@@ -2558,8 +2549,7 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
       try {
         const squareClient = new SquareClient({
           token: orderData.oauthToken,
-          environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-            SquareEnvironment.Production : SquareEnvironment.Sandbox,
+          environment: squareEnvironmentSetting,
         });
         
         await squareClient.payments.cancel({
@@ -2597,8 +2587,7 @@ export const cancelOrder = functions.https.onCall(async (data, context) => {
           if (locationId && oauthToken) {
             const squareClient = new SquareClient({
               token: oauthToken,
-              environment: process.env.SQUARE_ENVIRONMENT === "production" ? 
-                SquareEnvironment.Production : SquareEnvironment.Sandbox,
+              environment: squareEnvironmentSetting,
             });
             
             await squareClient.orders.update({
@@ -2740,7 +2729,7 @@ export const squareWebhook = functions.https.onRequest(async (req, res) => {
       signatureLength: signature.length,
       webhookUrl: webhookUrl,
       bodyLength: body.length,
-      secretConfigured: !!process.env.SQUARE_WEBHOOK_SIGNATURE_KEY
+      secretConfigured: !!appConfig.square.webhookSignatureKey
     });
 
     // Temporarily disable signature verification for testing
@@ -2919,8 +2908,8 @@ async function handleOrderCreated(webhookData: any) {
 async function sendOrderReadyNotification(userId: string, orderData: any) {
   try {
     // Get OneSignal App ID from environment variables
-    const oneSignalAppId = process.env.ONESIGNAL_APP_ID;
-    const oneSignalApiKey = process.env.ONESIGNAL_API_KEY;
+    const oneSignalAppId = appConfig.onesignal.appId;
+    const oneSignalApiKey = appConfig.onesignal.apiKey;
     
     functions.logger.info("OneSignal configuration check:", {
       hasAppId: !!oneSignalAppId,
@@ -3333,7 +3322,7 @@ async function processApplePayPaymentClover(paymentData: any, context: any) {
   functions.logger.info("Generated transaction ID:", transactionId);
 
   // Initialize Stripe
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const stripeSecretKey = appConfig.stripe.secretKey;
   if (!stripeSecretKey) {
     throw new functions.https.HttpsError(
       "failed-precondition",
