@@ -1,4 +1,5 @@
 import * as functions from "firebase-functions";
+import {logger} from "./utils";
 import * as admin from "firebase-admin";
 import {v4 as uuidv4} from "uuid";
 import {SquareClient, SquareEnvironment, Square} from "square";
@@ -213,18 +214,18 @@ export const getMerchantTokens = functions.https.onRequest(async (req, res) => {
     return;
   }
 
-  functions.logger.info("getMerchantTokens called with body:", req.body);
-  functions.logger.info("getMerchantTokens called with query:", req.query);
+  logger.info({ message: "getMerchantTokens called", context: { handler: "getMerchantTokens" }, data: { body: req.body } });
+  logger.debug({ message: "getMerchantTokens query", context: { handler: "getMerchantTokens" }, data: { query: req.query } });
   
   const merchantId = req.body?.merchantId || req.query?.merchantId;
   
   if (!merchantId) {
-    functions.logger.error("merchantId is missing from request");
+    logger.error({ message: "merchantId missing", context: { handler: "getCloverCredentials" } });
     res.status(400).json({ error: "merchantId is required" });
     return;
   }
   
-  functions.logger.info("Looking up tokens for merchantId:", merchantId);
+  logger.info({ message: "Fetching merchant tokens", context: { handler: "getMerchantTokens", merchantId } });
 
   try {
     const doc = await admin.firestore()
@@ -233,18 +234,18 @@ export const getMerchantTokens = functions.https.onRequest(async (req, res) => {
       .get();
     
     if (!doc.exists) {
-      functions.logger.error("Document not found for merchantId:", merchantId);
+      logger.warn({ message: "Merchant tokens not found", context: { handler: "getMerchantTokens", merchantId } });
       res.status(404).json({ error: "Merchant tokens not found" });
       return;
     }
     
     const tokenData = doc.data();
-    functions.logger.info("Successfully retrieved tokens for merchantId:", merchantId);
-    functions.logger.info("Token data keys:", Object.keys(tokenData || {}));
+    logger.info({ message: "Merchant tokens retrieved", context: { handler: "getMerchantTokens", merchantId } });
+    logger.debug({ message: "Merchant token keys", context: { handler: "getMerchantTokens", merchantId }, data: { keys: Object.keys(tokenData || {}) } });
     
     res.status(200).json({ tokens: tokenData });
   } catch (error: any) {
-    functions.logger.error("Failed to get merchant tokens:", error);
+    logger.error({ message: "Failed to load merchant tokens", context: { handler: "getMerchantTokens", merchantId } }, error);
     res.status(500).json({ error: "Failed to retrieve merchant tokens" });
   }
 });
@@ -261,18 +262,18 @@ export const getCloverCredentials = functions.https.onRequest(async (req, res) =
     return;
   }
 
-  functions.logger.info("getCloverCredentials called with body:", req.body);
-  functions.logger.info("getCloverCredentials called with query:", req.query);
+  logger.info({ message: "getCloverCredentials called", context: { handler: "getCloverCredentials" }, data: { body: req.body } });
+  logger.debug({ message: "getCloverCredentials query", context: { handler: "getCloverCredentials" }, data: { query: req.query } });
   
   const merchantId = req.body?.merchantId || req.query?.merchantId;
   
   if (!merchantId) {
-    functions.logger.error("merchantId is missing from request");
+    logger.error({ message: "merchantId missing", context: { handler: "getMerchantTokens" } });
     res.status(400).json({ error: "merchantId is required" });
     return;
   }
   
-  functions.logger.info("Looking up Clover credentials for merchantId:", merchantId);
+  logger.info({ message: "Fetching Clover credentials", context: { handler: "getCloverCredentials", merchantId } });
 
   try {
     const doc = await admin.firestore()
@@ -281,18 +282,18 @@ export const getCloverCredentials = functions.https.onRequest(async (req, res) =
       .get();
     
     if (!doc.exists) {
-      functions.logger.error("Clover credentials not found for merchantId:", merchantId);
+      logger.warn({ message: "Clover credentials not found", context: { handler: "getCloverCredentials", merchantId } });
       res.status(404).json({ error: "Clover credentials not found" });
       return;
     }
     
     const credentialData = doc.data() as CloverCredentials;
-    functions.logger.info("Successfully retrieved Clover credentials for merchantId:", merchantId);
-    functions.logger.info("Credential data keys:", Object.keys(credentialData || {}));
+    logger.info({ message: "Clover credentials retrieved", context: { handler: "getCloverCredentials", merchantId } });
+    logger.debug({ message: "Clover credential keys", context: { handler: "getCloverCredentials", merchantId }, data: { keys: Object.keys(credentialData || {}) } });
     
     res.status(200).json({ credentials: credentialData });
   } catch (error: any) {
-    functions.logger.error("Failed to get Clover credentials:", error);
+    logger.error({ message: "Failed to load Clover credentials", context: { handler: "getCloverCredentials", merchantId } }, error);
     res.status(500).json({ error: "Failed to retrieve Clover credentials" });
   }
 });

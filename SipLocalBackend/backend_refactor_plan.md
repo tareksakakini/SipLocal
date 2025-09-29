@@ -109,7 +109,7 @@ Phase 1 Foundation Blueprint
 - Logging helper goal: wrap `functions.logger` to add consistent context (request id, handler) and redact sensitive fields.
 - Initial refactor path: build `config` + `utils/logger` first, then migrate handlers incrementally while keeping exports in `index.ts`.
 - Next actions:
-  * Implement `utils/logger.ts` with redaction helpers and shared context tags.
+  * ✅ Implement `utils/logger.ts` with redaction helpers and shared context tags.
   * Add `services/square/clientFactory.ts` to centralize Square client creation using `appConfig`.
   * Extract Firestore order persistence into `data/ordersRepository.ts` as the first data module.
 
@@ -145,3 +145,4 @@ Rolling Notes / Decisions
 -------------------------
 - 2025-09-29 Introduced `src/config/env.ts` with centralized env loading/validation; Firebase Functions now consume `appConfig` instead of direct `process.env` access.
 - 2025-09-29 Scaffolded `src/data`, `src/services` (square/stripe/clover/notifications), `src/handlers`, and `src/utils` with barrel exports for incremental migration.
+- 2025-09-29 Added `utils/logger` with redaction helpers and wired into HTTP token/credential endpoints as first integration.
