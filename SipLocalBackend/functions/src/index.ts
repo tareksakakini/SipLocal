@@ -2351,17 +2351,12 @@ async function completeAuthorizedOrder(paymentId: string) {
   functions.logger.info("completeAuthorizedOrder called for:", paymentId);
   
   try {
-    const orderDoc = await admin.firestore()
-      .collection("orders")
-      .doc(paymentId)
-      .get();
+    const orderData = await ordersRepository.getOrder(paymentId);
 
-    if (!orderDoc.exists) {
+    if (!orderData) {
       functions.logger.error("Order not found for completion:", paymentId);
       return;
     }
-
-    const orderData = orderDoc.data();
     functions.logger.info("Order data for completion:", {
       paymentId,
       status: orderData?.status,
@@ -2404,14 +2399,10 @@ async function completeAuthorizedOrder(paymentId: string) {
     // Update order status
     functions.logger.info("Updating order status to SUBMITTED:", paymentId);
     try {
-      await admin.firestore()
-        .collection("orders")
-        .doc(paymentId)
-        .update({
-          status: "SUBMITTED",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          completedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+      await ordersRepository.updateOrder(paymentId, {
+        status: "SUBMITTED",
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
       functions.logger.info("Successfully updated Firestore order status:", paymentId);
     } catch (firestoreError) {
       functions.logger.error("Failed to update Firestore order status:", {
@@ -2428,14 +2419,10 @@ async function completeAuthorizedOrder(paymentId: string) {
     
     // Mark order as failed
     try {
-      await admin.firestore()
-        .collection("orders")
-        .doc(paymentId)
-        .update({
-          status: "FAILED",
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          error: (error as Error).message || "Unknown error during completion"
-        });
+      await ordersRepository.updateOrder(paymentId, {
+        status: "FAILED",
+        error: (error as Error).message || "Unknown error during completion",
+      });
     } catch (updateError) {
       functions.logger.error("Failed to update order status to FAILED:", updateError);
     }

@@ -148,3 +148,4 @@ Rolling Notes / Decisions
 - 2025-09-29 Added `utils/logger` with redaction helpers and wired into HTTP token/credential endpoints as first integration.
 - 2025-09-29 Created `services/square/clientFactory` and updated Square client usage across handlers to centralize environment handling.
 - 2025-09-29 Extracted initial order persistence into `data/ordersRepository` and migrated `processPayment` to use the repository.
+- 2025-09-29 Updated `completeAuthorizedOrder` to rely on `ordersRepository`, eliminating direct Firestore access in the completion flow.
