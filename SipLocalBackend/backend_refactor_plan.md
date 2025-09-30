@@ -111,7 +111,7 @@ Phase 1 Foundation Blueprint
 - Next actions:
   * ✅ Implement `utils/logger.ts` with redaction helpers and shared context tags.
   * ✅ Add `services/square/clientFactory.ts` to centralize Square client creation using `appConfig`.
-  * Extract Firestore order persistence into `data/ordersRepository.ts` as the first data module.
+  * ✅ Extract Firestore order persistence into `data/ordersRepository.ts` as the first data module.
 
 Phase 2 – Domain Modules & Shared Types
 ---------------------------------------
@@ -147,3 +147,4 @@ Rolling Notes / Decisions
 - 2025-09-29 Scaffolded `src/data`, `src/services` (square/stripe/clover/notifications), `src/handlers`, and `src/utils` with barrel exports for incremental migration.
 - 2025-09-29 Added `utils/logger` with redaction helpers and wired into HTTP token/credential endpoints as first integration.
 - 2025-09-29 Created `services/square/clientFactory` and updated Square client usage across handlers to centralize environment handling.
+- 2025-09-29 Extracted initial order persistence into `data/ordersRepository` and migrated `processPayment` to use the repository.

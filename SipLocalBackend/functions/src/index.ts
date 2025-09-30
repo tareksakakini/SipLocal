@@ -7,6 +7,7 @@ import Stripe from "stripe";
 import axios from "axios";
 import {appConfig} from "./config";
 import {squareService} from "./services";
+import {ordersRepository} from "./data";
 // import * as crypto from "crypto";
 
 // Initialize Firebase Admin
@@ -537,38 +538,31 @@ export const processPayment = functions.https.onCall(async (data, context) => {
       });
 
       // 4. Save order to Firestore
-      const orderData = {
-        transactionId: payment.id,
-        paymentStatus: payment.status,
-        amount: payment.amountMoney?.amount?.toString(),
-        currency: payment.amountMoney?.currency,
-        merchantId: merchantId,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        paymentMethod: "card",
-        receiptNumber: payment.receiptNumber || null,
-        receiptUrl: payment.receiptUrl || null,
-        userId: paymentData.userId, // Add userId to orderData
-        coffeeShopData: paymentData.coffeeShopData, // Add coffeeShopData to orderData
-         items: paymentData.items || [], // Store order items (now include ids and selection metadata)
-        customerName: paymentData.customerName,
-        customerEmail: paymentData.customerEmail,
-        pickupTime: paymentData.pickupTime,
-        orderId: orderId, // Store Square order ID for status tracking
-        status: "AUTHORIZED", // Payment authorized, awaiting confirmation
-        oauthToken: paymentData.oauth_token, // Store for completion later
-      };
-
       try {
         const paymentId = payment.id;
         if (!paymentId) {
           throw new Error("Payment ID is missing");
         }
-        
-        await admin.firestore()
-          .collection("orders")
-          .doc(paymentId)
-          .set(orderData);
+
+        await ordersRepository.createOrder(paymentId, {
+          transactionId: payment.id,
+          paymentStatus: payment.status,
+          amount: payment.amountMoney?.amount?.toString(),
+          currency: payment.amountMoney?.currency,
+          merchantId,
+          paymentMethod: "card",
+          receiptNumber: payment.receiptNumber || null,
+          receiptUrl: payment.receiptUrl || null,
+          userId: paymentData.userId,
+          coffeeShopData: paymentData.coffeeShopData,
+          items: paymentData.items || [],
+          customerName: paymentData.customerName,
+          customerEmail: paymentData.customerEmail,
+          pickupTime: paymentData.pickupTime,
+          orderId,
+          status: "AUTHORIZED",
+          oauthToken: paymentData.oauth_token,
+        });
         
         functions.logger.info("Order saved to Firestore", {
           transactionId: payment.id,
