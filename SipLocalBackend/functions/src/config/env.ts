@@ -36,9 +36,38 @@ const nodeEnv = process.env.NODE_ENV ?? "development";
 const isProduction = nodeEnv === "production";
 const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
 
-const squareEnvRaw = (process.env.SQUARE_ENVIRONMENT ?? "sandbox").toLowerCase();
+let runtimeConfig: any = {};
+try {
+  runtimeConfig = functions.config();
+} catch (error) {
+  // functions.config() throws when no config is set (local CLI without firebase.json)
+  runtimeConfig = {};
+}
+
+const stripeSecretKey =
+  runtimeConfig?.stripe?.secret_key ?? process.env.STRIPE_SECRET_KEY;
+
+const squareWebhookSignatureKey =
+  runtimeConfig?.square?.webhook_signature_key ??
+  process.env.SQUARE_WEBHOOK_SIGNATURE_KEY;
+
+const rawSquareEnv =
+  runtimeConfig?.square?.square_environment ??
+  runtimeConfig?.square?.environment ??
+  process.env.SQUARE_ENVIRONMENT;
+
+const squareEnvRaw = (rawSquareEnv ?? "sandbox").toLowerCase();
+
 const squareEnvironment: SquareEnvironmentName =
   squareEnvRaw === "production" ? "production" : "sandbox";
+
+const oneSignalAppId =
+  runtimeConfig?.onesignal?.app_id ?? process.env.ONESIGNAL_APP_ID;
+
+const oneSignalApiKey =
+  runtimeConfig?.onesignal?.rest_api_key ??
+  runtimeConfig?.onesignal?.api_key ??
+  process.env.ONESIGNAL_API_KEY;
 
 export const appConfig: AppConfig = {
   nodeEnv,
@@ -46,14 +75,14 @@ export const appConfig: AppConfig = {
   isEmulator,
   square: {
     environment: squareEnvironment,
-    webhookSignatureKey: process.env.SQUARE_WEBHOOK_SIGNATURE_KEY,
+    webhookSignatureKey: squareWebhookSignatureKey,
   },
   stripe: {
-    secretKey: process.env.STRIPE_SECRET_KEY,
+    secretKey: stripeSecretKey,
   },
   onesignal: {
-    appId: process.env.ONESIGNAL_APP_ID,
-    apiKey: process.env.ONESIGNAL_API_KEY,
+    appId: oneSignalAppId,
+    apiKey: oneSignalApiKey,
   },
 };
 
@@ -62,24 +91,21 @@ export const configValidation: ConfigValidation = {
   warnings: [],
 };
 
-const criticalKeys: string[] = [
-  "STRIPE_SECRET_KEY",
-  "SQUARE_WEBHOOK_SIGNATURE_KEY",
-];
-
-for (const key of criticalKeys) {
-  if (!process.env[key]) {
-    configValidation.missingCritical.push(key);
-  }
+if (!stripeSecretKey) {
+  configValidation.missingCritical.push("STRIPE_SECRET_KEY");
 }
 
-if (!process.env.ONESIGNAL_APP_ID || !process.env.ONESIGNAL_API_KEY) {
+if (!squareWebhookSignatureKey) {
+  configValidation.missingCritical.push("SQUARE_WEBHOOK_SIGNATURE_KEY");
+}
+
+if (!oneSignalAppId || !oneSignalApiKey) {
   configValidation.warnings.push(
     "OneSignal credentials missing; order-ready push notifications will be disabled."
   );
 }
 
-if (!process.env.SQUARE_ENVIRONMENT) {
+if (!rawSquareEnv) {
   configValidation.warnings.push(
     "SQUARE_ENVIRONMENT not set; defaulting to sandbox."
   );

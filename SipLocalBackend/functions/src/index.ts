@@ -3,7 +3,6 @@ import {logger} from "./utils";
 import * as admin from "firebase-admin";
 import {v4 as uuidv4} from "uuid";
 import {Square} from "square";
-import * as OneSignal from "onesignal-node";
 import Stripe from "stripe";
 import axios from "axios";
 import {appConfig} from "./config";
@@ -1037,16 +1036,18 @@ async function captureApplePayPayment(transactionId: string) {
     }
 
     // Update order in Firestore
+    const updatePayload = {
+      paymentStatus: "CAPTURED",
+      status: "SUBMITTED",
+      orderId: squareOrderId ?? orderData.orderId ?? null,
+      receiptUrl: capturedCharge.receipt_url ?? orderData.receiptUrl ?? null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
     await admin.firestore()
       .collection("orders")
       .doc(transactionId)
-      .update({
-        paymentStatus: "CAPTURED",
-        status: "SUBMITTED",
-        orderId: squareOrderId,
-        receiptUrl: capturedCharge.receipt_url,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      .update(updatePayload);
 
     functions.logger.info("Apple Pay payment captured and order updated", {
       transactionId,
@@ -2886,21 +2887,25 @@ async function sendOrderReadyNotification(userId: string, orderData: any) {
     // Get OneSignal App ID from environment variables
     const oneSignalAppId = appConfig.onesignal.appId;
     const oneSignalApiKey = appConfig.onesignal.apiKey;
+    const envApiKey = process.env.ONESIGNAL_API_KEY;
+    const apiKeyPreview = oneSignalApiKey ? `${oneSignalApiKey.substring(0, 8)}...` : null;
+    const apiKeySource = oneSignalApiKey
+      ? oneSignalApiKey === envApiKey ? "process.env" : "runtimeConfig"
+      : "missing";
     
     functions.logger.info("OneSignal configuration check:", {
       hasAppId: !!oneSignalAppId,
       hasApiKey: !!oneSignalApiKey,
       appIdLength: oneSignalAppId?.length || 0,
-      apiKeyLength: oneSignalApiKey?.length || 0
+      apiKeyLength: oneSignalApiKey?.length || 0,
+      apiKeyPreview,
+      apiKeySource
     });
     
     if (!oneSignalAppId || !oneSignalApiKey) {
       functions.logger.error("OneSignal configuration missing");
       return;
     }
-
-    // Initialize OneSignal client
-    const oneSignalClient = new OneSignal.Client(oneSignalAppId, oneSignalApiKey);
 
     // Get user data to find device IDs
     const userDoc = await admin.firestore()
@@ -2931,6 +2936,7 @@ async function sendOrderReadyNotification(userId: string, orderData: any) {
     // Use include_player_ids instead of include_external_user_ids
     // The device IDs from your database should be OneSignal player IDs
     const notification = {
+      app_id: oneSignalAppId,
       include_player_ids: deviceIds,
       headings: { en: "Order Ready for Pickup! ☕" },
       contents: { en: `Your order from ${coffeeShopName} is ready for pickup!` },
@@ -2949,25 +2955,41 @@ async function sendOrderReadyNotification(userId: string, orderData: any) {
     });
     
     try {
-      const response = await oneSignalClient.createNotification(notification);
-      
+      const response = await axios.post(
+        "https://api.onesignal.com/notifications",
+        notification,
+        {
+          headers: {
+            Authorization: `Bearer ${oneSignalApiKey}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
       functions.logger.info("OneSignal API response:", {
-        statusCode: response.statusCode,
-        body: response.body,
-        headers: response.headers
+        status: response.status,
+        data: response.data
       });
-      
+
       functions.logger.info("Notification sent successfully:", {
         userId,
         deviceCount: deviceIds.length,
-        notificationId: response.body?.id || "No ID returned"
+        notificationId: response.data?.id || "No ID returned"
       });
     } catch (error) {
-      functions.logger.error("OneSignal API error:", {
-        error: error,
-        errorMessage: (error as Error).message,
-        errorStack: (error as Error).stack
-      });
+      if (axios.isAxiosError(error)) {
+        functions.logger.error("OneSignal API error:", {
+          status: error.response?.status,
+          data: error.response?.data,
+          message: error.message
+        });
+      } else {
+        functions.logger.error("OneSignal API error:", {
+          error,
+          errorMessage: (error as Error).message,
+          errorStack: (error as Error).stack
+        });
+      }
       throw error;
     }
 
